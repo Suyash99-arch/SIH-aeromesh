@@ -1,0 +1,63 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Python environments
+.venv/
+.venv311/
+venv/
+env/
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Build output
+dist/
+build/
+.vite/
+.cache/
+
+# Environment / secrets
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+
+# IDE
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json
+
+# Generated output
+output/
+**/output/
+
+# Python / ML generated files
+*.pyc
+*.pyo
+*.pyd
+
+# Large ML models
+*.pt
+*.pth
+*.onnx
+*.ckpt
+*.safetensors
+
+# Large archives
+*.zip
+*.7z
+*.rar
+
+# Large video files
+*.mp4
+*.mov
+*.avi
+*.mkv
+
+# OS
+Thumbs.db
+.DS_Store

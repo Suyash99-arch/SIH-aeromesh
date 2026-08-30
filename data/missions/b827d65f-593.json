@@ -1,0 +1,211 @@
+{
+  "id": "b827d65f-593",
+  "name": "YOLO Integration 2",
+  "type": "infrastructure",
+  "location": "Test range",
+  "operator": "QA",
+  "createdAt": "2026-08-30T05:39:16.590780",
+  "status": "processing_complete",
+  "video": {
+    "filename": "video.mp4",
+    "url": "http://localhost:8000/media/missions/b827d65f-593/video.mp4",
+    "size_mb": 0.01,
+    "fps": 10.0,
+    "total_frames": 20,
+    "duration_seconds": 2.0,
+    "resolution": {
+      "width": 320,
+      "height": 240
+    },
+    "codec": "detected"
+  },
+  "processing": {
+    "status": "COMPLETE",
+    "sampleFps": 10,
+    "framesAnalyzed": 20,
+    "inferenceFps": 0
+  },
+  "detections": {
+    "uniqueTracks": 0,
+    "byGroup": {},
+    "byClass": {},
+    "observations": []
+  },
+  "tracks": [],
+  "frameQuality": {
+    "estimated": true,
+    "average": {
+      "sharpness": 100.0,
+      "brightness": 1.0,
+      "contrast": 17.9
+    },
+    "samples": [
+      {
+        "frame": 0,
+        "sharpness": 100.0,
+        "brightness": 1.0,
+        "contrast": 17.9
+      },
+      {
+        "frame": 1,
+        "sharpness": 100.0,
+        "brightness": 1.0,
+        "contrast": 17.9
+      },
+      {
+        "frame": 2,
+        "sharpness": 100.0,
+        "brightness": 1.0,
+        "contrast": 17.9
+      },
+      {
+        "frame": 3,
+        "sharpness": 100.0,
+        "brightness": 1.0,
+        "contrast": 17.9
+      },
+      {
+        "frame": 4,
+        "sharpness": 100.0,
+        "brightness": 1.0,
+        "contrast": 17.9
+      },
+      {
+        "frame": 5,
+        "sharpness": 100.0,
+        "brightness": 1.0,
+        "contrast": 17.9
+      },
+      {
+        "frame": 6,
+        "sharpness": 100.0,
+        "brightness": 1.0,
+        "contrast": 17.9
+      },
+      {
+        "frame": 7,
+        "sharpness": 100.0,
+        "brightness": 1.0,
+        "contrast": 17.9
+      },
+      {
+        "frame": 8,
+        "sharpness": 100.0,
+        "brightness": 1.0,
+        "contrast": 17.9
+      },
+      {
+        "frame": 9,
+        "sharpness": 100.0,
+        "brightness": 1.0,
+        "contrast": 17.9
+      },
+      {
+        "frame": 10,
+        "sharpness": 100.0,
+        "brightness": 1.0,
+        "contrast": 17.9
+      },
+      {
+        "frame": 11,
+        "sharpness": 100.0,
+        "brightness": 1.0,
+        "contrast": 17.9
+      },
+      {
+        "frame": 12,
+        "sharpness": 100.0,
+        "brightness": 1.0,
+        "contrast": 17.9
+      },
+      {
+        "frame": 13,
+        "sharpness": 100.0,
+        "brightness": 1.0,
+        "contrast": 17.9
+      },
+      {
+        "frame": 14,
+        "sharpness": 100.0,
+        "brightness": 1.0,
+        "contrast": 17.9
+      },
+      {
+        "frame": 15,
+        "sharpness": 100.0,
+        "brightness": 1.0,
+        "contrast": 17.9
+      },
+      {
+        "frame": 16,
+        "sharpness": 100.0,
+        "brightness": 1.0,
+        "contrast": 17.9
+      },
+      {
+        "frame": 17,
+        "sharpness": 100.0,
+        "brightness": 1.0,
+        "contrast": 17.9
+      },
+      {
+        "frame": 18,
+        "sharpness": 100.0,
+        "brightness": 1.0,
+        "contrast": 17.9
+      },
+      {
+        "frame": 19,
+        "sharpness": 100.0,
+        "brightness": 1.0,
+        "contrast": 17.9
+      }
+    ]
+  },
+  "reconstruction": {
+    "status": "complete",
+    "kind": "bridge",
+    "pointCloud": {
+      "points_count": 0,
+      "coverage": 0,
+      "density": "medium",
+      "color_confidence": 0.78,
+      "structure_confidence": 0.82
+    },
+    "observedSurface": 55,
+    "partialSurface": 28,
+    "occludedSurface": 17,
+    "confidence": 74,
+    "estimated": true,
+    "estimateMethod": "Heuristic from analyzed-frame count, average sharpness, and detection density",
+    "uncertainty": {
+      "overall": 0.13,
+      "byRegion": [
+        {
+          "region": "north",
+          "uncertainty": 0.08
+        },
+        {
+          "region": "east",
+          "uncertainty": 0.12
+        },
+        {
+          "region": "south",
+          "uncertainty": 0.18
+        },
+        {
+          "region": "west",
+          "uncertainty": 0.25
+        }
+      ]
+    }
+  },
+  "measurements": null,
+  "findings": [],
+  "metadata": {
+    "frame_sampling": 10,
+    "inference_resolution": 640,
+    "detection_confidence": 0.35,
+    "reconstruction_quality": "medium"
+  }
+}

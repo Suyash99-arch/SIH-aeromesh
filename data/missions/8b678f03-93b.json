@@ -1,0 +1,18 @@
+{
+  "id": "8b678f03-93b",
+  "name": "town",
+  "type": "single-pass",
+  "location": "Downtown city",
+  "operator": "me",
+  "createdAt": "2026-08-30T04:29:10.925854",
+  "status": "created",
+  "video": null,
+  "processing": null,
+  "detections": null,
+  "tracks": null,
+  "frameQuality": null,
+  "reconstruction": null,
+  "measurements": null,
+  "findings": [],
+  "metadata": {}
+}

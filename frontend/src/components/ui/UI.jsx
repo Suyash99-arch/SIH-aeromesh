@@ -1,0 +1,7 @@
+import Icon from "./Icon";
+export function Button({ children, icon, variant="secondary", className="", ...props }) { return <button className={`button ${variant} ${className}`} {...props}>{icon && <Icon name={icon} size={15}/>} {children}</button>; }
+export function Status({ children, tone="success" }) { return <span className={`status ${tone}`}><i />{children}</span>; }
+export function Panel({ children, className="" }) { return <section className={`panel ${className}`}>{children}</section>; }
+export function Progress({ value }) { return <div className="progress"><span style={{width:`${value}%`}} /></div>; }
+export function Metric({ icon, label, value, detail, tone="cyan" }) { return <Panel className="metric"><div className={`metric-icon ${tone}`}><Icon name={icon}/></div><div><span className="eyebrow">{label}</span><strong>{value}</strong><small>{detail}</small></div><svg className="spark" viewBox="0 0 80 24" aria-hidden="true"><path d="M1 20 L12 16 L22 18 L33 9 L45 13 L56 5 L68 10 L79 2"/></svg></Panel>; }
+export function Pipeline({ progress=72 }) { const steps=[["01","Frame extraction","Complete"],["02","Visual odometry","Complete"],["03","3D reconstruction",`${progress}%`,"active"],["04","AI scene analysis","Waiting"]]; return <div className="pipeline">{steps.map(([n,t,s,active])=><div className={`pipeline-step ${active||""}`} key={n}><span>{n}</span><strong>{t}</strong><small>{s === "Complete" ? "✓ " : "● "}{s}</small></div>)}</div>; }

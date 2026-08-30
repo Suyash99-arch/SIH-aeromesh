@@ -1,0 +1,30 @@
+{
+  "id": "1897f357-121",
+  "name": "copilot-test",
+  "type": "single-pass",
+  "location": "Downtown",
+  "operator": "copilot",
+  "createdAt": "2026-08-30T04:19:58.129305",
+  "status": "video_uploaded",
+  "video": {
+    "filename": "copilot_upload_test.mp4",
+    "path": "C:\\Users\\kc889\\OneDrive\\Desktop\\Sih\\data\\missions\\1897f357-121\\video.mp4",
+    "size_mb": 0.01,
+    "fps": 10.0,
+    "total_frames": 20,
+    "duration_seconds": 2.0,
+    "resolution": {
+      "width": 320,
+      "height": 240
+    },
+    "codec": "detected"
+  },
+  "processing": null,
+  "detections": null,
+  "tracks": null,
+  "frameQuality": null,
+  "reconstruction": null,
+  "measurements": null,
+  "findings": [],
+  "metadata": {}
+}

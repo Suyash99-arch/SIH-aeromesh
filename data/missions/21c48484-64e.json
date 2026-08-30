@@ -1,0 +1,120 @@
+{
+  "id": "21c48484-64e",
+  "name": "town",
+  "type": "single-pass",
+  "location": "Downtown city",
+  "operator": "me",
+  "createdAt": "2026-08-30T04:33:39.556504",
+  "status": "processing_complete",
+  "video": {
+    "filename": "53902-476396222.mp4",
+    "path": "C:\\Users\\kc889\\OneDrive\\Desktop\\Sih\\data\\missions\\21c48484-64e\\video.mp4",
+    "size_mb": 12.45,
+    "fps": 25.0,
+    "total_frames": 125,
+    "duration_seconds": 5.0,
+    "resolution": {
+      "width": 1920,
+      "height": 1080
+    },
+    "codec": "detected"
+  },
+  "processing": {
+    "status": "COMPLETE",
+    "sampleFps": 2,
+    "framesAnalyzed": 11,
+    "inferenceFps": 0
+  },
+  "detections": {
+    "uniqueTracks": 0,
+    "byGroup": {},
+    "byClass": {},
+    "observations": []
+  },
+  "tracks": [],
+  "frameQuality": {
+    "estimated": true,
+    "average": {
+      "sharpness": 100.0,
+      "brightness": 26.3,
+      "contrast": 36.3
+    },
+    "samples": [
+      {
+        "frame": 0,
+        "sharpness": 100.0,
+        "brightness": 27.1,
+        "contrast": 37.5
+      },
+      {
+        "frame": 12,
+        "sharpness": 100.0,
+        "brightness": 27.2,
+        "contrast": 38.6
+      },
+      {
+        "frame": 24,
+        "sharpness": 100.0,
+        "brightness": 26.8,
+        "contrast": 38.2
+      },
+      {
+        "frame": 36,
+        "sharpness": 100.0,
+        "brightness": 27.0,
+        "contrast": 36.4
+      },
+      {
+        "frame": 48,
+        "sharpness": 100.0,
+        "brightness": 26.4,
+        "contrast": 35.4
+      },
+      {
+        "frame": 60,
+        "sharpness": 100.0,
+        "brightness": 25.8,
+        "contrast": 36.4
+      },
+      {
+        "frame": 72,
+        "sharpness": 100.0,
+        "brightness": 26.2,
+        "contrast": 36.0
+      },
+      {
+        "frame": 84,
+        "sharpness": 100.0,
+        "brightness": 26.0,
+        "contrast": 36.1
+      },
+      {
+        "frame": 96,
+        "sharpness": 100.0,
+        "brightness": 25.6,
+        "contrast": 35.3
+      },
+      {
+        "frame": 108,
+        "sharpness": 100.0,
+        "brightness": 25.9,
+        "contrast": 34.7
+      },
+      {
+        "frame": 120,
+        "sharpness": 100.0,
+        "brightness": 25.2,
+        "contrast": 34.6
+      }
+    ]
+  },
+  "reconstruction": null,
+  "measurements": null,
+  "findings": [],
+  "metadata": {
+    "frame_sampling": 2,
+    "inference_resolution": 640,
+    "detection_confidence": 0.35,
+    "reconstruction_quality": "medium"
+  }
+}

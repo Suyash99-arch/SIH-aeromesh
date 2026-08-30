@@ -1,0 +1,18 @@
+{
+  "id": "eedd13ff-825",
+  "name": "test-mission",
+  "type": "single-pass",
+  "location": "Downtown",
+  "operator": "copilot",
+  "createdAt": "2026-08-30T04:19:29.541224",
+  "status": "created",
+  "video": null,
+  "processing": null,
+  "detections": null,
+  "tracks": null,
+  "frameQuality": null,
+  "reconstruction": null,
+  "measurements": null,
+  "findings": [],
+  "metadata": {}
+}

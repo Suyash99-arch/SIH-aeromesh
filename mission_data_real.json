@@ -1,0 +1,65 @@
+{
+  "north-ridge": {
+    "uniqueTracks": 15,
+    "byGroup": {
+      "vehicles": 15
+    },
+    "byClass": {
+      "car": 15
+    },
+    "objects": [
+      "car"
+    ]
+  },
+  "downtown-grid": {
+    "uniqueTracks": 3,
+    "byGroup": {
+      "other": 3
+    },
+    "byClass": {
+      "traffic light": 1,
+      "airplane": 2
+    },
+    "objects": [
+      "traffic light",
+      "airplane"
+    ]
+  },
+  "harbor-district": {
+    "uniqueTracks": 30,
+    "byGroup": {
+      "other": 18,
+      "vehicles": 12
+    },
+    "byClass": {
+      "train": 2,
+      "boat": 11,
+      "umbrella": 1,
+      "car": 11,
+      "skateboard": 4,
+      "truck": 1
+    },
+    "objects": [
+      "train",
+      "boat",
+      "umbrella",
+      "car",
+      "skateboard",
+      "truck"
+    ]
+  },
+  "river-approach": {
+    "uniqueTracks": 13,
+    "byGroup": {
+      "other": 13
+    },
+    "byClass": {
+      "clock": 1,
+      "traffic light": 12
+    },
+    "objects": [
+      "clock",
+      "traffic light"
+    ]
+  }
+}

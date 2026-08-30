@@ -1,0 +1,3044 @@
+{
+  "id": "fe270d6e-c75",
+  "name": "Live YOLO Check 2",
+  "type": "survey",
+  "location": "Test",
+  "operator": "QA",
+  "createdAt": "2026-08-30T05:40:21.022929",
+  "status": "processing_complete",
+  "video": {
+    "filename": "video.mp4",
+    "url": "http://localhost:8000/media/missions/fe270d6e-c75/video.mp4",
+    "size_mb": 12.45,
+    "fps": 25.0,
+    "total_frames": 125,
+    "duration_seconds": 5.0,
+    "resolution": {
+      "width": 1920,
+      "height": 1080
+    },
+    "codec": "detected",
+    "frames": 125,
+    "durationSeconds": 5.0
+  },
+  "processing": {
+    "status": "COMPLETE",
+    "sampleFps": 10,
+    "framesAnalyzed": 63,
+    "inferenceFps": 3.8
+  },
+  "detections": {
+    "uniqueTracks": 87,
+    "byGroup": {
+      "vehicles": 82,
+      "other": 4,
+      "people": 1
+    },
+    "byClass": {
+      "car": 81,
+      "orange": 1,
+      "person": 1,
+      "train": 3,
+      "truck": 1
+    },
+    "observations": [
+      {
+        "frame": 0,
+        "trackId": "T0001",
+        "class": "car",
+        "confidence": 0.508,
+        "boundingBox": [
+          73.3,
+          389.1,
+          140.0,
+          420.7
+        ]
+      },
+      {
+        "frame": 0,
+        "trackId": "T0002",
+        "class": "car",
+        "confidence": 0.477,
+        "boundingBox": [
+          902.0,
+          647.9,
+          940.8,
+          686.2
+        ]
+      },
+      {
+        "frame": 2,
+        "trackId": "T0001",
+        "class": "car",
+        "confidence": 0.418,
+        "boundingBox": [
+          59.6,
+          395.6,
+          121.1,
+          424.2
+        ]
+      },
+      {
+        "frame": 2,
+        "trackId": "T0003",
+        "class": "car",
+        "confidence": 0.417,
+        "boundingBox": [
+          935.0,
+          951.3,
+          989.1,
+          1014.4
+        ]
+      },
+      {
+        "frame": 4,
+        "trackId": "T0004",
+        "class": "car",
+        "confidence": 0.525,
+        "boundingBox": [
+          899.9,
+          680.0,
+          940.0,
+          721.6
+        ]
+      },
+      {
+        "frame": 4,
+        "trackId": "T0003",
+        "class": "car",
+        "confidence": 0.352,
+        "boundingBox": [
+          938.1,
+          976.7,
+          990.4,
+          1043.5
+        ]
+      },
+      {
+        "frame": 6,
+        "trackId": "T0005",
+        "class": "car",
+        "confidence": 0.607,
+        "boundingBox": [
+          168.2,
+          345.4,
+          239.2,
+          380.5
+        ]
+      },
+      {
+        "frame": 6,
+        "trackId": "T0006",
+        "class": "car",
+        "confidence": 0.433,
+        "boundingBox": [
+          30.8,
+          413.0,
+          101.3,
+          446.9
+        ]
+      },
+      {
+        "frame": 8,
+        "trackId": "T0006",
+        "class": "car",
+        "confidence": 0.41,
+        "boundingBox": [
+          16.9,
+          421.3,
+          94.2,
+          459.5
+        ]
+      },
+      {
+        "frame": 10,
+        "trackId": "T0007",
+        "class": "car",
+        "confidence": 0.485,
+        "boundingBox": [
+          294.0,
+          338.3,
+          354.4,
+          374.5
+        ]
+      },
+      {
+        "frame": 10,
+        "trackId": "T0008",
+        "class": "car",
+        "confidence": 0.398,
+        "boundingBox": [
+          826.7,
+          751.8,
+          869.9,
+          819.4
+        ]
+      },
+      {
+        "frame": 10,
+        "trackId": "T0009",
+        "class": "car",
+        "confidence": 0.386,
+        "boundingBox": [
+          225.1,
+          342.0,
+          285.7,
+          373.0
+        ]
+      },
+      {
+        "frame": 12,
+        "trackId": "T0010",
+        "class": "car",
+        "confidence": 0.45,
+        "boundingBox": [
+          826.6,
+          805.5,
+          873.5,
+          872.6
+        ]
+      },
+      {
+        "frame": 18,
+        "trackId": "T0011",
+        "class": "car",
+        "confidence": 0.381,
+        "boundingBox": [
+          895.3,
+          817.1,
+          935.3,
+          875.4
+        ]
+      },
+      {
+        "frame": 40,
+        "trackId": "T0012",
+        "class": "orange",
+        "confidence": 0.533,
+        "boundingBox": [
+          1052.0,
+          628.9,
+          1117.5,
+          738.4
+        ]
+      },
+      {
+        "frame": 42,
+        "trackId": "T0012",
+        "class": "orange",
+        "confidence": 0.447,
+        "boundingBox": [
+          1050.6,
+          642.8,
+          1118.3,
+          754.8
+        ]
+      },
+      {
+        "frame": 42,
+        "trackId": "T0013",
+        "class": "car",
+        "confidence": 0.411,
+        "boundingBox": [
+          0.0,
+          492.1,
+          53.6,
+          539.6
+        ]
+      },
+      {
+        "frame": 46,
+        "trackId": "T0014",
+        "class": "car",
+        "confidence": 0.401,
+        "boundingBox": [
+          755.7,
+          793.0,
+          791.3,
+          851.0
+        ]
+      },
+      {
+        "frame": 46,
+        "trackId": "T0015",
+        "class": "person",
+        "confidence": 0.38,
+        "boundingBox": [
+          1810.5,
+          635.8,
+          1919.4,
+          781.2
+        ]
+      },
+      {
+        "frame": 46,
+        "trackId": "T0012",
+        "class": "orange",
+        "confidence": 0.364,
+        "boundingBox": [
+          1043.3,
+          669.5,
+          1115.2,
+          790.2
+        ]
+      },
+      {
+        "frame": 50,
+        "trackId": "T0016",
+        "class": "train",
+        "confidence": 0.581,
+        "boundingBox": [
+          1492.9,
+          246.6,
+          1918.4,
+          662.5
+        ]
+      },
+      {
+        "frame": 50,
+        "trackId": "T0017",
+        "class": "car",
+        "confidence": 0.365,
+        "boundingBox": [
+          742.1,
+          827.4,
+          791.1,
+          891.9
+        ]
+      },
+      {
+        "frame": 52,
+        "trackId": "T0016",
+        "class": "train",
+        "confidence": 0.389,
+        "boundingBox": [
+          1507.9,
+          250.9,
+          1918.6,
+          669.8
+        ]
+      },
+      {
+        "frame": 54,
+        "trackId": "T0018",
+        "class": "car",
+        "confidence": 0.438,
+        "boundingBox": [
+          727.2,
+          843.5,
+          767.1,
+          904.2
+        ]
+      },
+      {
+        "frame": 54,
+        "trackId": "T0019",
+        "class": "truck",
+        "confidence": 0.401,
+        "boundingBox": [
+          1098.8,
+          895.6,
+          1250.9,
+          1033.1
+        ]
+      },
+      {
+        "frame": 54,
+        "trackId": "T0020",
+        "class": "car",
+        "confidence": 0.363,
+        "boundingBox": [
+          166.0,
+          451.1,
+          206.6,
+          478.3
+        ]
+      },
+      {
+        "frame": 56,
+        "trackId": "T0019",
+        "class": "truck",
+        "confidence": 0.438,
+        "boundingBox": [
+          1093.3,
+          920.5,
+          1245.4,
+          1062.9
+        ]
+      },
+      {
+        "frame": 58,
+        "trackId": "T0021",
+        "class": "car",
+        "confidence": 0.671,
+        "boundingBox": [
+          723.6,
+          783.5,
+          766.9,
+          844.4
+        ]
+      },
+      {
+        "frame": 58,
+        "trackId": "T0019",
+        "class": "truck",
+        "confidence": 0.362,
+        "boundingBox": [
+          1086.9,
+          949.2,
+          1244.7,
+          1065.6
+        ]
+      },
+      {
+        "frame": 60,
+        "trackId": "T0022",
+        "class": "car",
+        "confidence": 0.413,
+        "boundingBox": [
+          124.1,
+          470.4,
+          163.7,
+          502.0
+        ]
+      },
+      {
+        "frame": 62,
+        "trackId": "T0023",
+        "class": "car",
+        "confidence": 0.549,
+        "boundingBox": [
+          781.2,
+          762.8,
+          829.5,
+          812.8
+        ]
+      },
+      {
+        "frame": 64,
+        "trackId": "T0024",
+        "class": "car",
+        "confidence": 0.412,
+        "boundingBox": [
+          752.8,
+          554.6,
+          789.1,
+          608.0
+        ]
+      },
+      {
+        "frame": 64,
+        "trackId": "T0022",
+        "class": "car",
+        "confidence": 0.405,
+        "boundingBox": [
+          98.3,
+          480.5,
+          155.9,
+          510.1
+        ]
+      },
+      {
+        "frame": 68,
+        "trackId": "T0025",
+        "class": "car",
+        "confidence": 0.538,
+        "boundingBox": [
+          138.5,
+          466.3,
+          188.8,
+          494.8
+        ]
+      },
+      {
+        "frame": 68,
+        "trackId": "T0026",
+        "class": "car",
+        "confidence": 0.485,
+        "boundingBox": [
+          631.6,
+          964.6,
+          691.5,
+          1061.7
+        ]
+      },
+      {
+        "frame": 68,
+        "trackId": "T0027",
+        "class": "car",
+        "confidence": 0.467,
+        "boundingBox": [
+          774.2,
+          727.6,
+          819.5,
+          774.4
+        ]
+      },
+      {
+        "frame": 68,
+        "trackId": "T0028",
+        "class": "car",
+        "confidence": 0.41,
+        "boundingBox": [
+          0.2,
+          519.3,
+          18.9,
+          566.3
+        ]
+      },
+      {
+        "frame": 68,
+        "trackId": "T0029",
+        "class": "car",
+        "confidence": 0.374,
+        "boundingBox": [
+          67.0,
+          493.0,
+          125.6,
+          530.8
+        ]
+      },
+      {
+        "frame": 68,
+        "trackId": "T0030",
+        "class": "car",
+        "confidence": 0.353,
+        "boundingBox": [
+          230.9,
+          415.4,
+          296.2,
+          453.4
+        ]
+      },
+      {
+        "frame": 70,
+        "trackId": "T0031",
+        "class": "car",
+        "confidence": 0.4,
+        "boundingBox": [
+          762.0,
+          773.5,
+          798.8,
+          815.4
+        ]
+      },
+      {
+        "frame": 72,
+        "trackId": "T0026",
+        "class": "car",
+        "confidence": 0.594,
+        "boundingBox": [
+          614.6,
+          975.3,
+          669.4,
+          1055.6
+        ]
+      },
+      {
+        "frame": 74,
+        "trackId": "T0032",
+        "class": "car",
+        "confidence": 0.523,
+        "boundingBox": [
+          713.8,
+          887.8,
+          766.6,
+          951.4
+        ]
+      },
+      {
+        "frame": 74,
+        "trackId": "T0033",
+        "class": "car",
+        "confidence": 0.449,
+        "boundingBox": [
+          322.4,
+          366.5,
+          370.7,
+          392.1
+        ]
+      },
+      {
+        "frame": 74,
+        "trackId": "T0034",
+        "class": "car",
+        "confidence": 0.444,
+        "boundingBox": [
+          695.4,
+          667.6,
+          736.1,
+          724.1
+        ]
+      },
+      {
+        "frame": 76,
+        "trackId": "T0035",
+        "class": "car",
+        "confidence": 0.562,
+        "boundingBox": [
+          30.2,
+          481.3,
+          98.5,
+          527.5
+        ]
+      },
+      {
+        "frame": 78,
+        "trackId": "T0034",
+        "class": "car",
+        "confidence": 0.424,
+        "boundingBox": [
+          682.7,
+          680.1,
+          719.0,
+          735.3
+        ]
+      },
+      {
+        "frame": 80,
+        "trackId": "T0036",
+        "class": "train",
+        "confidence": 0.593,
+        "boundingBox": [
+          1481.3,
+          352.4,
+          1919.7,
+          768.9
+        ]
+      },
+      {
+        "frame": 82,
+        "trackId": "T0037",
+        "class": "train",
+        "confidence": 0.583,
+        "boundingBox": [
+          14.7,
+          733.0,
+          362.0,
+          1069.8
+        ]
+      },
+      {
+        "frame": 82,
+        "trackId": "T0038",
+        "class": "car",
+        "confidence": 0.546,
+        "boundingBox": [
+          660.5,
+          712.1,
+          700.0,
+          770.7
+        ]
+      },
+      {
+        "frame": 82,
+        "trackId": "T0039",
+        "class": "car",
+        "confidence": 0.465,
+        "boundingBox": [
+          360.4,
+          391.5,
+          409.1,
+          418.1
+        ]
+      },
+      {
+        "frame": 82,
+        "trackId": "T0040",
+        "class": "car",
+        "confidence": 0.384,
+        "boundingBox": [
+          730.9,
+          715.5,
+          772.7,
+          762.3
+        ]
+      },
+      {
+        "frame": 82,
+        "trackId": "T0041",
+        "class": "car",
+        "confidence": 0.381,
+        "boundingBox": [
+          396.3,
+          358.3,
+          444.7,
+          390.9
+        ]
+      },
+      {
+        "frame": 84,
+        "trackId": "T0034",
+        "class": "car",
+        "confidence": 0.442,
+        "boundingBox": [
+          663.4,
+          666.1,
+          706.5,
+          726.5
+        ]
+      },
+      {
+        "frame": 84,
+        "trackId": "T0042",
+        "class": "car",
+        "confidence": 0.414,
+        "boundingBox": [
+          703.9,
+          863.3,
+          748.5,
+          922.5
+        ]
+      },
+      {
+        "frame": 86,
+        "trackId": "T0043",
+        "class": "car",
+        "confidence": 0.548,
+        "boundingBox": [
+          32.4,
+          531.5,
+          98.4,
+          563.1
+        ]
+      },
+      {
+        "frame": 88,
+        "trackId": "T0034",
+        "class": "car",
+        "confidence": 0.473,
+        "boundingBox": [
+          654.9,
+          689.0,
+          694.5,
+          738.2
+        ]
+      },
+      {
+        "frame": 88,
+        "trackId": "T0044",
+        "class": "car",
+        "confidence": 0.433,
+        "boundingBox": [
+          214.1,
+          446.8,
+          256.6,
+          476.9
+        ]
+      },
+      {
+        "frame": 92,
+        "trackId": "T0045",
+        "class": "car",
+        "confidence": 0.421,
+        "boundingBox": [
+          167.6,
+          471.5,
+          220.3,
+          502.4
+        ]
+      },
+      {
+        "frame": 92,
+        "trackId": "T0046",
+        "class": "car",
+        "confidence": 0.407,
+        "boundingBox": [
+          661.5,
+          423.7,
+          704.7,
+          458.7
+        ]
+      },
+      {
+        "frame": 94,
+        "trackId": "T0047",
+        "class": "car",
+        "confidence": 0.551,
+        "boundingBox": [
+          254.8,
+          445.1,
+          307.5,
+          471.7
+        ]
+      },
+      {
+        "frame": 98,
+        "trackId": "T0048",
+        "class": "car",
+        "confidence": 0.609,
+        "boundingBox": [
+          574.4,
+          870.0,
+          629.1,
+          959.0
+        ]
+      },
+      {
+        "frame": 98,
+        "trackId": "T0049",
+        "class": "car",
+        "confidence": 0.437,
+        "boundingBox": [
+          0.2,
+          566.5,
+          24.6,
+          606.4
+        ]
+      },
+      {
+        "frame": 98,
+        "trackId": "T0050",
+        "class": "car",
+        "confidence": 0.372,
+        "boundingBox": [
+          625.9,
+          717.9,
+          667.2,
+          771.2
+        ]
+      },
+      {
+        "frame": 100,
+        "trackId": "T0051",
+        "class": "car",
+        "confidence": 0.425,
+        "boundingBox": [
+          40.8,
+          525.3,
+          113.0,
+          561.9
+        ]
+      },
+      {
+        "frame": 102,
+        "trackId": "T0052",
+        "class": "car",
+        "confidence": 0.722,
+        "boundingBox": [
+          639.8,
+          651.9,
+          679.1,
+          704.2
+        ]
+      },
+      {
+        "frame": 102,
+        "trackId": "T0053",
+        "class": "car",
+        "confidence": 0.65,
+        "boundingBox": [
+          559.0,
+          911.1,
+          611.0,
+          986.6
+        ]
+      },
+      {
+        "frame": 102,
+        "trackId": "T0054",
+        "class": "car",
+        "confidence": 0.488,
+        "boundingBox": [
+          74.4,
+          515.1,
+          141.4,
+          550.8
+        ]
+      },
+      {
+        "frame": 102,
+        "trackId": "T0055",
+        "class": "car",
+        "confidence": 0.478,
+        "boundingBox": [
+          666.8,
+          504.8,
+          701.2,
+          545.0
+        ]
+      },
+      {
+        "frame": 104,
+        "trackId": "T0052",
+        "class": "car",
+        "confidence": 0.752,
+        "boundingBox": [
+          635.3,
+          654.4,
+          674.1,
+          709.2
+        ]
+      },
+      {
+        "frame": 104,
+        "trackId": "T0056",
+        "class": "car",
+        "confidence": 0.535,
+        "boundingBox": [
+          534.1,
+          989.3,
+          587.6,
+          1062.7
+        ]
+      },
+      {
+        "frame": 104,
+        "trackId": "T0056",
+        "class": "car",
+        "confidence": 0.433,
+        "boundingBox": [
+          535.0,
+          1007.9,
+          583.8,
+          1062.3
+        ]
+      },
+      {
+        "frame": 104,
+        "trackId": "T0057",
+        "class": "car",
+        "confidence": 0.428,
+        "boundingBox": [
+          668.4,
+          772.7,
+          720.6,
+          821.7
+        ]
+      },
+      {
+        "frame": 104,
+        "trackId": "T0058",
+        "class": "car",
+        "confidence": 0.379,
+        "boundingBox": [
+          692.3,
+          696.4,
+          731.8,
+          737.9
+        ]
+      },
+      {
+        "frame": 106,
+        "trackId": "T0051",
+        "class": "car",
+        "confidence": 0.528,
+        "boundingBox": [
+          67.2,
+          534.3,
+          122.6,
+          568.1
+        ]
+      },
+      {
+        "frame": 106,
+        "trackId": "T0059",
+        "class": "car",
+        "confidence": 0.479,
+        "boundingBox": [
+          129.8,
+          493.9,
+          199.1,
+          530.9
+        ]
+      },
+      {
+        "frame": 106,
+        "trackId": "T0060",
+        "class": "car",
+        "confidence": 0.387,
+        "boundingBox": [
+          536.3,
+          958.7,
+          589.5,
+          1014.2
+        ]
+      },
+      {
+        "frame": 106,
+        "trackId": "T0056",
+        "class": "car",
+        "confidence": 0.369,
+        "boundingBox": [
+          534.5,
+          959.5,
+          589.1,
+          1045.7
+        ]
+      },
+      {
+        "frame": 106,
+        "trackId": "T0061",
+        "class": "car",
+        "confidence": 0.365,
+        "boundingBox": [
+          700.4,
+          489.1,
+          735.6,
+          517.5
+        ]
+      },
+      {
+        "frame": 108,
+        "trackId": "T0062",
+        "class": "car",
+        "confidence": 0.619,
+        "boundingBox": [
+          656.6,
+          842.4,
+          705.1,
+          904.4
+        ]
+      },
+      {
+        "frame": 108,
+        "trackId": "T0063",
+        "class": "car",
+        "confidence": 0.428,
+        "boundingBox": [
+          760.1,
+          607.9,
+          795.5,
+          644.5
+        ]
+      },
+      {
+        "frame": 108,
+        "trackId": "T0064",
+        "class": "car",
+        "confidence": 0.389,
+        "boundingBox": [
+          183.1,
+          485.4,
+          254.2,
+          518.8
+        ]
+      },
+      {
+        "frame": 108,
+        "trackId": "T0065",
+        "class": "car",
+        "confidence": 0.356,
+        "boundingBox": [
+          1873.5,
+          470.6,
+          1919.3,
+          530.2
+        ]
+      },
+      {
+        "frame": 110,
+        "trackId": "T0056",
+        "class": "car",
+        "confidence": 0.519,
+        "boundingBox": [
+          531.5,
+          948.3,
+          586.3,
+          1024.1
+        ]
+      },
+      {
+        "frame": 110,
+        "trackId": "T0066",
+        "class": "car",
+        "confidence": 0.495,
+        "boundingBox": [
+          162.0,
+          472.1,
+          206.4,
+          502.2
+        ]
+      },
+      {
+        "frame": 110,
+        "trackId": "T0055",
+        "class": "car",
+        "confidence": 0.483,
+        "boundingBox": [
+          681.2,
+          504.5,
+          717.4,
+          534.7
+        ]
+      },
+      {
+        "frame": 112,
+        "trackId": "T0067",
+        "class": "car",
+        "confidence": 0.427,
+        "boundingBox": [
+          603.1,
+          699.8,
+          646.7,
+          756.0
+        ]
+      },
+      {
+        "frame": 112,
+        "trackId": "T0068",
+        "class": "car",
+        "confidence": 0.422,
+        "boundingBox": [
+          91.0,
+          527.9,
+          152.0,
+          561.7
+        ]
+      },
+      {
+        "frame": 114,
+        "trackId": "T0051",
+        "class": "car",
+        "confidence": 0.482,
+        "boundingBox": [
+          67.9,
+          540.8,
+          147.4,
+          575.3
+        ]
+      },
+      {
+        "frame": 114,
+        "trackId": "T0067",
+        "class": "car",
+        "confidence": 0.432,
+        "boundingBox": [
+          598.3,
+          699.1,
+          644.9,
+          770.0
+        ]
+      },
+      {
+        "frame": 114,
+        "trackId": "T0069",
+        "class": "car",
+        "confidence": 0.416,
+        "boundingBox": [
+          155.9,
+          515.1,
+          211.9,
+          546.3
+        ]
+      },
+      {
+        "frame": 114,
+        "trackId": "T0070",
+        "class": "car",
+        "confidence": 0.391,
+        "boundingBox": [
+          616.4,
+          489.1,
+          661.8,
+          522.3
+        ]
+      },
+      {
+        "frame": 116,
+        "trackId": "T0071",
+        "class": "car",
+        "confidence": 0.525,
+        "boundingBox": [
+          644.7,
+          512.7,
+          687.5,
+          546.1
+        ]
+      },
+      {
+        "frame": 116,
+        "trackId": "T0072",
+        "class": "car",
+        "confidence": 0.523,
+        "boundingBox": [
+          538.1,
+          901.8,
+          589.7,
+          973.9
+        ]
+      },
+      {
+        "frame": 116,
+        "trackId": "T0068",
+        "class": "car",
+        "confidence": 0.417,
+        "boundingBox": [
+          107.3,
+          533.8,
+          178.0,
+          567.7
+        ]
+      },
+      {
+        "frame": 116,
+        "trackId": "T0073",
+        "class": "car",
+        "confidence": 0.404,
+        "boundingBox": [
+          658.9,
+          762.0,
+          700.8,
+          810.7
+        ]
+      },
+      {
+        "frame": 116,
+        "trackId": "T0074",
+        "class": "car",
+        "confidence": 0.393,
+        "boundingBox": [
+          592.1,
+          531.1,
+          639.8,
+          571.5
+        ]
+      },
+      {
+        "frame": 118,
+        "trackId": "T0075",
+        "class": "car",
+        "confidence": 0.417,
+        "boundingBox": [
+          683.4,
+          668.9,
+          720.7,
+          708.5
+        ]
+      },
+      {
+        "frame": 118,
+        "trackId": "T0076",
+        "class": "car",
+        "confidence": 0.384,
+        "boundingBox": [
+          240.0,
+          421.1,
+          287.3,
+          457.2
+        ]
+      },
+      {
+        "frame": 118,
+        "trackId": "T0077",
+        "class": "car",
+        "confidence": 0.381,
+        "boundingBox": [
+          137.2,
+          495.3,
+          186.8,
+          525.6
+        ]
+      },
+      {
+        "frame": 118,
+        "trackId": "T0078",
+        "class": "car",
+        "confidence": 0.376,
+        "boundingBox": [
+          601.5,
+          668.1,
+          644.9,
+          725.8
+        ]
+      },
+      {
+        "frame": 120,
+        "trackId": "T0068",
+        "class": "car",
+        "confidence": 0.491,
+        "boundingBox": [
+          109.8,
+          544.1,
+          188.4,
+          576.6
+        ]
+      },
+      {
+        "frame": 120,
+        "trackId": "T0079",
+        "class": "car",
+        "confidence": 0.464,
+        "boundingBox": [
+          18.2,
+          530.8,
+          91.6,
+          579.2
+        ]
+      },
+      {
+        "frame": 120,
+        "trackId": "T0080",
+        "class": "car",
+        "confidence": 0.423,
+        "boundingBox": [
+          512.0,
+          451.6,
+          545.7,
+          493.8
+        ]
+      },
+      {
+        "frame": 120,
+        "trackId": "T0081",
+        "class": "car",
+        "confidence": 0.38,
+        "boundingBox": [
+          608.5,
+          891.7,
+          664.9,
+          953.8
+        ]
+      },
+      {
+        "frame": 122,
+        "trackId": "T0082",
+        "class": "car",
+        "confidence": 0.395,
+        "boundingBox": [
+          531.5,
+          852.2,
+          588.9,
+          935.2
+        ]
+      },
+      {
+        "frame": 122,
+        "trackId": "T0083",
+        "class": "car",
+        "confidence": 0.373,
+        "boundingBox": [
+          256.1,
+          446.3,
+          463.0,
+          502.7
+        ]
+      },
+      {
+        "frame": 122,
+        "trackId": "T0084",
+        "class": "car",
+        "confidence": 0.367,
+        "boundingBox": [
+          162.1,
+          534.2,
+          229.2,
+          574.4
+        ]
+      },
+      {
+        "frame": 124,
+        "trackId": "T0085",
+        "class": "car",
+        "confidence": 0.518,
+        "boundingBox": [
+          563.8,
+          558.0,
+          619.3,
+          599.8
+        ]
+      },
+      {
+        "frame": 124,
+        "trackId": "T0086",
+        "class": "car",
+        "confidence": 0.513,
+        "boundingBox": [
+          209.2,
+          448.2,
+          256.2,
+          479.2
+        ]
+      },
+      {
+        "frame": 124,
+        "trackId": "T0087",
+        "class": "car",
+        "confidence": 0.371,
+        "boundingBox": [
+          57.9,
+          542.0,
+          114.4,
+          576.2
+        ]
+      }
+    ]
+  },
+  "tracks": [
+    {
+      "trackId": "T0001",
+      "class": "car",
+      "firstSeen": 0,
+      "hits": 2,
+      "bbox": [
+        59.6,
+        395.6,
+        121.1,
+        424.2
+      ],
+      "confidence": 0.418,
+      "lastSeen": 2
+    },
+    {
+      "trackId": "T0002",
+      "class": "car",
+      "firstSeen": 0,
+      "hits": 1,
+      "bbox": [
+        902.0,
+        647.9,
+        940.8,
+        686.2
+      ],
+      "confidence": 0.477,
+      "lastSeen": 0
+    },
+    {
+      "trackId": "T0003",
+      "class": "car",
+      "firstSeen": 2,
+      "hits": 2,
+      "bbox": [
+        938.1,
+        976.7,
+        990.4,
+        1043.5
+      ],
+      "confidence": 0.352,
+      "lastSeen": 4
+    },
+    {
+      "trackId": "T0004",
+      "class": "car",
+      "firstSeen": 4,
+      "hits": 1,
+      "bbox": [
+        899.9,
+        680.0,
+        940.0,
+        721.6
+      ],
+      "confidence": 0.525,
+      "lastSeen": 4
+    },
+    {
+      "trackId": "T0005",
+      "class": "car",
+      "firstSeen": 6,
+      "hits": 1,
+      "bbox": [
+        168.2,
+        345.4,
+        239.2,
+        380.5
+      ],
+      "confidence": 0.607,
+      "lastSeen": 6
+    },
+    {
+      "trackId": "T0006",
+      "class": "car",
+      "firstSeen": 6,
+      "hits": 2,
+      "bbox": [
+        16.9,
+        421.3,
+        94.2,
+        459.5
+      ],
+      "confidence": 0.41,
+      "lastSeen": 8
+    },
+    {
+      "trackId": "T0007",
+      "class": "car",
+      "firstSeen": 10,
+      "hits": 1,
+      "bbox": [
+        294.0,
+        338.3,
+        354.4,
+        374.5
+      ],
+      "confidence": 0.485,
+      "lastSeen": 10
+    },
+    {
+      "trackId": "T0008",
+      "class": "car",
+      "firstSeen": 10,
+      "hits": 1,
+      "bbox": [
+        826.7,
+        751.8,
+        869.9,
+        819.4
+      ],
+      "confidence": 0.398,
+      "lastSeen": 10
+    },
+    {
+      "trackId": "T0009",
+      "class": "car",
+      "firstSeen": 10,
+      "hits": 1,
+      "bbox": [
+        225.1,
+        342.0,
+        285.7,
+        373.0
+      ],
+      "confidence": 0.386,
+      "lastSeen": 10
+    },
+    {
+      "trackId": "T0010",
+      "class": "car",
+      "firstSeen": 12,
+      "hits": 1,
+      "bbox": [
+        826.6,
+        805.5,
+        873.5,
+        872.6
+      ],
+      "confidence": 0.45,
+      "lastSeen": 12
+    },
+    {
+      "trackId": "T0011",
+      "class": "car",
+      "firstSeen": 18,
+      "hits": 1,
+      "bbox": [
+        895.3,
+        817.1,
+        935.3,
+        875.4
+      ],
+      "confidence": 0.381,
+      "lastSeen": 18
+    },
+    {
+      "trackId": "T0012",
+      "class": "orange",
+      "firstSeen": 40,
+      "hits": 3,
+      "bbox": [
+        1043.3,
+        669.5,
+        1115.2,
+        790.2
+      ],
+      "confidence": 0.364,
+      "lastSeen": 46
+    },
+    {
+      "trackId": "T0013",
+      "class": "car",
+      "firstSeen": 42,
+      "hits": 1,
+      "bbox": [
+        0.0,
+        492.1,
+        53.6,
+        539.6
+      ],
+      "confidence": 0.411,
+      "lastSeen": 42
+    },
+    {
+      "trackId": "T0014",
+      "class": "car",
+      "firstSeen": 46,
+      "hits": 1,
+      "bbox": [
+        755.7,
+        793.0,
+        791.3,
+        851.0
+      ],
+      "confidence": 0.401,
+      "lastSeen": 46
+    },
+    {
+      "trackId": "T0015",
+      "class": "person",
+      "firstSeen": 46,
+      "hits": 1,
+      "bbox": [
+        1810.5,
+        635.8,
+        1919.4,
+        781.2
+      ],
+      "confidence": 0.38,
+      "lastSeen": 46
+    },
+    {
+      "trackId": "T0016",
+      "class": "train",
+      "firstSeen": 50,
+      "hits": 2,
+      "bbox": [
+        1507.9,
+        250.9,
+        1918.6,
+        669.8
+      ],
+      "confidence": 0.389,
+      "lastSeen": 52
+    },
+    {
+      "trackId": "T0017",
+      "class": "car",
+      "firstSeen": 50,
+      "hits": 1,
+      "bbox": [
+        742.1,
+        827.4,
+        791.1,
+        891.9
+      ],
+      "confidence": 0.365,
+      "lastSeen": 50
+    },
+    {
+      "trackId": "T0018",
+      "class": "car",
+      "firstSeen": 54,
+      "hits": 1,
+      "bbox": [
+        727.2,
+        843.5,
+        767.1,
+        904.2
+      ],
+      "confidence": 0.438,
+      "lastSeen": 54
+    },
+    {
+      "trackId": "T0019",
+      "class": "truck",
+      "firstSeen": 54,
+      "hits": 3,
+      "bbox": [
+        1086.9,
+        949.2,
+        1244.7,
+        1065.6
+      ],
+      "confidence": 0.362,
+      "lastSeen": 58
+    },
+    {
+      "trackId": "T0020",
+      "class": "car",
+      "firstSeen": 54,
+      "hits": 1,
+      "bbox": [
+        166.0,
+        451.1,
+        206.6,
+        478.3
+      ],
+      "confidence": 0.363,
+      "lastSeen": 54
+    },
+    {
+      "trackId": "T0021",
+      "class": "car",
+      "firstSeen": 58,
+      "hits": 1,
+      "bbox": [
+        723.6,
+        783.5,
+        766.9,
+        844.4
+      ],
+      "confidence": 0.671,
+      "lastSeen": 58
+    },
+    {
+      "trackId": "T0022",
+      "class": "car",
+      "firstSeen": 60,
+      "hits": 2,
+      "bbox": [
+        98.3,
+        480.5,
+        155.9,
+        510.1
+      ],
+      "confidence": 0.405,
+      "lastSeen": 64
+    },
+    {
+      "trackId": "T0023",
+      "class": "car",
+      "firstSeen": 62,
+      "hits": 1,
+      "bbox": [
+        781.2,
+        762.8,
+        829.5,
+        812.8
+      ],
+      "confidence": 0.549,
+      "lastSeen": 62
+    },
+    {
+      "trackId": "T0024",
+      "class": "car",
+      "firstSeen": 64,
+      "hits": 1,
+      "bbox": [
+        752.8,
+        554.6,
+        789.1,
+        608.0
+      ],
+      "confidence": 0.412,
+      "lastSeen": 64
+    },
+    {
+      "trackId": "T0025",
+      "class": "car",
+      "firstSeen": 68,
+      "hits": 1,
+      "bbox": [
+        138.5,
+        466.3,
+        188.8,
+        494.8
+      ],
+      "confidence": 0.538,
+      "lastSeen": 68
+    },
+    {
+      "trackId": "T0026",
+      "class": "car",
+      "firstSeen": 68,
+      "hits": 2,
+      "bbox": [
+        614.6,
+        975.3,
+        669.4,
+        1055.6
+      ],
+      "confidence": 0.594,
+      "lastSeen": 72
+    },
+    {
+      "trackId": "T0027",
+      "class": "car",
+      "firstSeen": 68,
+      "hits": 1,
+      "bbox": [
+        774.2,
+        727.6,
+        819.5,
+        774.4
+      ],
+      "confidence": 0.467,
+      "lastSeen": 68
+    },
+    {
+      "trackId": "T0028",
+      "class": "car",
+      "firstSeen": 68,
+      "hits": 1,
+      "bbox": [
+        0.2,
+        519.3,
+        18.9,
+        566.3
+      ],
+      "confidence": 0.41,
+      "lastSeen": 68
+    },
+    {
+      "trackId": "T0029",
+      "class": "car",
+      "firstSeen": 68,
+      "hits": 1,
+      "bbox": [
+        67.0,
+        493.0,
+        125.6,
+        530.8
+      ],
+      "confidence": 0.374,
+      "lastSeen": 68
+    },
+    {
+      "trackId": "T0030",
+      "class": "car",
+      "firstSeen": 68,
+      "hits": 1,
+      "bbox": [
+        230.9,
+        415.4,
+        296.2,
+        453.4
+      ],
+      "confidence": 0.353,
+      "lastSeen": 68
+    },
+    {
+      "trackId": "T0031",
+      "class": "car",
+      "firstSeen": 70,
+      "hits": 1,
+      "bbox": [
+        762.0,
+        773.5,
+        798.8,
+        815.4
+      ],
+      "confidence": 0.4,
+      "lastSeen": 70
+    },
+    {
+      "trackId": "T0032",
+      "class": "car",
+      "firstSeen": 74,
+      "hits": 1,
+      "bbox": [
+        713.8,
+        887.8,
+        766.6,
+        951.4
+      ],
+      "confidence": 0.523,
+      "lastSeen": 74
+    },
+    {
+      "trackId": "T0033",
+      "class": "car",
+      "firstSeen": 74,
+      "hits": 1,
+      "bbox": [
+        322.4,
+        366.5,
+        370.7,
+        392.1
+      ],
+      "confidence": 0.449,
+      "lastSeen": 74
+    },
+    {
+      "trackId": "T0034",
+      "class": "car",
+      "firstSeen": 74,
+      "hits": 4,
+      "bbox": [
+        654.9,
+        689.0,
+        694.5,
+        738.2
+      ],
+      "confidence": 0.473,
+      "lastSeen": 88
+    },
+    {
+      "trackId": "T0035",
+      "class": "car",
+      "firstSeen": 76,
+      "hits": 1,
+      "bbox": [
+        30.2,
+        481.3,
+        98.5,
+        527.5
+      ],
+      "confidence": 0.562,
+      "lastSeen": 76
+    },
+    {
+      "trackId": "T0036",
+      "class": "train",
+      "firstSeen": 80,
+      "hits": 1,
+      "bbox": [
+        1481.3,
+        352.4,
+        1919.7,
+        768.9
+      ],
+      "confidence": 0.593,
+      "lastSeen": 80
+    },
+    {
+      "trackId": "T0037",
+      "class": "train",
+      "firstSeen": 82,
+      "hits": 1,
+      "bbox": [
+        14.7,
+        733.0,
+        362.0,
+        1069.8
+      ],
+      "confidence": 0.583,
+      "lastSeen": 82
+    },
+    {
+      "trackId": "T0038",
+      "class": "car",
+      "firstSeen": 82,
+      "hits": 1,
+      "bbox": [
+        660.5,
+        712.1,
+        700.0,
+        770.7
+      ],
+      "confidence": 0.546,
+      "lastSeen": 82
+    },
+    {
+      "trackId": "T0039",
+      "class": "car",
+      "firstSeen": 82,
+      "hits": 1,
+      "bbox": [
+        360.4,
+        391.5,
+        409.1,
+        418.1
+      ],
+      "confidence": 0.465,
+      "lastSeen": 82
+    },
+    {
+      "trackId": "T0040",
+      "class": "car",
+      "firstSeen": 82,
+      "hits": 1,
+      "bbox": [
+        730.9,
+        715.5,
+        772.7,
+        762.3
+      ],
+      "confidence": 0.384,
+      "lastSeen": 82
+    },
+    {
+      "trackId": "T0041",
+      "class": "car",
+      "firstSeen": 82,
+      "hits": 1,
+      "bbox": [
+        396.3,
+        358.3,
+        444.7,
+        390.9
+      ],
+      "confidence": 0.381,
+      "lastSeen": 82
+    },
+    {
+      "trackId": "T0042",
+      "class": "car",
+      "firstSeen": 84,
+      "hits": 1,
+      "bbox": [
+        703.9,
+        863.3,
+        748.5,
+        922.5
+      ],
+      "confidence": 0.414,
+      "lastSeen": 84
+    },
+    {
+      "trackId": "T0043",
+      "class": "car",
+      "firstSeen": 86,
+      "hits": 1,
+      "bbox": [
+        32.4,
+        531.5,
+        98.4,
+        563.1
+      ],
+      "confidence": 0.548,
+      "lastSeen": 86
+    },
+    {
+      "trackId": "T0044",
+      "class": "car",
+      "firstSeen": 88,
+      "hits": 1,
+      "bbox": [
+        214.1,
+        446.8,
+        256.6,
+        476.9
+      ],
+      "confidence": 0.433,
+      "lastSeen": 88
+    },
+    {
+      "trackId": "T0045",
+      "class": "car",
+      "firstSeen": 92,
+      "hits": 1,
+      "bbox": [
+        167.6,
+        471.5,
+        220.3,
+        502.4
+      ],
+      "confidence": 0.421,
+      "lastSeen": 92
+    },
+    {
+      "trackId": "T0046",
+      "class": "car",
+      "firstSeen": 92,
+      "hits": 1,
+      "bbox": [
+        661.5,
+        423.7,
+        704.7,
+        458.7
+      ],
+      "confidence": 0.407,
+      "lastSeen": 92
+    },
+    {
+      "trackId": "T0047",
+      "class": "car",
+      "firstSeen": 94,
+      "hits": 1,
+      "bbox": [
+        254.8,
+        445.1,
+        307.5,
+        471.7
+      ],
+      "confidence": 0.551,
+      "lastSeen": 94
+    },
+    {
+      "trackId": "T0048",
+      "class": "car",
+      "firstSeen": 98,
+      "hits": 1,
+      "bbox": [
+        574.4,
+        870.0,
+        629.1,
+        959.0
+      ],
+      "confidence": 0.609,
+      "lastSeen": 98
+    },
+    {
+      "trackId": "T0049",
+      "class": "car",
+      "firstSeen": 98,
+      "hits": 1,
+      "bbox": [
+        0.2,
+        566.5,
+        24.6,
+        606.4
+      ],
+      "confidence": 0.437,
+      "lastSeen": 98
+    },
+    {
+      "trackId": "T0050",
+      "class": "car",
+      "firstSeen": 98,
+      "hits": 1,
+      "bbox": [
+        625.9,
+        717.9,
+        667.2,
+        771.2
+      ],
+      "confidence": 0.372,
+      "lastSeen": 98
+    },
+    {
+      "trackId": "T0051",
+      "class": "car",
+      "firstSeen": 100,
+      "hits": 3,
+      "bbox": [
+        67.9,
+        540.8,
+        147.4,
+        575.3
+      ],
+      "confidence": 0.482,
+      "lastSeen": 114
+    },
+    {
+      "trackId": "T0052",
+      "class": "car",
+      "firstSeen": 102,
+      "hits": 2,
+      "bbox": [
+        635.3,
+        654.4,
+        674.1,
+        709.2
+      ],
+      "confidence": 0.752,
+      "lastSeen": 104
+    },
+    {
+      "trackId": "T0053",
+      "class": "car",
+      "firstSeen": 102,
+      "hits": 1,
+      "bbox": [
+        559.0,
+        911.1,
+        611.0,
+        986.6
+      ],
+      "confidence": 0.65,
+      "lastSeen": 102
+    },
+    {
+      "trackId": "T0054",
+      "class": "car",
+      "firstSeen": 102,
+      "hits": 1,
+      "bbox": [
+        74.4,
+        515.1,
+        141.4,
+        550.8
+      ],
+      "confidence": 0.488,
+      "lastSeen": 102
+    },
+    {
+      "trackId": "T0055",
+      "class": "car",
+      "firstSeen": 102,
+      "hits": 2,
+      "bbox": [
+        681.2,
+        504.5,
+        717.4,
+        534.7
+      ],
+      "confidence": 0.483,
+      "lastSeen": 110
+    },
+    {
+      "trackId": "T0056",
+      "class": "car",
+      "firstSeen": 104,
+      "hits": 4,
+      "bbox": [
+        531.5,
+        948.3,
+        586.3,
+        1024.1
+      ],
+      "confidence": 0.519,
+      "lastSeen": 110
+    },
+    {
+      "trackId": "T0057",
+      "class": "car",
+      "firstSeen": 104,
+      "hits": 1,
+      "bbox": [
+        668.4,
+        772.7,
+        720.6,
+        821.7
+      ],
+      "confidence": 0.428,
+      "lastSeen": 104
+    },
+    {
+      "trackId": "T0058",
+      "class": "car",
+      "firstSeen": 104,
+      "hits": 1,
+      "bbox": [
+        692.3,
+        696.4,
+        731.8,
+        737.9
+      ],
+      "confidence": 0.379,
+      "lastSeen": 104
+    },
+    {
+      "trackId": "T0059",
+      "class": "car",
+      "firstSeen": 106,
+      "hits": 1,
+      "bbox": [
+        129.8,
+        493.9,
+        199.1,
+        530.9
+      ],
+      "confidence": 0.479,
+      "lastSeen": 106
+    },
+    {
+      "trackId": "T0060",
+      "class": "car",
+      "firstSeen": 106,
+      "hits": 1,
+      "bbox": [
+        536.3,
+        958.7,
+        589.5,
+        1014.2
+      ],
+      "confidence": 0.387,
+      "lastSeen": 106
+    },
+    {
+      "trackId": "T0061",
+      "class": "car",
+      "firstSeen": 106,
+      "hits": 1,
+      "bbox": [
+        700.4,
+        489.1,
+        735.6,
+        517.5
+      ],
+      "confidence": 0.365,
+      "lastSeen": 106
+    },
+    {
+      "trackId": "T0062",
+      "class": "car",
+      "firstSeen": 108,
+      "hits": 1,
+      "bbox": [
+        656.6,
+        842.4,
+        705.1,
+        904.4
+      ],
+      "confidence": 0.619,
+      "lastSeen": 108
+    },
+    {
+      "trackId": "T0063",
+      "class": "car",
+      "firstSeen": 108,
+      "hits": 1,
+      "bbox": [
+        760.1,
+        607.9,
+        795.5,
+        644.5
+      ],
+      "confidence": 0.428,
+      "lastSeen": 108
+    },
+    {
+      "trackId": "T0064",
+      "class": "car",
+      "firstSeen": 108,
+      "hits": 1,
+      "bbox": [
+        183.1,
+        485.4,
+        254.2,
+        518.8
+      ],
+      "confidence": 0.389,
+      "lastSeen": 108
+    },
+    {
+      "trackId": "T0065",
+      "class": "car",
+      "firstSeen": 108,
+      "hits": 1,
+      "bbox": [
+        1873.5,
+        470.6,
+        1919.3,
+        530.2
+      ],
+      "confidence": 0.356,
+      "lastSeen": 108
+    },
+    {
+      "trackId": "T0066",
+      "class": "car",
+      "firstSeen": 110,
+      "hits": 1,
+      "bbox": [
+        162.0,
+        472.1,
+        206.4,
+        502.2
+      ],
+      "confidence": 0.495,
+      "lastSeen": 110
+    },
+    {
+      "trackId": "T0067",
+      "class": "car",
+      "firstSeen": 112,
+      "hits": 2,
+      "bbox": [
+        598.3,
+        699.1,
+        644.9,
+        770.0
+      ],
+      "confidence": 0.432,
+      "lastSeen": 114
+    },
+    {
+      "trackId": "T0068",
+      "class": "car",
+      "firstSeen": 112,
+      "hits": 3,
+      "bbox": [
+        109.8,
+        544.1,
+        188.4,
+        576.6
+      ],
+      "confidence": 0.491,
+      "lastSeen": 120
+    },
+    {
+      "trackId": "T0069",
+      "class": "car",
+      "firstSeen": 114,
+      "hits": 1,
+      "bbox": [
+        155.9,
+        515.1,
+        211.9,
+        546.3
+      ],
+      "confidence": 0.416,
+      "lastSeen": 114
+    },
+    {
+      "trackId": "T0070",
+      "class": "car",
+      "firstSeen": 114,
+      "hits": 1,
+      "bbox": [
+        616.4,
+        489.1,
+        661.8,
+        522.3
+      ],
+      "confidence": 0.391,
+      "lastSeen": 114
+    },
+    {
+      "trackId": "T0071",
+      "class": "car",
+      "firstSeen": 116,
+      "hits": 1,
+      "bbox": [
+        644.7,
+        512.7,
+        687.5,
+        546.1
+      ],
+      "confidence": 0.525,
+      "lastSeen": 116
+    },
+    {
+      "trackId": "T0072",
+      "class": "car",
+      "firstSeen": 116,
+      "hits": 1,
+      "bbox": [
+        538.1,
+        901.8,
+        589.7,
+        973.9
+      ],
+      "confidence": 0.523,
+      "lastSeen": 116
+    },
+    {
+      "trackId": "T0073",
+      "class": "car",
+      "firstSeen": 116,
+      "hits": 1,
+      "bbox": [
+        658.9,
+        762.0,
+        700.8,
+        810.7
+      ],
+      "confidence": 0.404,
+      "lastSeen": 116
+    },
+    {
+      "trackId": "T0074",
+      "class": "car",
+      "firstSeen": 116,
+      "hits": 1,
+      "bbox": [
+        592.1,
+        531.1,
+        639.8,
+        571.5
+      ],
+      "confidence": 0.393,
+      "lastSeen": 116
+    },
+    {
+      "trackId": "T0075",
+      "class": "car",
+      "firstSeen": 118,
+      "hits": 1,
+      "bbox": [
+        683.4,
+        668.9,
+        720.7,
+        708.5
+      ],
+      "confidence": 0.417,
+      "lastSeen": 118
+    },
+    {
+      "trackId": "T0076",
+      "class": "car",
+      "firstSeen": 118,
+      "hits": 1,
+      "bbox": [
+        240.0,
+        421.1,
+        287.3,
+        457.2
+      ],
+      "confidence": 0.384,
+      "lastSeen": 118
+    },
+    {
+      "trackId": "T0077",
+      "class": "car",
+      "firstSeen": 118,
+      "hits": 1,
+      "bbox": [
+        137.2,
+        495.3,
+        186.8,
+        525.6
+      ],
+      "confidence": 0.381,
+      "lastSeen": 118
+    },
+    {
+      "trackId": "T0078",
+      "class": "car",
+      "firstSeen": 118,
+      "hits": 1,
+      "bbox": [
+        601.5,
+        668.1,
+        644.9,
+        725.8
+      ],
+      "confidence": 0.376,
+      "lastSeen": 118
+    },
+    {
+      "trackId": "T0079",
+      "class": "car",
+      "firstSeen": 120,
+      "hits": 1,
+      "bbox": [
+        18.2,
+        530.8,
+        91.6,
+        579.2
+      ],
+      "confidence": 0.464,
+      "lastSeen": 120
+    },
+    {
+      "trackId": "T0080",
+      "class": "car",
+      "firstSeen": 120,
+      "hits": 1,
+      "bbox": [
+        512.0,
+        451.6,
+        545.7,
+        493.8
+      ],
+      "confidence": 0.423,
+      "lastSeen": 120
+    },
+    {
+      "trackId": "T0081",
+      "class": "car",
+      "firstSeen": 120,
+      "hits": 1,
+      "bbox": [
+        608.5,
+        891.7,
+        664.9,
+        953.8
+      ],
+      "confidence": 0.38,
+      "lastSeen": 120
+    },
+    {
+      "trackId": "T0082",
+      "class": "car",
+      "firstSeen": 122,
+      "hits": 1,
+      "bbox": [
+        531.5,
+        852.2,
+        588.9,
+        935.2
+      ],
+      "confidence": 0.395,
+      "lastSeen": 122
+    },
+    {
+      "trackId": "T0083",
+      "class": "car",
+      "firstSeen": 122,
+      "hits": 1,
+      "bbox": [
+        256.1,
+        446.3,
+        463.0,
+        502.7
+      ],
+      "confidence": 0.373,
+      "lastSeen": 122
+    },
+    {
+      "trackId": "T0084",
+      "class": "car",
+      "firstSeen": 122,
+      "hits": 1,
+      "bbox": [
+        162.1,
+        534.2,
+        229.2,
+        574.4
+      ],
+      "confidence": 0.367,
+      "lastSeen": 122
+    },
+    {
+      "trackId": "T0085",
+      "class": "car",
+      "firstSeen": 124,
+      "hits": 1,
+      "bbox": [
+        563.8,
+        558.0,
+        619.3,
+        599.8
+      ],
+      "confidence": 0.518,
+      "lastSeen": 124
+    },
+    {
+      "trackId": "T0086",
+      "class": "car",
+      "firstSeen": 124,
+      "hits": 1,
+      "bbox": [
+        209.2,
+        448.2,
+        256.2,
+        479.2
+      ],
+      "confidence": 0.513,
+      "lastSeen": 124
+    },
+    {
+      "trackId": "T0087",
+      "class": "car",
+      "firstSeen": 124,
+      "hits": 1,
+      "bbox": [
+        57.9,
+        542.0,
+        114.4,
+        576.2
+      ],
+      "confidence": 0.371,
+      "lastSeen": 124
+    }
+  ],
+  "frameQuality": {
+    "estimated": true,
+    "average": {
+      "sharpness": 100.0,
+      "brightness": 26.4,
+      "contrast": 36.3
+    },
+    "samples": [
+      {
+        "frame": 0,
+        "sharpness": 100.0,
+        "brightness": 27.1,
+        "contrast": 37.5
+      },
+      {
+        "frame": 2,
+        "sharpness": 100.0,
+        "brightness": 27.2,
+        "contrast": 37.4
+      },
+      {
+        "frame": 4,
+        "sharpness": 100.0,
+        "brightness": 27.3,
+        "contrast": 37.5
+      },
+      {
+        "frame": 6,
+        "sharpness": 100.0,
+        "brightness": 27.3,
+        "contrast": 38.0
+      },
+      {
+        "frame": 8,
+        "sharpness": 100.0,
+        "brightness": 27.6,
+        "contrast": 38.3
+      },
+      {
+        "frame": 10,
+        "sharpness": 100.0,
+        "brightness": 27.6,
+        "contrast": 38.6
+      },
+      {
+        "frame": 12,
+        "sharpness": 100.0,
+        "brightness": 27.2,
+        "contrast": 38.6
+      },
+      {
+        "frame": 14,
+        "sharpness": 100.0,
+        "brightness": 26.9,
+        "contrast": 38.4
+      },
+      {
+        "frame": 16,
+        "sharpness": 100.0,
+        "brightness": 27.0,
+        "contrast": 38.3
+      },
+      {
+        "frame": 18,
+        "sharpness": 100.0,
+        "brightness": 27.1,
+        "contrast": 38.5
+      },
+      {
+        "frame": 20,
+        "sharpness": 100.0,
+        "brightness": 27.1,
+        "contrast": 38.4
+      },
+      {
+        "frame": 22,
+        "sharpness": 100.0,
+        "brightness": 26.9,
+        "contrast": 38.4
+      },
+      {
+        "frame": 24,
+        "sharpness": 100.0,
+        "brightness": 26.8,
+        "contrast": 38.2
+      },
+      {
+        "frame": 26,
+        "sharpness": 100.0,
+        "brightness": 27.0,
+        "contrast": 38.6
+      },
+      {
+        "frame": 28,
+        "sharpness": 100.0,
+        "brightness": 27.1,
+        "contrast": 38.2
+      },
+      {
+        "frame": 30,
+        "sharpness": 100.0,
+        "brightness": 26.7,
+        "contrast": 38.1
+      },
+      {
+        "frame": 32,
+        "sharpness": 100.0,
+        "brightness": 26.9,
+        "contrast": 37.4
+      },
+      {
+        "frame": 34,
+        "sharpness": 100.0,
+        "brightness": 26.9,
+        "contrast": 36.6
+      },
+      {
+        "frame": 36,
+        "sharpness": 100.0,
+        "brightness": 27.0,
+        "contrast": 36.4
+      },
+      {
+        "frame": 38,
+        "sharpness": 100.0,
+        "brightness": 27.0,
+        "contrast": 36.7
+      },
+      {
+        "frame": 40,
+        "sharpness": 100.0,
+        "brightness": 26.6,
+        "contrast": 36.5
+      },
+      {
+        "frame": 42,
+        "sharpness": 100.0,
+        "brightness": 26.2,
+        "contrast": 35.8
+      },
+      {
+        "frame": 44,
+        "sharpness": 100.0,
+        "brightness": 26.2,
+        "contrast": 35.5
+      },
+      {
+        "frame": 46,
+        "sharpness": 100.0,
+        "brightness": 26.3,
+        "contrast": 35.5
+      },
+      {
+        "frame": 48,
+        "sharpness": 100.0,
+        "brightness": 26.4,
+        "contrast": 35.4
+      },
+      {
+        "frame": 50,
+        "sharpness": 100.0,
+        "brightness": 26.3,
+        "contrast": 35.5
+      },
+      {
+        "frame": 52,
+        "sharpness": 100.0,
+        "brightness": 26.4,
+        "contrast": 35.7
+      },
+      {
+        "frame": 54,
+        "sharpness": 100.0,
+        "brightness": 26.3,
+        "contrast": 35.7
+      },
+      {
+        "frame": 56,
+        "sharpness": 100.0,
+        "brightness": 26.2,
+        "contrast": 35.7
+      },
+      {
+        "frame": 58,
+        "sharpness": 100.0,
+        "brightness": 26.2,
+        "contrast": 35.8
+      },
+      {
+        "frame": 60,
+        "sharpness": 100.0,
+        "brightness": 25.8,
+        "contrast": 36.4
+      },
+      {
+        "frame": 62,
+        "sharpness": 100.0,
+        "brightness": 26.1,
+        "contrast": 36.8
+      },
+      {
+        "frame": 64,
+        "sharpness": 100.0,
+        "brightness": 26.2,
+        "contrast": 36.1
+      },
+      {
+        "frame": 66,
+        "sharpness": 100.0,
+        "brightness": 26.2,
+        "contrast": 35.9
+      },
+      {
+        "frame": 68,
+        "sharpness": 100.0,
+        "brightness": 26.3,
+        "contrast": 36.0
+      },
+      {
+        "frame": 70,
+        "sharpness": 100.0,
+        "brightness": 26.3,
+        "contrast": 35.9
+      },
+      {
+        "frame": 72,
+        "sharpness": 100.0,
+        "brightness": 26.2,
+        "contrast": 36.0
+      },
+      {
+        "frame": 74,
+        "sharpness": 100.0,
+        "brightness": 26.3,
+        "contrast": 35.8
+      },
+      {
+        "frame": 76,
+        "sharpness": 100.0,
+        "brightness": 26.2,
+        "contrast": 35.7
+      },
+      {
+        "frame": 78,
+        "sharpness": 100.0,
+        "brightness": 26.1,
+        "contrast": 35.6
+      },
+      {
+        "frame": 80,
+        "sharpness": 100.0,
+        "brightness": 26.1,
+        "contrast": 36.0
+      },
+      {
+        "frame": 82,
+        "sharpness": 100.0,
+        "brightness": 26.7,
+        "contrast": 36.3
+      },
+      {
+        "frame": 84,
+        "sharpness": 100.0,
+        "brightness": 26.0,
+        "contrast": 36.1
+      },
+      {
+        "frame": 86,
+        "sharpness": 100.0,
+        "brightness": 25.8,
+        "contrast": 35.9
+      },
+      {
+        "frame": 88,
+        "sharpness": 100.0,
+        "brightness": 25.8,
+        "contrast": 35.5
+      },
+      {
+        "frame": 90,
+        "sharpness": 100.0,
+        "brightness": 25.4,
+        "contrast": 35.6
+      },
+      {
+        "frame": 92,
+        "sharpness": 100.0,
+        "brightness": 25.5,
+        "contrast": 35.3
+      },
+      {
+        "frame": 94,
+        "sharpness": 100.0,
+        "brightness": 25.5,
+        "contrast": 34.9
+      },
+      {
+        "frame": 96,
+        "sharpness": 100.0,
+        "brightness": 25.6,
+        "contrast": 35.3
+      },
+      {
+        "frame": 98,
+        "sharpness": 100.0,
+        "brightness": 25.8,
+        "contrast": 35.7
+      },
+      {
+        "frame": 100,
+        "sharpness": 100.0,
+        "brightness": 26.0,
+        "contrast": 35.6
+      },
+      {
+        "frame": 102,
+        "sharpness": 100.0,
+        "brightness": 26.2,
+        "contrast": 35.9
+      },
+      {
+        "frame": 104,
+        "sharpness": 100.0,
+        "brightness": 26.4,
+        "contrast": 35.7
+      },
+      {
+        "frame": 106,
+        "sharpness": 100.0,
+        "brightness": 26.4,
+        "contrast": 35.3
+      },
+      {
+        "frame": 108,
+        "sharpness": 100.0,
+        "brightness": 25.9,
+        "contrast": 34.7
+      },
+      {
+        "frame": 110,
+        "sharpness": 100.0,
+        "brightness": 25.9,
+        "contrast": 34.4
+      },
+      {
+        "frame": 112,
+        "sharpness": 100.0,
+        "brightness": 25.8,
+        "contrast": 34.5
+      },
+      {
+        "frame": 114,
+        "sharpness": 100.0,
+        "brightness": 25.8,
+        "contrast": 34.6
+      },
+      {
+        "frame": 116,
+        "sharpness": 100.0,
+        "brightness": 25.9,
+        "contrast": 34.7
+      },
+      {
+        "frame": 118,
+        "sharpness": 100.0,
+        "brightness": 26.0,
+        "contrast": 34.5
+      },
+      {
+        "frame": 120,
+        "sharpness": 100.0,
+        "brightness": 25.2,
+        "contrast": 34.6
+      },
+      {
+        "frame": 122,
+        "sharpness": 100.0,
+        "brightness": 25.4,
+        "contrast": 34.4
+      },
+      {
+        "frame": 124,
+        "sharpness": 100.0,
+        "brightness": 25.8,
+        "contrast": 34.6
+      }
+    ]
+  },
+  "reconstruction": {
+    "status": "complete",
+    "kind": "urban",
+    "pointCloud": {
+      "points_count": 25000,
+      "coverage": 100,
+      "density": "medium",
+      "color_confidence": 0.78,
+      "structure_confidence": 0.82
+    },
+    "observedSurface": 60,
+    "partialSurface": 25,
+    "occludedSurface": 15,
+    "confidence": 93,
+    "estimated": true,
+    "estimateMethod": "Heuristic from analyzed-frame count, average sharpness, and detection density",
+    "uncertainty": {
+      "overall": 0.13,
+      "byRegion": [
+        {
+          "region": "north",
+          "uncertainty": 0.08
+        },
+        {
+          "region": "east",
+          "uncertainty": 0.12
+        },
+        {
+          "region": "south",
+          "uncertainty": 0.18
+        },
+        {
+          "region": "west",
+          "uncertainty": 0.25
+        }
+      ]
+    }
+  },
+  "measurements": null,
+  "findings": [
+    {
+      "id": "f_83a62d1b",
+      "title": "People detected (1)",
+      "status": "OBSERVED",
+      "category": "dynamic",
+      "confidence": 0,
+      "severity": "info",
+      "evidence": "Tracked 1 distinct individuals across frames",
+      "location": "Scene",
+      "action": "Review detected individuals for operational relevance"
+    },
+    {
+      "id": "f_301783d6",
+      "title": "Vehicles detected (82)",
+      "status": "OBSERVED",
+      "category": "dynamic",
+      "confidence": 0,
+      "severity": "info",
+      "evidence": "Tracked 82 vehicles in scene",
+      "location": "Scene",
+      "action": "Monitor vehicle movement and trajectories"
+    }
+  ],
+  "metadata": {
+    "frame_sampling": 10,
+    "inference_resolution": 640,
+    "detection_confidence": 0.35,
+    "reconstruction_quality": "medium"
+  }
+}

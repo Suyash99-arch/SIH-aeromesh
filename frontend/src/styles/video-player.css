@@ -1,0 +1,199 @@
+/* Video Player */
+.video-player-wrapper {
+  position: relative;
+  width: 100%;
+  background: #061017;
+}
+
+.video-player-container {
+  position: relative;
+  width: 100%;
+  max-width: 100%;
+}
+
+.video-canvas {
+  width: 100%;
+  height: auto;
+  display: block;
+  background: #061017;
+}
+
+.video-hud-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  pointer-events: none;
+  font-family: "Courier New", monospace;
+  font-size: 12px;
+}
+
+.hud {
+  position: absolute;
+  color: #42d7ff;
+  background: rgba(6, 16, 23, 0.7);
+  padding: 6px 10px;
+  border: 1px solid rgba(66, 215, 255, 0.3);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+}
+
+.hud.rec {
+  top: 12px;
+  left: 12px;
+}
+
+.hud.rec i {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  background: #ff5c70;
+  border-radius: 50%;
+  margin-right: 4px;
+  animation: pulse 1s ease-in-out infinite;
+}
+
+.hud.telemetry {
+  top: 12px;
+  right: 12px;
+  text-align: right;
+  line-height: 1.5;
+}
+
+.crosshair {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 24px;
+  color: rgba(66, 215, 255, 0.4);
+  font-weight: 300;
+}
+
+.detection {
+  position: absolute;
+  bottom: 20px;
+  left: 20px;
+  color: #ff6978;
+  background: rgba(255, 105, 120, 0.1);
+  border: 2px solid #ff6978;
+  padding: 8px 12px;
+}
+
+.detection b {
+  display: block;
+  margin-top: 4px;
+  font-size: 14px;
+}
+
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.4;
+  }
+}
+
+.detection-list {
+  display: grid;
+  gap: 6px;
+}
+
+.detection-badge {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 12px;
+}
+
+.detection-badge.critical {
+  border-color: #ff6978;
+  background: rgba(255, 105, 120, 0.05);
+}
+
+.detection-badge.high {
+  border-color: #ffb15d;
+  background: rgba(255, 177, 93, 0.05);
+}
+
+.detection-badge.medium {
+  border-color: #f3b45e;
+}
+
+.detection-badge span {
+  flex: 1;
+  color: var(--text2);
+}
+
+.detection-badge b {
+  color: var(--text);
+  font-weight: 700;
+}
+
+/* Mission Map */
+.mission-map {
+  width: 100%;
+  height: auto;
+  max-height: 400px;
+}
+
+/* Analytics Grid */
+.analytics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+  margin-bottom: 20px;
+}
+
+.object-stats {
+  display: grid;
+  gap: 10px;
+}
+
+.classification {
+  display: grid;
+  gap: 12px;
+}
+
+.class-item {
+  display: flex;
+  justify-content: space-between;
+  padding: 10px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+.class-item span {
+  color: var(--text2);
+}
+
+.class-item b {
+  color: var(--cyan);
+}
+
+.confidence-bar {
+  display: grid;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+
+.confidence-bar span {
+  font-size: 12px;
+  color: var(--text2);
+}
+
+.confidence-bar b {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--text);
+}

@@ -1,0 +1,989 @@
+{
+  "north-ridge": {
+    "detections": {
+      "uniqueTracks": 15,
+      "byGroup": {
+        "vehicles": 15
+      },
+      "byClass": {
+        "car": 15
+      }
+    },
+    "objects": [
+      "car"
+    ],
+    "frameQuality": {
+      "estimated": true,
+      "average": {
+        "sharpness": 100.0,
+        "brightness": 26.3,
+        "contrast": 36.3
+      },
+      "samples": [
+        {
+          "frame": 0,
+          "sharpness": 100.0,
+          "brightness": 27.1,
+          "contrast": 37.5
+        },
+        {
+          "frame": 12,
+          "sharpness": 100.0,
+          "brightness": 27.2,
+          "contrast": 38.6
+        },
+        {
+          "frame": 24,
+          "sharpness": 100.0,
+          "brightness": 26.8,
+          "contrast": 38.2
+        },
+        {
+          "frame": 36,
+          "sharpness": 100.0,
+          "brightness": 27.0,
+          "contrast": 36.4
+        },
+        {
+          "frame": 48,
+          "sharpness": 100.0,
+          "brightness": 26.4,
+          "contrast": 35.4
+        },
+        {
+          "frame": 60,
+          "sharpness": 100.0,
+          "brightness": 25.8,
+          "contrast": 36.4
+        },
+        {
+          "frame": 72,
+          "sharpness": 100.0,
+          "brightness": 26.2,
+          "contrast": 36.0
+        },
+        {
+          "frame": 84,
+          "sharpness": 100.0,
+          "brightness": 26.0,
+          "contrast": 36.1
+        },
+        {
+          "frame": 96,
+          "sharpness": 100.0,
+          "brightness": 25.6,
+          "contrast": 35.3
+        },
+        {
+          "frame": 108,
+          "sharpness": 100.0,
+          "brightness": 25.9,
+          "contrast": 34.7
+        },
+        {
+          "frame": 120,
+          "sharpness": 100.0,
+          "brightness": 25.2,
+          "contrast": 34.6
+        }
+      ]
+    }
+  },
+  "downtown-grid": {
+    "detections": {
+      "uniqueTracks": 3,
+      "byGroup": {
+        "other": 3
+      },
+      "byClass": {
+        "traffic light": 1,
+        "airplane": 2
+      }
+    },
+    "objects": [
+      "traffic light",
+      "airplane"
+    ],
+    "frameQuality": {
+      "estimated": true,
+      "average": {
+        "sharpness": 10.9,
+        "brightness": 33.8,
+        "contrast": 22.2
+      },
+      "samples": [
+        {
+          "frame": 0,
+          "sharpness": 12.1,
+          "brightness": 33.8,
+          "contrast": 20.6
+        },
+        {
+          "frame": 12,
+          "sharpness": 11.8,
+          "brightness": 33.8,
+          "contrast": 20.7
+        },
+        {
+          "frame": 24,
+          "sharpness": 12.2,
+          "brightness": 33.8,
+          "contrast": 20.9
+        },
+        {
+          "frame": 36,
+          "sharpness": 11.9,
+          "brightness": 33.9,
+          "contrast": 21.0
+        },
+        {
+          "frame": 48,
+          "sharpness": 12.0,
+          "brightness": 33.8,
+          "contrast": 21.1
+        },
+        {
+          "frame": 60,
+          "sharpness": 11.6,
+          "brightness": 33.9,
+          "contrast": 21.2
+        },
+        {
+          "frame": 72,
+          "sharpness": 11.8,
+          "brightness": 33.9,
+          "contrast": 21.2
+        },
+        {
+          "frame": 84,
+          "sharpness": 11.7,
+          "brightness": 33.9,
+          "contrast": 21.4
+        },
+        {
+          "frame": 96,
+          "sharpness": 11.9,
+          "brightness": 33.9,
+          "contrast": 21.6
+        },
+        {
+          "frame": 108,
+          "sharpness": 11.6,
+          "brightness": 33.8,
+          "contrast": 21.6
+        },
+        {
+          "frame": 120,
+          "sharpness": 11.6,
+          "brightness": 33.7,
+          "contrast": 21.6
+        },
+        {
+          "frame": 132,
+          "sharpness": 11.5,
+          "brightness": 33.7,
+          "contrast": 21.8
+        },
+        {
+          "frame": 144,
+          "sharpness": 11.6,
+          "brightness": 33.6,
+          "contrast": 21.9
+        },
+        {
+          "frame": 156,
+          "sharpness": 11.3,
+          "brightness": 33.5,
+          "contrast": 22.1
+        },
+        {
+          "frame": 168,
+          "sharpness": 11.3,
+          "brightness": 33.5,
+          "contrast": 22.1
+        },
+        {
+          "frame": 180,
+          "sharpness": 11.3,
+          "brightness": 33.5,
+          "contrast": 22.2
+        },
+        {
+          "frame": 192,
+          "sharpness": 11.1,
+          "brightness": 33.6,
+          "contrast": 22.3
+        },
+        {
+          "frame": 204,
+          "sharpness": 10.8,
+          "brightness": 33.8,
+          "contrast": 22.4
+        },
+        {
+          "frame": 216,
+          "sharpness": 10.5,
+          "brightness": 33.9,
+          "contrast": 22.4
+        },
+        {
+          "frame": 228,
+          "sharpness": 10.2,
+          "brightness": 34.0,
+          "contrast": 22.3
+        },
+        {
+          "frame": 240,
+          "sharpness": 10.2,
+          "brightness": 34.1,
+          "contrast": 22.3
+        },
+        {
+          "frame": 252,
+          "sharpness": 9.6,
+          "brightness": 34.3,
+          "contrast": 22.2
+        },
+        {
+          "frame": 264,
+          "sharpness": 9.5,
+          "brightness": 34.3,
+          "contrast": 22.1
+        },
+        {
+          "frame": 276,
+          "sharpness": 9.5,
+          "brightness": 34.4,
+          "contrast": 22.2
+        },
+        {
+          "frame": 288,
+          "sharpness": 9.6,
+          "brightness": 34.3,
+          "contrast": 22.4
+        },
+        {
+          "frame": 300,
+          "sharpness": 9.9,
+          "brightness": 34.4,
+          "contrast": 22.6
+        },
+        {
+          "frame": 312,
+          "sharpness": 10.0,
+          "brightness": 34.2,
+          "contrast": 22.6
+        },
+        {
+          "frame": 324,
+          "sharpness": 10.2,
+          "brightness": 34.0,
+          "contrast": 22.8
+        },
+        {
+          "frame": 336,
+          "sharpness": 10.3,
+          "brightness": 33.8,
+          "contrast": 23.1
+        },
+        {
+          "frame": 348,
+          "sharpness": 10.5,
+          "brightness": 33.6,
+          "contrast": 23.3
+        },
+        {
+          "frame": 360,
+          "sharpness": 10.5,
+          "brightness": 33.4,
+          "contrast": 23.5
+        },
+        {
+          "frame": 372,
+          "sharpness": 10.5,
+          "brightness": 33.1,
+          "contrast": 23.7
+        },
+        {
+          "frame": 384,
+          "sharpness": 10.8,
+          "brightness": 33.0,
+          "contrast": 23.9
+        },
+        {
+          "frame": 396,
+          "sharpness": 11.0,
+          "brightness": 32.9,
+          "contrast": 24.1
+        },
+        {
+          "frame": 408,
+          "sharpness": 11.2,
+          "brightness": 32.8,
+          "contrast": 24.4
+        }
+      ]
+    }
+  },
+  "harbor-district": {
+    "detections": {
+      "uniqueTracks": 30,
+      "byGroup": {
+        "other": 18,
+        "vehicles": 12
+      },
+      "byClass": {
+        "train": 2,
+        "boat": 11,
+        "umbrella": 1,
+        "car": 11,
+        "skateboard": 4,
+        "truck": 1
+      }
+    },
+    "objects": [
+      "train",
+      "boat",
+      "umbrella",
+      "car",
+      "skateboard",
+      "truck"
+    ],
+    "frameQuality": {
+      "estimated": true,
+      "average": {
+        "sharpness": 100.0,
+        "brightness": 45.4,
+        "contrast": 52.0
+      },
+      "samples": [
+        {
+          "frame": 0,
+          "sharpness": 100.0,
+          "brightness": 46.9,
+          "contrast": 46.7
+        },
+        {
+          "frame": 15,
+          "sharpness": 100.0,
+          "brightness": 48.6,
+          "contrast": 51.7
+        },
+        {
+          "frame": 30,
+          "sharpness": 100.0,
+          "brightness": 48.6,
+          "contrast": 51.8
+        },
+        {
+          "frame": 45,
+          "sharpness": 100.0,
+          "brightness": 48.7,
+          "contrast": 51.5
+        },
+        {
+          "frame": 60,
+          "sharpness": 100.0,
+          "brightness": 49.0,
+          "contrast": 51.4
+        },
+        {
+          "frame": 75,
+          "sharpness": 100.0,
+          "brightness": 48.9,
+          "contrast": 51.3
+        },
+        {
+          "frame": 90,
+          "sharpness": 100.0,
+          "brightness": 48.8,
+          "contrast": 51.3
+        },
+        {
+          "frame": 105,
+          "sharpness": 100.0,
+          "brightness": 48.8,
+          "contrast": 51.2
+        },
+        {
+          "frame": 120,
+          "sharpness": 100.0,
+          "brightness": 48.7,
+          "contrast": 51.2
+        },
+        {
+          "frame": 135,
+          "sharpness": 100.0,
+          "brightness": 48.3,
+          "contrast": 51.2
+        },
+        {
+          "frame": 150,
+          "sharpness": 100.0,
+          "brightness": 47.7,
+          "contrast": 51.3
+        },
+        {
+          "frame": 165,
+          "sharpness": 100.0,
+          "brightness": 47.8,
+          "contrast": 51.6
+        },
+        {
+          "frame": 180,
+          "sharpness": 100.0,
+          "brightness": 47.9,
+          "contrast": 51.9
+        },
+        {
+          "frame": 195,
+          "sharpness": 100.0,
+          "brightness": 47.8,
+          "contrast": 52.6
+        },
+        {
+          "frame": 210,
+          "sharpness": 100.0,
+          "brightness": 47.2,
+          "contrast": 52.5
+        },
+        {
+          "frame": 225,
+          "sharpness": 100.0,
+          "brightness": 46.8,
+          "contrast": 52.2
+        },
+        {
+          "frame": 240,
+          "sharpness": 100.0,
+          "brightness": 46.5,
+          "contrast": 52.3
+        },
+        {
+          "frame": 255,
+          "sharpness": 100.0,
+          "brightness": 46.6,
+          "contrast": 52.0
+        },
+        {
+          "frame": 270,
+          "sharpness": 100.0,
+          "brightness": 46.0,
+          "contrast": 51.7
+        },
+        {
+          "frame": 285,
+          "sharpness": 100.0,
+          "brightness": 45.8,
+          "contrast": 51.8
+        },
+        {
+          "frame": 300,
+          "sharpness": 100.0,
+          "brightness": 45.2,
+          "contrast": 51.6
+        },
+        {
+          "frame": 315,
+          "sharpness": 100.0,
+          "brightness": 44.8,
+          "contrast": 51.7
+        },
+        {
+          "frame": 330,
+          "sharpness": 100.0,
+          "brightness": 45.0,
+          "contrast": 51.6
+        },
+        {
+          "frame": 345,
+          "sharpness": 100.0,
+          "brightness": 44.7,
+          "contrast": 51.7
+        },
+        {
+          "frame": 360,
+          "sharpness": 100.0,
+          "brightness": 44.1,
+          "contrast": 52.1
+        },
+        {
+          "frame": 375,
+          "sharpness": 100.0,
+          "brightness": 44.7,
+          "contrast": 52.2
+        },
+        {
+          "frame": 390,
+          "sharpness": 100.0,
+          "brightness": 45.0,
+          "contrast": 52.3
+        },
+        {
+          "frame": 405,
+          "sharpness": 100.0,
+          "brightness": 45.1,
+          "contrast": 52.3
+        },
+        {
+          "frame": 420,
+          "sharpness": 100.0,
+          "brightness": 44.9,
+          "contrast": 52.3
+        },
+        {
+          "frame": 435,
+          "sharpness": 100.0,
+          "brightness": 44.8,
+          "contrast": 52.5
+        },
+        {
+          "frame": 450,
+          "sharpness": 100.0,
+          "brightness": 45.0,
+          "contrast": 52.1
+        },
+        {
+          "frame": 465,
+          "sharpness": 100.0,
+          "brightness": 45.0,
+          "contrast": 51.9
+        },
+        {
+          "frame": 480,
+          "sharpness": 100.0,
+          "brightness": 45.0,
+          "contrast": 52.2
+        },
+        {
+          "frame": 495,
+          "sharpness": 100.0,
+          "brightness": 45.2,
+          "contrast": 51.9
+        },
+        {
+          "frame": 510,
+          "sharpness": 100.0,
+          "brightness": 45.1,
+          "contrast": 52.1
+        },
+        {
+          "frame": 525,
+          "sharpness": 100.0,
+          "brightness": 45.4,
+          "contrast": 51.9
+        },
+        {
+          "frame": 540,
+          "sharpness": 100.0,
+          "brightness": 45.1,
+          "contrast": 52.1
+        },
+        {
+          "frame": 555,
+          "sharpness": 100.0,
+          "brightness": 44.7,
+          "contrast": 52.2
+        },
+        {
+          "frame": 570,
+          "sharpness": 100.0,
+          "brightness": 45.1,
+          "contrast": 51.9
+        },
+        {
+          "frame": 585,
+          "sharpness": 100.0,
+          "brightness": 44.3,
+          "contrast": 52.4
+        },
+        {
+          "frame": 600,
+          "sharpness": 100.0,
+          "brightness": 44.8,
+          "contrast": 52.1
+        },
+        {
+          "frame": 615,
+          "sharpness": 100.0,
+          "brightness": 44.3,
+          "contrast": 52.2
+        },
+        {
+          "frame": 630,
+          "sharpness": 100.0,
+          "brightness": 44.4,
+          "contrast": 53.0
+        },
+        {
+          "frame": 645,
+          "sharpness": 100.0,
+          "brightness": 44.8,
+          "contrast": 52.6
+        },
+        {
+          "frame": 660,
+          "sharpness": 100.0,
+          "brightness": 44.4,
+          "contrast": 52.6
+        },
+        {
+          "frame": 675,
+          "sharpness": 100.0,
+          "brightness": 44.5,
+          "contrast": 52.7
+        },
+        {
+          "frame": 690,
+          "sharpness": 100.0,
+          "brightness": 44.4,
+          "contrast": 52.7
+        },
+        {
+          "frame": 705,
+          "sharpness": 100.0,
+          "brightness": 44.3,
+          "contrast": 52.7
+        },
+        {
+          "frame": 720,
+          "sharpness": 100.0,
+          "brightness": 44.1,
+          "contrast": 52.8
+        },
+        {
+          "frame": 735,
+          "sharpness": 100.0,
+          "brightness": 44.2,
+          "contrast": 52.7
+        },
+        {
+          "frame": 750,
+          "sharpness": 100.0,
+          "brightness": 44.2,
+          "contrast": 52.6
+        },
+        {
+          "frame": 765,
+          "sharpness": 100.0,
+          "brightness": 44.1,
+          "contrast": 52.5
+        },
+        {
+          "frame": 780,
+          "sharpness": 100.0,
+          "brightness": 43.9,
+          "contrast": 52.6
+        },
+        {
+          "frame": 795,
+          "sharpness": 100.0,
+          "brightness": 44.0,
+          "contrast": 52.3
+        },
+        {
+          "frame": 810,
+          "sharpness": 100.0,
+          "brightness": 43.8,
+          "contrast": 52.6
+        },
+        {
+          "frame": 825,
+          "sharpness": 100.0,
+          "brightness": 43.7,
+          "contrast": 52.7
+        },
+        {
+          "frame": 840,
+          "sharpness": 100.0,
+          "brightness": 43.6,
+          "contrast": 52.3
+        },
+        {
+          "frame": 855,
+          "sharpness": 100.0,
+          "brightness": 43.4,
+          "contrast": 52.0
+        },
+        {
+          "frame": 870,
+          "sharpness": 100.0,
+          "brightness": 43.3,
+          "contrast": 51.9
+        },
+        {
+          "frame": 885,
+          "sharpness": 100.0,
+          "brightness": 43.0,
+          "contrast": 51.9
+        },
+        {
+          "frame": 900,
+          "sharpness": 100.0,
+          "brightness": 42.8,
+          "contrast": 52.3
+        },
+        {
+          "frame": 915,
+          "sharpness": 100.0,
+          "brightness": 42.9,
+          "contrast": 51.6
+        },
+        {
+          "frame": 930,
+          "sharpness": 100.0,
+          "brightness": 42.7,
+          "contrast": 51.4
+        },
+        {
+          "frame": 945,
+          "sharpness": 100.0,
+          "brightness": 42.6,
+          "contrast": 51.4
+        },
+        {
+          "frame": 960,
+          "sharpness": 100.0,
+          "brightness": 42.4,
+          "contrast": 51.5
+        }
+      ]
+    }
+  },
+  "river-approach": {
+    "detections": {
+      "uniqueTracks": 13,
+      "byGroup": {
+        "other": 13
+      },
+      "byClass": {
+        "clock": 1,
+        "traffic light": 12
+      }
+    },
+    "objects": [
+      "clock",
+      "traffic light"
+    ],
+    "frameQuality": {
+      "estimated": true,
+      "average": {
+        "sharpness": 62.1,
+        "brightness": 36.9,
+        "contrast": 44.0
+      },
+      "samples": [
+        {
+          "frame": 0,
+          "sharpness": 61.6,
+          "brightness": 36.3,
+          "contrast": 45.9
+        },
+        {
+          "frame": 12,
+          "sharpness": 58.8,
+          "brightness": 36.4,
+          "contrast": 45.8
+        },
+        {
+          "frame": 24,
+          "sharpness": 59.3,
+          "brightness": 36.5,
+          "contrast": 45.8
+        },
+        {
+          "frame": 36,
+          "sharpness": 59.4,
+          "brightness": 36.6,
+          "contrast": 45.6
+        },
+        {
+          "frame": 48,
+          "sharpness": 60.0,
+          "brightness": 36.6,
+          "contrast": 45.4
+        },
+        {
+          "frame": 60,
+          "sharpness": 60.4,
+          "brightness": 36.6,
+          "contrast": 45.3
+        },
+        {
+          "frame": 72,
+          "sharpness": 61.7,
+          "brightness": 36.6,
+          "contrast": 45.2
+        },
+        {
+          "frame": 84,
+          "sharpness": 61.8,
+          "brightness": 36.7,
+          "contrast": 45.1
+        },
+        {
+          "frame": 96,
+          "sharpness": 62.4,
+          "brightness": 36.7,
+          "contrast": 45.0
+        },
+        {
+          "frame": 108,
+          "sharpness": 63.1,
+          "brightness": 36.8,
+          "contrast": 44.8
+        },
+        {
+          "frame": 120,
+          "sharpness": 63.1,
+          "brightness": 36.9,
+          "contrast": 44.7
+        },
+        {
+          "frame": 132,
+          "sharpness": 63.5,
+          "brightness": 36.9,
+          "contrast": 44.5
+        },
+        {
+          "frame": 144,
+          "sharpness": 63.7,
+          "brightness": 36.9,
+          "contrast": 44.5
+        },
+        {
+          "frame": 156,
+          "sharpness": 64.4,
+          "brightness": 36.9,
+          "contrast": 44.5
+        },
+        {
+          "frame": 168,
+          "sharpness": 65.3,
+          "brightness": 36.9,
+          "contrast": 44.3
+        },
+        {
+          "frame": 180,
+          "sharpness": 65.7,
+          "brightness": 36.9,
+          "contrast": 44.2
+        },
+        {
+          "frame": 192,
+          "sharpness": 66.3,
+          "brightness": 36.9,
+          "contrast": 44.2
+        },
+        {
+          "frame": 204,
+          "sharpness": 66.7,
+          "brightness": 36.9,
+          "contrast": 44.0
+        },
+        {
+          "frame": 216,
+          "sharpness": 66.8,
+          "brightness": 36.9,
+          "contrast": 43.9
+        },
+        {
+          "frame": 228,
+          "sharpness": 67.3,
+          "brightness": 36.9,
+          "contrast": 43.8
+        },
+        {
+          "frame": 240,
+          "sharpness": 67.7,
+          "brightness": 36.9,
+          "contrast": 43.7
+        },
+        {
+          "frame": 252,
+          "sharpness": 57.6,
+          "brightness": 37.0,
+          "contrast": 43.6
+        },
+        {
+          "frame": 264,
+          "sharpness": 57.5,
+          "brightness": 37.0,
+          "contrast": 43.5
+        },
+        {
+          "frame": 276,
+          "sharpness": 58.2,
+          "brightness": 37.0,
+          "contrast": 43.3
+        },
+        {
+          "frame": 288,
+          "sharpness": 58.4,
+          "brightness": 36.9,
+          "contrast": 43.3
+        },
+        {
+          "frame": 300,
+          "sharpness": 58.1,
+          "brightness": 37.1,
+          "contrast": 42.9
+        },
+        {
+          "frame": 312,
+          "sharpness": 59.0,
+          "brightness": 37.2,
+          "contrast": 42.8
+        },
+        {
+          "frame": 324,
+          "sharpness": 59.0,
+          "brightness": 37.2,
+          "contrast": 42.8
+        },
+        {
+          "frame": 336,
+          "sharpness": 59.8,
+          "brightness": 37.3,
+          "contrast": 42.8
+        },
+        {
+          "frame": 348,
+          "sharpness": 62.1,
+          "brightness": 37.2,
+          "contrast": 42.8
+        },
+        {
+          "frame": 360,
+          "sharpness": 61.3,
+          "brightness": 37.3,
+          "contrast": 42.7
+        },
+        {
+          "frame": 372,
+          "sharpness": 64.1,
+          "brightness": 37.3,
+          "contrast": 42.6
+        },
+        {
+          "frame": 384,
+          "sharpness": 65.0,
+          "brightness": 37.3,
+          "contrast": 42.7
+        },
+        {
+          "frame": 396,
+          "sharpness": 63.6,
+          "brightness": 37.3,
+          "contrast": 42.8
+        },
+        {
+          "frame": 408,
+          "sharpness": 62.5,
+          "brightness": 37.2,
+          "contrast": 42.8
+        }
+      ]
+    }
+  }
+}
