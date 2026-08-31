@@ -8,7 +8,7 @@ import Topbar from "./components/layout/Topbar";
 import CreateMissionModal from "./components/missions/CreateMissionModal";
 import { pageTitles } from "./data/navigation";
 import { getMission as getSeedMission } from "./data/missions";
-import { getMission as getApiMission } from "./api/missions";
+import { getMission as getApiMission, listMissions } from "./api/missions";
 import {
   OverviewPage,
   MissionsPage,
@@ -21,7 +21,7 @@ import {
 
 export default function App() {
   const [activePage, setActivePage] = useState("overview");
-  const [missionId, setMissionId] = useState("sector-04");
+  const [missionId, setMissionId] = useState("north-ridge");
   const [toast, setToast] = useState(null);
   const [theme, setTheme] = useState(
     () =>
@@ -44,6 +44,19 @@ export default function App() {
 
   useEffect(() => {
     let active = true;
+
+    listMissions()
+      .then((items) => {
+        if (!active || !Array.isArray(items) || !items.length) {
+          return;
+        }
+
+        const firstMission = items[0];
+        if (firstMission?.id && firstMission.id !== missionId) {
+          setMissionId(firstMission.id);
+        }
+      })
+      .catch(() => undefined);
 
     getApiMission(missionId).then((nextMission) => {
       if (!active) return;
@@ -120,7 +133,10 @@ export default function App() {
           notice={notice}
         />
 
-        <div className="content" key={`${activePage}-${missionId}`}>
+        <div
+          className="content app-page-shell"
+          key={`${activePage}-${missionId}`}
+        >
           {page}
         </div>
       </main>

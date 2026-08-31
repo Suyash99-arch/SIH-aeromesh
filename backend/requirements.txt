@@ -5,3 +5,6 @@ opencv-python==4.8.1.78
 numpy==1.26.2
 pydantic==2.5.2
 ultralytics>=8.3.0
+roboflow>=1.0.0
+inference-sdk>=0.16.0
+pycolmap>=3.11.1

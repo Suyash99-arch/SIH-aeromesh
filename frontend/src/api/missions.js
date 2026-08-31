@@ -3,20 +3,20 @@
  * Single source of truth for all mission data
  */
 
-import { missions as seededMissions } from "../data/missions";
+import { getMission as getSeedMission } from "../data/missions";
 
 // API base URL
 const API_BASE = "http://localhost:8000/api";
 
 const fallbackMission = {
-  id: "sector-04",
-  name: "Disaster Response",
-  sector: "Sector 04",
+  id: "mission-overview",
+  name: "Mission Overview",
+  sector: "Awaiting upload",
   status: "ready",
   priority: "medium",
   type: "Single-Pass Aerial Reconstruction",
   drone: "AERO-X4",
-  coverage: "0.00 km²",
+  coverage: "UNKNOWN",
   duration: "00:00",
   frames: 0,
   progress: 0,
@@ -27,17 +27,22 @@ const fallbackMission = {
     vehicles: 0,
     structures: 0,
     hazards: 0,
+    confirmed_objects: 0,
+    possible_objects: 0,
+    rejected_objects: 0,
+    static_objects: 0,
+    dynamic_objects: 0,
   },
   telemetry: {
-    altitude: "0 m",
-    speed: "0 m/s",
-    heading: "0°",
-    gps: "WAITING",
-    accuracy: "N/A",
+    altitude: "UNKNOWN",
+    speed: "UNKNOWN",
+    heading: "UNKNOWN",
+    gps: "UNKNOWN",
+    accuracy: "UNKNOWN",
     satellites: "0",
-    battery: "0%",
-    signal: "NONE",
-    position: "N/A",
+    battery: "UNKNOWN",
+    signal: "UNKNOWN",
+    position: "UNKNOWN",
   },
   quality: {
     sharpness: 0,
@@ -58,24 +63,132 @@ const fallbackMission = {
     occluded: 0,
   },
   measurements: {
-    distance: "0 m",
-    area: "0 m²",
-    height: "0 m",
-    length: "0 m",
-    width: "0 m",
+    distance: "UNKNOWN",
+    area: "UNKNOWN",
+    height: "UNKNOWN",
+    length: "UNKNOWN",
+    width: "UNKNOWN",
     confidence: "0%",
-    uncertainty: "N/A",
+    uncertainty: "UNKNOWN",
   },
   findings: [],
   recommendations: ["Upload a drone video to start automatic analysis."],
 };
 
+function toSafeNumber(value, fallback = 0) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : fallback;
+}
+
+function normalizeSceneAnalysis(rawMission = {}) {
+  const sceneAnalysis =
+    rawMission.scene_analysis || rawMission.sceneAnalysis || {};
+  const objects = rawMission.objects || {};
+  const total = toSafeNumber(
+    sceneAnalysis.total ?? objects.total ?? objects.confirmed_objects ?? 0,
+    0,
+  );
+  const people = toSafeNumber(sceneAnalysis.people ?? objects.people ?? 0, 0);
+  const vehicles = toSafeNumber(
+    sceneAnalysis.vehicles ?? objects.vehicles ?? 0,
+    0,
+  );
+  const structures = toSafeNumber(
+    sceneAnalysis.structures ?? objects.structures ?? 0,
+    0,
+  );
+  const hazards = toSafeNumber(
+    sceneAnalysis.hazards ?? objects.hazards ?? 0,
+    0,
+  );
+
+  return {
+    total,
+    people,
+    vehicles,
+    structures,
+    hazards,
+    confirmed_objects: toSafeNumber(
+      sceneAnalysis.confirmed_objects ?? objects.confirmed_objects ?? 0,
+      0,
+    ),
+    possible_objects: toSafeNumber(
+      sceneAnalysis.possible_objects ?? objects.possible_objects ?? 0,
+      0,
+    ),
+    rejected_objects: toSafeNumber(
+      sceneAnalysis.rejected_objects ?? objects.rejected_objects ?? 0,
+      0,
+    ),
+    static_objects: toSafeNumber(
+      sceneAnalysis.static_objects ??
+        objects.static_objects ??
+        structures + hazards,
+      0,
+    ),
+    dynamic_objects: toSafeNumber(
+      sceneAnalysis.dynamic_objects ??
+        objects.dynamic_objects ??
+        people + vehicles,
+      0,
+    ),
+    per_object_evidence: Array.isArray(sceneAnalysis.per_object_evidence)
+      ? sceneAnalysis.per_object_evidence
+      : [],
+  };
+}
+
+function normalizeFindings(rawMission = {}, sceneAnalysis = {}) {
+  const findings = Array.isArray(rawMission.findings)
+    ? rawMission.findings
+    : [];
+  const explicitSceneAnalysis =
+    rawMission.scene_analysis || rawMission.sceneAnalysis || null;
+  const total = toSafeNumber(sceneAnalysis.total ?? 0, 0);
+
+  if (!explicitSceneAnalysis && !findings.length) {
+    return [];
+  }
+
+  if (total <= 0) {
+    return [];
+  }
+
+  return findings.filter(Boolean);
+}
+
+function formatDuration(seconds) {
+  if (!Number.isFinite(seconds) || seconds < 0) return "00:00";
+  const rounded = Math.round(seconds);
+  const mins = Math.floor(rounded / 60);
+  const secs = rounded % 60;
+  return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
+}
+
 function normalizeMission(rawMission = {}) {
   const videoUrl = rawMission.video?.url || rawMission.videoUrl || "";
+  const sceneAnalysis = normalizeSceneAnalysis(rawMission);
+  const findings = normalizeFindings(rawMission, sceneAnalysis);
+
+  // Format duration from seconds if available
+  const duration =
+    rawMission.duration ||
+    (rawMission.video?.duration_seconds
+      ? formatDuration(rawMission.video.duration_seconds)
+      : "00:00");
+
+  // Use frames from video data if available
+  const frames = rawMission.frames || rawMission.video?.total_frames || 0;
+
   const mission = {
     ...fallbackMission,
     ...rawMission,
-    objects: { ...fallbackMission.objects, ...(rawMission.objects || {}) },
+    duration,
+    frames,
+    objects: {
+      ...fallbackMission.objects,
+      ...sceneAnalysis,
+    },
     telemetry: {
       ...fallbackMission.telemetry,
       ...(rawMission.telemetry || {}),
@@ -89,10 +202,11 @@ function normalizeMission(rawMission = {}) {
       ...fallbackMission.measurements,
       ...(rawMission.measurements || {}),
     },
-    findings: Array.isArray(rawMission.findings) ? rawMission.findings : [],
+    findings,
     recommendations: Array.isArray(rawMission.recommendations)
       ? rawMission.recommendations
       : fallbackMission.recommendations,
+    scene_analysis: sceneAnalysis,
     assets: {
       ...(rawMission.assets || {}),
       video: videoUrl || rawMission.assets?.video || "",
@@ -103,22 +217,14 @@ function normalizeMission(rawMission = {}) {
     },
   };
 
-  if (!mission.sector && mission.location) {
-    mission.sector = mission.location;
-  }
-
-  if (!mission.type && mission.missionType) {
-    mission.type = mission.missionType;
-  }
+  if (!mission.sector && mission.location) mission.sector = mission.location;
+  if (!mission.type && mission.missionType) mission.type = mission.missionType;
 
   return mission;
 }
 
 // Mission state cache
 const missionCache = new Map();
-
-const getSeededMission = (missionId) =>
-  seededMissions.find((mission) => mission.id === missionId);
 
 async function parseResponse(response) {
   const contentType = response.headers.get("content-type") || "";
@@ -173,40 +279,63 @@ export async function createMission({ name, missionType, location, operator }) {
 }
 
 export async function getMission(missionId) {
+  const seededMission = getSeedMission(missionId);
   if (missionCache.has(missionId)) {
     return missionCache.get(missionId);
+  }
+
+  if (seededMission && seededMission.id === missionId) {
+    const mission = normalizeMission(seededMission);
+    missionCache.set(missionId, mission);
+    return mission;
   }
 
   try {
     const response = await fetch(`${API_BASE}/missions/${missionId}`);
     if (response.status === 404) {
-      return (
-        getSeededMission(missionId) ||
-        normalizeMission({ id: missionId, name: "Mission Overview" })
-      );
+      const fallbackMission = seededMission
+        ? normalizeMission(seededMission)
+        : normalizeMission({ id: missionId, name: "Mission Overview" });
+      missionCache.set(missionId, fallbackMission);
+      return fallbackMission;
     }
     const data = await parseResponse(response);
     if (data.success) {
       const mission = normalizeMission(data.mission);
+      if (
+        !mission.assets?.video &&
+        !mission.reconstruction?.pointCloud &&
+        seededMission
+      ) {
+        const seededFallback = normalizeMission(seededMission);
+        missionCache.set(missionId, seededFallback);
+        return seededFallback;
+      }
       missionCache.set(missionId, mission);
       return mission;
     }
-    return (
-      getSeededMission(missionId) ||
-      normalizeMission({ id: missionId, name: "Mission Overview" })
-    );
+    const fallbackMission = seededMission
+      ? normalizeMission(seededMission)
+      : normalizeMission({ id: missionId, name: "Mission Overview" });
+    missionCache.set(missionId, fallbackMission);
+    return fallbackMission;
   } catch (error) {
     if (error instanceof TypeError) {
-      console.warn("Backend unavailable; using local mission data.");
-      const localMission =
-        getSeededMission(missionId) ||
-        normalizeMission({ id: missionId, name: "Mission Overview" });
-      return { ...localMission, backendUnavailable: true };
+      console.warn(
+        "Backend unavailable; using local demo mission data until the API is reachable.",
+      );
+      const fallbackMission = seededMission
+        ? normalizeMission(seededMission)
+        : normalizeMission({ id: missionId, name: "Mission Overview" });
+      return {
+        ...fallbackMission,
+        backendUnavailable: true,
+      };
     }
-    return (
-      getSeededMission(missionId) ||
-      normalizeMission({ id: missionId, name: "Mission Overview" })
-    );
+    const fallbackMission = seededMission
+      ? normalizeMission(seededMission)
+      : normalizeMission({ id: missionId, name: "Mission Overview" });
+    return fallbackMission;
   }
 }
 

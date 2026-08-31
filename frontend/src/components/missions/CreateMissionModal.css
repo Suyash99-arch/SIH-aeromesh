@@ -1,15 +1,3 @@
-:root {
-  --accent-primary: var(--cyan);
-  --accent-primary-rgb: 66, 215, 255;
-  --accent-primary-dark: #1bb7db;
-  --bg-primary: var(--bg2);
-  --bg-secondary: var(--surface);
-  --text-primary: var(--text);
-  --text-secondary: var(--text2);
-  --border-color: var(--border);
-  --success-color: var(--success);
-}
-
 /* Mission Creation Modal */
 
 .modal-overlay {

@@ -1,7 +1,8 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Icon from "../components/ui/Icon";
 import { Button, Panel, Progress, Status } from "../components/ui/UI";
 import { missions, pipelineStages } from "../data/missions";
+import { listMissions } from "../api/missions";
 import ReconstructionViewer from "../components/reconstruction/ReconstructionViewer";
 import VideoPlayer from "../components/reconstruction/VideoPlayer";
 
@@ -19,9 +20,22 @@ const Header = ({ kicker, title, copy, children }) => (
 const Stat = ({ label, value }) => (
   <div className="data-stat">
     <span>{label}</span>
-    <strong>{value}</strong>
+    <strong>{value ?? "—"}</strong>
   </div>
 );
+
+function safeCount(value) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : "—";
+}
+
+function safeTotal(...values) {
+  const parsed = values.map((value) => Number(value));
+  if (parsed.every((numeric) => Number.isFinite(numeric))) {
+    return parsed.reduce((sum, value) => sum + value, 0);
+  }
+  return "—";
+}
 
 function Findings({ mission, onAction }) {
   return (
@@ -130,14 +144,20 @@ export function OverviewPage({ mission, navigate }) {
 
       <div className="command-stats">
         {[
-          ["Coverage", mission.coverage],
-          ["Flight duration", mission.duration],
-          ["Frames processed", mission.frames.toLocaleString()],
-          ["Objects detected", mission.objects.total],
-          ["AI findings", mission.findings.length],
+          ["Coverage", mission.coverage || "—"],
+          ["Flight duration", mission.duration || "—"],
+          [
+            "Frames processed",
+            Number.isFinite(Number(mission.frames))
+              ? mission.frames.toLocaleString()
+              : "—",
+          ],
+          ["Objects detected", safeCount(mission.objects?.total)],
+          ["AI findings", mission.findings?.length ?? 0],
           [
             "Critical findings",
-            mission.findings.filter((f) => f.severity === "critical").length,
+            mission.findings?.filter((f) => f.severity === "critical").length ??
+              0,
           ],
         ].map((x) => (
           <Stat key={x[0]} label={x[0]} value={x[1]} />
@@ -175,12 +195,50 @@ export function OverviewPage({ mission, navigate }) {
 
 export function MissionsPage({ mission, setMission, navigate, notice }) {
   const [q, setQ] = useState("");
+  const [loadedMissions, setLoadedMissions] = useState([]);
+
+  // Fetch real missions from API and merge with seeded missions
+  useEffect(() => {
+    let mounted = true;
+
+    listMissions()
+      .then((apiMissions) => {
+        if (!mounted) return;
+
+        if (!apiMissions || apiMissions.length === 0) {
+          // Use only seeded missions if API returns nothing
+          setLoadedMissions(missions);
+          return;
+        }
+
+        // Merge API missions with seeded missions, avoiding duplicates
+        const seededIds = new Set(missions.map((m) => m.id));
+        const additionalMissions = apiMissions.filter(
+          (m) => !seededIds.has(m.id),
+        );
+        const merged = [...missions, ...additionalMissions];
+        setLoadedMissions(merged);
+      })
+      .catch((error) => {
+        console.error("Failed to fetch missions:", error);
+        // Fall back to seeded missions on error
+        setLoadedMissions(missions);
+      });
+
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  // Use loaded missions if available, otherwise fall back to seeded
+  const allMissions = loadedMissions.length > 0 ? loadedMissions : missions;
+
   const list = useMemo(
     () =>
-      missions.filter((m) =>
+      allMissions.filter((m) =>
         `${m.name} ${m.sector}`.toLowerCase().includes(q.toLowerCase()),
       ),
-    [q],
+    [q, allMissions],
   );
 
   return (
@@ -804,13 +862,19 @@ export function IntelligencePage({ kind, mission, navigate, notice }) {
 
           <Panel>
             <span className="eyebrow">CONFIDENCE DISTRIBUTION</span>
-            {mission.findings.map((f) => (
-              <div key={f.id} className="confidence-bar">
-                <span>{f.title}</span>
-                <Progress value={f.confidence} />
-                <b>{f.confidence}%</b>
+            {mission.findings.length > 0 ? (
+              mission.findings.map((f) => (
+                <div key={f.id} className="confidence-bar">
+                  <span>{f.title}</span>
+                  <Progress value={f.confidence} />
+                  <b>{f.confidence}%</b>
+                </div>
+              ))
+            ) : (
+              <div className="confidence-empty">
+                <span>No detection evidence available for this mission.</span>
               </div>
-            ))}
+            )}
           </Panel>
         </div>
       </>
@@ -977,7 +1041,7 @@ export function ChallengePage({ mission }) {
       "Moving objects",
       "Dynamic/static separation",
       "People and vehicle tracks",
-      `${mission.objects.people + mission.objects.vehicles} dynamic`,
+      `${safeCount(safeTotal(mission.objects?.people, mission.objects?.vehicles))} dynamic`,
     ],
     [
       "GPS errors",
