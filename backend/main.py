@@ -9,6 +9,7 @@ import json
 import shutil
 import uuid
 import importlib.util
+import hashlib
 from typing import Optional, Any
 import logging
 
@@ -110,6 +111,65 @@ EVIDENCE_STATES = {
     "UNKNOWN",
     "UNAVAILABLE",
 }
+
+
+# ============================================================
+# VIDEO VALIDATION & HASHING
+# ============================================================
+
+def compute_video_sha256(video_path: Path, chunk_size: int = 65536) -> str:
+    """Compute SHA-256 hash of a video file."""
+    sha256_hash = hashlib.sha256()
+    try:
+        with open(video_path, "rb") as f:
+            for chunk in iter(lambda: f.read(chunk_size), b""):
+                sha256_hash.update(chunk)
+        return sha256_hash.hexdigest().upper()
+    except Exception as e:
+        logger.error(f"Failed to compute hash for {video_path}: {e}")
+        return ""
+
+
+def validate_mission_video(mission_data: dict, video_path: Path) -> dict:
+    """Validate that mission video is properly configured and exists."""
+    errors = []
+    warnings = []
+    
+    video_info = mission_data.get("video")
+    if not video_info:
+        errors.append("video_info_missing")
+    
+    if not video_path.exists():
+        errors.append("video_file_not_found")
+    
+    # Check if video.path is set (if present in schema)
+    if video_info and not video_info.get("path"):
+        warnings.append("video_path_empty")
+    
+    # Check if video.sha256 is set
+    if video_info and not video_info.get("sha256"):
+        warnings.append("video_sha256_not_set")
+    
+    # If file exists, verify hash if stored
+    if video_path.exists() and video_info and video_info.get("sha256"):
+        computed_hash = compute_video_sha256(video_path)
+        stored_hash = video_info.get("sha256", "").upper()
+        if computed_hash and stored_hash and computed_hash != stored_hash:
+            errors.append("video_hash_mismatch")
+    
+    # Check file doesn't belong to another mission (basic check via hash)
+    if video_path.exists():
+        file_hash = compute_video_sha256(video_path)
+        mission_id = mission_data.get("id")
+        if file_hash:
+            # Could check against other missions' hashes here
+            pass
+    
+    return {
+        "is_valid": len(errors) == 0,
+        "errors": errors,
+        "warnings": warnings,
+    }
 
 
 def build_provenance_entry(
@@ -533,10 +593,34 @@ async def upload_video(
             "quality": {"average": {"sharpness": 0, "brightness": 0, "contrast": 0}, "blur_rejected": 0, "low_quality_frames": 0, "keyframes": 0},
             "camera_motion": {"status": "UNAVAILABLE", "estimated_motion_score": 0.0, "source": "UNKNOWN", "confidence": 0.0},
         }
+    
+    # Compute video hash to detect duplicate videos across missions
+    video_sha256 = compute_video_sha256(video_path)
+    logger.info(f"MISSION_VIDEO_HASH mission_id={mission_id} file={video_path.name} sha256={video_sha256}")
+    
+    # Check if this video hash already exists in another mission
+    if video_sha256:
+        duplicate_missions = []
+        for other_mission_file in MISSIONS_DIR.glob("*.json"):
+            if other_mission_file.stem == mission_id:
+                continue  # Skip self
+            try:
+                with open(other_mission_file) as f:
+                    other_mission = json.load(f)
+                    other_sha256 = other_mission.get("video", {}).get("sha256", "").upper()
+                    if other_sha256 and other_sha256 == video_sha256:
+                        duplicate_missions.append(other_mission.get("id", other_mission_file.stem))
+            except Exception:
+                pass
+        
+        if duplicate_missions:
+            logger.warning(f"DUPLICATE_VIDEO_DETECTED mission_id={mission_id} sha256={video_sha256} also_in_missions={duplicate_missions}")
 
     video_info = {
         "filename": file.filename,
+        "path": str(video_path),
         "url": f"{str(request.base_url).rstrip('/')}/media/missions/{mission_id}/{video_path.name}",
+        "sha256": video_sha256,
         "size_mb": round(video_path.stat().st_size / (1024 * 1024), 2),
         "fps": summary["fps"],
         "total_frames": summary["frames_total"],
@@ -586,7 +670,40 @@ async def process_video(
     mission_dir = MISSIONS_DIR / mission_id
     video_path = next(mission_dir.glob("video.*"), None)
     if not video_path or not video_path.exists():
-        raise HTTPException(status_code=400, detail="Video file not found")
+        logger.error(f"MISSION_VIDEO_NOT_AVAILABLE mission_id={mission_id}")
+        return {
+            "status": "UNAVAILABLE",
+            "error": "MISSION_VIDEO_NOT_AVAILABLE",
+            "detail": "Video file not found in mission directory",
+            "mission_id": mission_id
+        }
+    
+    # VALIDATION: Verify video hash matches stored hash (if available)
+    stored_sha256 = video_info.get("sha256", "").upper()
+    if stored_sha256:
+        computed_sha256 = compute_video_sha256(video_path)
+        if computed_sha256 and computed_sha256 != stored_sha256:
+            logger.error(f"VIDEO_HASH_MISMATCH mission_id={mission_id} stored={stored_sha256} computed={computed_sha256}")
+            raise HTTPException(
+                status_code=400,
+                detail="Video hash mismatch - file may have been replaced or corrupted"
+            )
+        logger.info(f"MISSION_PROCESS_START mission_id={mission_id} video_hash={computed_sha256}")
+    
+    # VALIDATION: Check this video doesn't belong to another mission
+    # (basic check - log if hash matches another mission, don't fail yet)
+    if stored_sha256:
+        for other_mission_file in MISSIONS_DIR.glob("*.json"):
+            if other_mission_file.stem == mission_id:
+                continue
+            try:
+                with open(other_mission_file) as f:
+                    other_mission = json.load(f)
+                    other_sha256 = other_mission.get("video", {}).get("sha256", "").upper()
+                    if other_sha256 and other_sha256 == stored_sha256:
+                        logger.warning(f"VIDEO_SHARED_ACROSS_MISSIONS mission_id={mission_id} shared_with={other_mission.get('id')} sha256={stored_sha256}")
+            except Exception:
+                pass
     
     try:
         real_summary = summarize_uploaded_video(video_path)
@@ -595,19 +712,62 @@ async def process_video(
         result["processing"]["status"] = "COMPLETE"
         result["processing"]["warning"] = "YOLO model not available or no valid detections were confirmed from the uploaded video."
         
-        model_path = BASE_DIR.parent / "yolo11n.pt"
+        # PRIORITY 1: Use trained aeromesh_yolo.pt (VisDrone fine-tuned)
+        model_path = BASE_DIR / "backend" / "models" / "aeromesh_yolo.pt"
+        fallback_path = BASE_DIR / "yolo11n.pt"
+        
         if model_path.exists():
             try:
                 from ultralytics import YOLO
                 model = YOLO(str(model_path))
-                result = _run_yolo_detection(video_path, model, sample_fps=frame_sampling, confidence=detection_confidence)
+                logger.info(f"YOLO MODEL LOADED path={model_path} model_type=aeromesh_yolo model_classes={model.names} model_class_count={len(model.names)}")
+                result = _run_yolo_detection(video_path, model, sample_fps=frame_sampling, confidence=detection_confidence, is_aeromesh=True)
                 result["video"] = {**video_info, **result.get("video", {}), **real_summary}
                 result["processing"]["status"] = "COMPLETE"
                 result["processing"]["warning"] = "" if result.get("detections", {}).get("uniqueTracks", 0) else "No confident detections were observed in the uploaded video."
             except Exception as exc:
-                logger.warning("YOLO inference unavailable: %s", exc)
+                logger.warning("Aeromesh model inference failed: %s; attempting fallback", exc)
+                # Fallback to yolo11n if aeromesh fails
+                if fallback_path.exists():
+                    try:
+                        from ultralytics import YOLO
+                        model = YOLO(str(fallback_path))
+                        logger.info(f"YOLO MODEL LOADED path={fallback_path} model_type=yolo11n_fallback model_classes={model.names} model_class_count={len(model.names)}")
+                        result = _run_yolo_detection(video_path, model, sample_fps=frame_sampling, confidence=detection_confidence, is_aeromesh=False)
+                        result["video"] = {**video_info, **result.get("video", {}), **real_summary}
+                        result["processing"]["status"] = "COMPLETE"
+                        result["processing"]["warning"] = "Using fallback COCO model; results may not match trained model expectations."
+                    except Exception as fallback_exc:
+                        logger.error("Fallback model inference also failed: %s", fallback_exc)
+                        result["processing"]["status"] = "PARTIAL"
+                        result["processing"]["warning"] = "YOLO inference unavailable; object counts remain unconfirmed."
+                else:
+                    logger.error("No fallback model available")
+                    result["processing"]["status"] = "PARTIAL"
+                    result["processing"]["warning"] = "Trained model failed and no fallback available; object counts remain unconfirmed."
+        elif fallback_path.exists():
+            try:
+                from ultralytics import YOLO
+                model = YOLO(str(fallback_path))
+                logger.info(f"YOLO MODEL LOADED path={fallback_path} model_type=yolo11n_only model_classes={model.names} model_class_count={len(model.names)}")
+                logger.warning("Trained aeromesh model not found; using COCO fallback")
+                result = _run_yolo_detection(video_path, model, sample_fps=frame_sampling, confidence=detection_confidence, is_aeromesh=False)
+                result["video"] = {**video_info, **result.get("video", {}), **real_summary}
+                result["processing"]["status"] = "COMPLETE"
+                result["processing"]["warning"] = "Using COCO fallback model (trained aeromesh model not found); results may not be optimal."
+            except Exception as exc:
+                logger.error("Fallback model inference failed: %s", exc)
                 result["processing"]["status"] = "PARTIAL"
                 result["processing"]["warning"] = "YOLO model available but inference failed; object counts remain unconfirmed."
+        else:
+            logger.error("No YOLO model available (neither aeromesh nor fallback)")
+            result["processing"]["status"] = "PARTIAL"
+            result["processing"]["warning"] = "No YOLO model available; object counts remain unconfirmed."
+        
+        # Store mission_id in detections for provenance tracking
+        if result.get("detections"):
+            result["detections"]["mission_id"] = mission_id
+            result["detections"]["video_sha256"] = stored_sha256
         
         scene_analysis = result.get("scene_analysis") or build_scene_analysis(result.get("detections"), result.get("tracks"))
         mission.update({
@@ -726,7 +886,7 @@ def _basic_process(video_path: Path, sample_fps: int, confidence: float):
     }
 
 
-def _run_yolo_detection(video_path: Path, model, sample_fps: int, confidence: float) -> dict:
+def _run_yolo_detection(video_path: Path, model, sample_fps: int, confidence: float, is_aeromesh: bool = False) -> dict:
     """Run actual YOLO inference with temporal verification and evidence-aware track states."""
     capture = cv2.VideoCapture(str(video_path))
     if not capture.isOpened():
@@ -827,7 +987,10 @@ def _run_yolo_detection(video_path: Path, model, sample_fps: int, confidence: fl
         for track in all_tracks:
             by_class[track["class"]] = by_class.get(track["class"], 0) + 1
         detections["byClass"] = by_class
-    detector = get_detector_metadata()
+    
+    # Use aeromesh metadata if applicable
+    detector = _get_detector_metadata_aeromesh() if is_aeromesh else get_detector_metadata()
+    
     return {
         "video": {"fps": round(fps, 2) if fps else 0, "total_frames": total_frames, "durationSeconds": round(total_frames / fps, 2) if fps else 0, "resolution": {"width": width, "height": height}},
         "detector": detector,
@@ -850,6 +1013,32 @@ def _run_yolo_detection(video_path: Path, model, sample_fps: int, confidence: fl
             "occluded_region_pct": 100,
             "coverage": "Partial evidence only; no validated 3D coverage claim is made.",
         },
+    }
+
+
+def _get_detector_metadata_aeromesh() -> dict:
+    """Return metadata for aeromesh_yolo model (VisDrone fine-tuned)."""
+    return {
+        "model": "aeromesh_yolo",
+        "dataset": "VisDrone (fine-tuned on aerial drone footage)",
+        "domain": "Aerial / drone-based detection",
+        "confidence_threshold": 0.35,
+        "per_class_thresholds": {
+            "person": 0.35,
+            "bicycle": 0.50,
+            "car": 0.50,
+            "motorcycle": 0.35,
+            "bus": 0.25,
+            "truck": 0.35,
+            "van": 0.25,
+            "tricycle": 0.25,
+        },
+        "input_resolution": 640,
+        "suitability": "Aerial-specialized detector trained on VisDrone dataset",
+        "known_weaknesses": ["car detection (mAP50 < 10%)", "bicycle detection (mAP50 < 10%)"],
+        "known_strengths": ["van detection", "bus detection", "tricycle detection"],
+        "status": "AVAILABLE",
+        "source": "MODEL_METADATA",
     }
 
 # ============================================================

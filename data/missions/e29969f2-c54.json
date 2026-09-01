@@ -1,0 +1,18 @@
+{
+  "id": "e29969f2-c54",
+  "name": "Test Mission A",
+  "type": "single-pass",
+  "location": "Location A",
+  "operator": "Test Operator",
+  "createdAt": "2026-08-31T17:35:55.752700",
+  "status": "created",
+  "video": null,
+  "processing": null,
+  "detections": null,
+  "tracks": null,
+  "frameQuality": null,
+  "reconstruction": null,
+  "measurements": null,
+  "findings": [],
+  "metadata": {}
+}

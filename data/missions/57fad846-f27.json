@@ -1,0 +1,18 @@
+{
+  "id": "57fad846-f27",
+  "name": "Test Mission B",
+  "type": "single-pass",
+  "location": "Location B",
+  "operator": "Test Operator",
+  "createdAt": "2026-08-31T17:45:59.193710",
+  "status": "created",
+  "video": null,
+  "processing": null,
+  "detections": null,
+  "tracks": null,
+  "frameQuality": null,
+  "reconstruction": null,
+  "measurements": null,
+  "findings": [],
+  "metadata": {}
+}

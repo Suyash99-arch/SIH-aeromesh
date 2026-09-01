@@ -174,39 +174,103 @@ export async function createMission({ name, missionType, location, operator }) {
 
 export async function getMission(missionId) {
   if (missionCache.has(missionId)) {
-    return missionCache.get(missionId);
+    const cached = missionCache.get(missionId);
+    console.log(`[Mission] Cache hit for mission ${missionId}`);
+    return cached;
   }
 
   try {
     const response = await fetch(`${API_BASE}/missions/${missionId}`);
+
     if (response.status === 404) {
-      return (
-        getSeededMission(missionId) ||
-        normalizeMission({ id: missionId, name: "Mission Overview" })
+      // Mission not found on backend
+      // IMPORTANT: Only return seeded mission if missionId exactly matches a seeded mission ID
+      const seeded = getSeededMission(missionId);
+      if (seeded) {
+        console.log(
+          `[Mission] API returned 404 but found seeded mission ${missionId}`,
+        );
+        return normalizeMission(seeded);
+      }
+      // Real mission not found - return error state, NOT another mission
+      console.warn(
+        `[Mission] Mission ${missionId} not found on backend or in seeded data`,
       );
+      return {
+        id: missionId,
+        name: `Mission Not Found: ${missionId}`,
+        status: "unavailable",
+        error: "MISSION_NOT_FOUND",
+        backendUnavailable: false,
+        hasError: true,
+      };
     }
+
     const data = await parseResponse(response);
     if (data.success) {
       const mission = normalizeMission(data.mission);
       missionCache.set(missionId, mission);
+      console.log(`[Mission] Loaded mission ${missionId} from API`, {
+        video: mission.video?.url || "no video",
+      });
       return mission;
     }
-    return (
-      getSeededMission(missionId) ||
-      normalizeMission({ id: missionId, name: "Mission Overview" })
+
+    // API returned success: false - treat as error
+    console.error(
+      `[Mission] API returned success: false for mission ${missionId}`,
     );
+    return {
+      id: missionId,
+      name: `Error Loading Mission: ${missionId}`,
+      status: "unavailable",
+      error: "API_ERROR",
+      backendUnavailable: false,
+      hasError: true,
+    };
   } catch (error) {
     if (error instanceof TypeError) {
-      console.warn("Backend unavailable; using local mission data.");
-      const localMission =
-        getSeededMission(missionId) ||
-        normalizeMission({ id: missionId, name: "Mission Overview" });
-      return { ...localMission, backendUnavailable: true };
+      // Backend is unavailable (network error)
+      console.warn(
+        `[Mission] Backend unavailable for mission ${missionId} (network error)`,
+      );
+
+      // Only fall back to seeded data if missionId exactly matches a seeded mission
+      const seeded = getSeededMission(missionId);
+      if (seeded) {
+        console.warn(
+          `[Mission] Using seeded mission ${missionId} due to backend unavailability`,
+        );
+        return { ...normalizeMission(seeded), backendUnavailable: true };
+      }
+
+      // Real mission requested but backend is down
+      return {
+        id: missionId,
+        name: `Backend Unavailable`,
+        status: "unavailable",
+        error: "BACKEND_UNAVAILABLE",
+        backendUnavailable: true,
+        hasError: true,
+        detail:
+          "Backend server is not responding. Start the FastAPI server on localhost:8000.",
+      };
     }
-    return (
-      getSeededMission(missionId) ||
-      normalizeMission({ id: missionId, name: "Mission Overview" })
+
+    // Other error
+    console.error(
+      `[Mission] Unexpected error fetching mission ${missionId}:`,
+      error,
     );
+    return {
+      id: missionId,
+      name: `Error Loading Mission`,
+      status: "unavailable",
+      error: "UNKNOWN_ERROR",
+      backendUnavailable: false,
+      hasError: true,
+      detail: error.message,
+    };
   }
 }
 
@@ -228,6 +292,7 @@ export async function listMissions() {
 
 export async function uploadVideo(missionId, file) {
   try {
+    console.log(`[Upload] Starting video upload for mission ${missionId}`);
     const formData = new FormData();
     formData.append("file", file);
 
@@ -238,14 +303,19 @@ export async function uploadVideo(missionId, file) {
 
     const data = await response.json();
     if (data.success) {
+      console.log(
+        `[Upload] Video uploaded successfully for mission ${missionId}`,
+        { size: data.video?.size_mb, fps: data.video?.fps },
+      );
       missionCache.delete(missionId);
       const mission = await getMission(missionId);
       missionCache.set(missionId, mission);
       return data;
     }
+    console.error(`[Upload] Upload failed for mission ${missionId}:`, data);
     throw new Error(data.message || "Upload failed");
   } catch (error) {
-    console.error("Upload error:", error);
+    console.error(`[Upload] Upload error for mission ${missionId}:`, error);
     throw error;
   }
 }
@@ -258,6 +328,11 @@ export async function processVideo(
   reconstructionQuality = "medium",
 ) {
   try {
+    console.log(`[Process] Starting processing for mission ${missionId}`, {
+      frameSampling,
+      detectionConfidence,
+    });
+
     const params = new URLSearchParams({
       frame_sampling: frameSampling,
       inference_resolution: inferenceResolution,
@@ -273,15 +348,39 @@ export async function processVideo(
     );
 
     const data = await response.json();
+
+    // Handle special error states from backend
+    if (data.status === "UNAVAILABLE") {
+      console.error(
+        `[Process] Video unavailable for mission ${missionId}:`,
+        data.error,
+      );
+      throw new Error(
+        `Video unavailable (${data.error}): ${data.detail || "Unknown reason"}`,
+      );
+    }
+
     if (data.success) {
+      console.log(`[Process] Processing completed for mission ${missionId}`, {
+        tracks: data.detections?.uniqueTracks || 0,
+        status: data.processing?.status,
+      });
       missionCache.delete(missionId);
       const mission = await getMission(missionId);
       missionCache.set(missionId, mission);
       return data;
     }
+
+    console.error(
+      `[Process] Processing failed for mission ${missionId}:`,
+      data,
+    );
     throw new Error(data.message || "Processing failed");
   } catch (error) {
-    console.error("Processing error:", error);
+    console.error(
+      `[Process] Processing error for mission ${missionId}:`,
+      error,
+    );
     throw error;
   }
 }

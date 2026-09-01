@@ -19,7 +19,8 @@
     },
     "codec": "detected",
     "frames": 125,
-    "durationSeconds": 5.0
+    "durationSeconds": 5.0,
+    "sha256": "A12B772DCF185C2A5988188806FF494A866A6E39BD15A4348AAD050F5F123C93"
   },
   "processing": {
     "status": "COMPLETE",

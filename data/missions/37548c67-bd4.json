@@ -1,0 +1,18 @@
+{
+  "id": "37548c67-bd4",
+  "name": "Test Mission A",
+  "type": "single-pass",
+  "location": "Location A",
+  "operator": "Test Operator",
+  "createdAt": "2026-08-31T18:04:54.525102",
+  "status": "created",
+  "video": null,
+  "processing": null,
+  "detections": null,
+  "tracks": null,
+  "frameQuality": null,
+  "reconstruction": null,
+  "measurements": null,
+  "findings": [],
+  "metadata": {}
+}

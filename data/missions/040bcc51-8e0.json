@@ -1,0 +1,2946 @@
+{
+  "id": "040bcc51-8e0",
+  "name": "Aeromesh Test Mission",
+  "type": "single-pass",
+  "location": "Test Location",
+  "operator": "Test Operator",
+  "createdAt": "2026-08-31T15:50:28.066645",
+  "status": "processing_complete",
+  "video": {
+    "filename": "drone.mp4",
+    "url": "http://localhost:8000/media/missions/040bcc51-8e0/video.mp4",
+    "size_mb": 3.35,
+    "fps": 30.0,
+    "total_frames": 477,
+    "duration_seconds": 15.9,
+    "resolution": {
+      "width": 384,
+      "height": 850
+    },
+    "codec": "detected",
+    "durationSeconds": 15.9,
+    "frames_total": 477,
+    "frames_valid": 477,
+    "quality": {
+      "average": {
+        "sharpness": 38.1,
+        "brightness": 21.1,
+        "contrast": 48.8
+      },
+      "keyframes": 477
+    },
+    "camera_motion": {
+      "status": "AVAILABLE",
+      "estimated_motion_score": 5366.64,
+      "source": "VIDEO_DERIVED",
+      "confidence": 0.9
+    },
+    "sha256": "BEB7E58CC89BF051A4A69C0D71CE7CC3782244ADB3FC7B0EF9D3D66F2FFD933B"
+  },
+  "processing": {
+    "status": "COMPLETE",
+    "sampleFps": 2,
+    "framesAnalyzed": 32,
+    "inferenceFps": 5.0,
+    "warning": ""
+  },
+  "detections": {
+    "uniqueTracks": 10,
+    "byGroup": {},
+    "byClass": {
+      "van": 7,
+      "truck": 1,
+      "person": 1,
+      "tricycle": 1
+    },
+    "observations": [
+      {
+        "frame": 0,
+        "trackId": "T0001",
+        "class": "van",
+        "confidence": 0.541,
+        "boundingBox": [
+          335.7,
+          642.7,
+          360.9,
+          653.8
+        ]
+      },
+      {
+        "frame": 0,
+        "trackId": "T0002",
+        "class": "van",
+        "confidence": 0.501,
+        "boundingBox": [
+          125.2,
+          378.8,
+          147.8,
+          389.2
+        ]
+      },
+      {
+        "frame": 0,
+        "trackId": "T0002",
+        "class": "van",
+        "confidence": 0.486,
+        "boundingBox": [
+          147.0,
+          382.9,
+          160.5,
+          394.6
+        ]
+      },
+      {
+        "frame": 0,
+        "trackId": "T0001",
+        "class": "van",
+        "confidence": 0.492,
+        "boundingBox": [
+          337.5,
+          582.0,
+          361.5,
+          602.7
+        ]
+      },
+      {
+        "frame": 0,
+        "trackId": "T0003",
+        "class": "van",
+        "confidence": 0.432,
+        "boundingBox": [
+          231.5,
+          283.1,
+          260.5,
+          297.6
+        ]
+      },
+      {
+        "frame": 0,
+        "trackId": "T0004",
+        "class": "truck",
+        "confidence": 0.427,
+        "boundingBox": [
+          302.0,
+          399.0,
+          384.0,
+          504.0
+        ]
+      },
+      {
+        "frame": 0,
+        "trackId": "T0001",
+        "class": "van",
+        "confidence": 0.466,
+        "boundingBox": [
+          338.5,
+          610.9,
+          359.8,
+          623.5
+        ]
+      },
+      {
+        "frame": 0,
+        "trackId": "T0002",
+        "class": "van",
+        "confidence": 0.456,
+        "boundingBox": [
+          140.2,
+          409.2,
+          162.1,
+          421.0
+        ]
+      },
+      {
+        "frame": 0,
+        "trackId": "T0003",
+        "class": "van",
+        "confidence": 0.412,
+        "boundingBox": [
+          226.1,
+          278.5,
+          259.1,
+          287.2
+        ]
+      },
+      {
+        "frame": 0,
+        "trackId": "T0002",
+        "class": "van",
+        "confidence": 0.436,
+        "boundingBox": [
+          131.1,
+          401.5,
+          157.0,
+          416.4
+        ]
+      },
+      {
+        "frame": 0,
+        "trackId": "T0002",
+        "class": "van",
+        "confidence": 0.422,
+        "boundingBox": [
+          132.1,
+          392.0,
+          149.4,
+          409.6
+        ]
+      },
+      {
+        "frame": 15,
+        "trackId": "T0001",
+        "class": "van",
+        "confidence": 0.534,
+        "boundingBox": [
+          336.0,
+          640.5,
+          363.9,
+          653.0
+        ]
+      },
+      {
+        "frame": 15,
+        "trackId": "T0001",
+        "class": "van",
+        "confidence": 0.566,
+        "boundingBox": [
+          336.9,
+          576.3,
+          361.6,
+          599.9
+        ]
+      },
+      {
+        "frame": 15,
+        "trackId": "T0001",
+        "class": "van",
+        "confidence": 0.556,
+        "boundingBox": [
+          335.7,
+          607.6,
+          365.6,
+          620.2
+        ]
+      },
+      {
+        "frame": 60,
+        "trackId": "T0005",
+        "class": "person",
+        "confidence": 0.394,
+        "boundingBox": [
+          222.3,
+          475.2,
+          231.3,
+          493.1
+        ]
+      },
+      {
+        "frame": 75,
+        "trackId": "T0001",
+        "class": "van",
+        "confidence": 0.56,
+        "boundingBox": [
+          336.4,
+          576.0,
+          362.3,
+          598.9
+        ]
+      },
+      {
+        "frame": 75,
+        "trackId": "T0001",
+        "class": "van",
+        "confidence": 0.559,
+        "boundingBox": [
+          335.8,
+          607.3,
+          365.1,
+          620.4
+        ]
+      },
+      {
+        "frame": 75,
+        "trackId": "T0001",
+        "class": "van",
+        "confidence": 0.557,
+        "boundingBox": [
+          335.4,
+          639.8,
+          362.3,
+          652.7
+        ]
+      },
+      {
+        "frame": 75,
+        "trackId": "T0006",
+        "class": "van",
+        "confidence": 0.495,
+        "boundingBox": [
+          37.3,
+          304.9,
+          74.6,
+          326.1
+        ]
+      },
+      {
+        "frame": 75,
+        "trackId": "T0006",
+        "class": "van",
+        "confidence": 0.487,
+        "boundingBox": [
+          38.1,
+          301.8,
+          87.9,
+          327.6
+        ]
+      },
+      {
+        "frame": 75,
+        "trackId": "T0001",
+        "class": "van",
+        "confidence": 0.542,
+        "boundingBox": [
+          336.4,
+          607.1,
+          365.9,
+          626.9
+        ]
+      },
+      {
+        "frame": 90,
+        "trackId": "T0001",
+        "class": "van",
+        "confidence": 0.56,
+        "boundingBox": [
+          336.8,
+          576.3,
+          361.8,
+          599.9
+        ]
+      },
+      {
+        "frame": 90,
+        "trackId": "T0001",
+        "class": "van",
+        "confidence": 0.573,
+        "boundingBox": [
+          335.7,
+          640.3,
+          363.4,
+          652.8
+        ]
+      },
+      {
+        "frame": 90,
+        "trackId": "T0002",
+        "class": "van",
+        "confidence": 0.448,
+        "boundingBox": [
+          21.4,
+          390.9,
+          57.1,
+          411.6
+        ]
+      },
+      {
+        "frame": 105,
+        "trackId": "T0001",
+        "class": "van",
+        "confidence": 0.579,
+        "boundingBox": [
+          335.6,
+          640.0,
+          362.9,
+          652.7
+        ]
+      },
+      {
+        "frame": 105,
+        "trackId": "T0001",
+        "class": "van",
+        "confidence": 0.582,
+        "boundingBox": [
+          336.5,
+          576.3,
+          361.6,
+          600.5
+        ]
+      },
+      {
+        "frame": 120,
+        "trackId": "T0001",
+        "class": "van",
+        "confidence": 0.582,
+        "boundingBox": [
+          336.9,
+          576.1,
+          362.7,
+          598.0
+        ]
+      },
+      {
+        "frame": 120,
+        "trackId": "T0001",
+        "class": "van",
+        "confidence": 0.572,
+        "boundingBox": [
+          314.9,
+          485.6,
+          351.9,
+          524.2
+        ]
+      },
+      {
+        "frame": 135,
+        "trackId": "T0007",
+        "class": "van",
+        "confidence": 0.679,
+        "boundingBox": [
+          336.0,
+          640.0,
+          364.0,
+          652.5
+        ]
+      },
+      {
+        "frame": 135,
+        "trackId": "T0007",
+        "class": "van",
+        "confidence": 0.643,
+        "boundingBox": [
+          337.5,
+          576.2,
+          361.7,
+          599.8
+        ]
+      },
+      {
+        "frame": 150,
+        "trackId": "T0007",
+        "class": "van",
+        "confidence": 0.676,
+        "boundingBox": [
+          335.9,
+          639.3,
+          363.8,
+          653.3
+        ]
+      },
+      {
+        "frame": 150,
+        "trackId": "T0007",
+        "class": "van",
+        "confidence": 0.688,
+        "boundingBox": [
+          337.6,
+          576.0,
+          361.6,
+          599.5
+        ]
+      },
+      {
+        "frame": 150,
+        "trackId": "T0007",
+        "class": "van",
+        "confidence": 0.656,
+        "boundingBox": [
+          336.0,
+          608.3,
+          365.0,
+          619.9
+        ]
+      },
+      {
+        "frame": 165,
+        "trackId": "T0007",
+        "class": "van",
+        "confidence": 0.658,
+        "boundingBox": [
+          335.9,
+          639.7,
+          362.9,
+          653.3
+        ]
+      },
+      {
+        "frame": 165,
+        "trackId": "T0008",
+        "class": "tricycle",
+        "confidence": 0.612,
+        "boundingBox": [
+          149.5,
+          352.7,
+          229.1,
+          417.7
+        ]
+      },
+      {
+        "frame": 165,
+        "trackId": "T0001",
+        "class": "van",
+        "confidence": 0.56,
+        "boundingBox": [
+          257.8,
+          410.7,
+          303.2,
+          436.8
+        ]
+      },
+      {
+        "frame": 180,
+        "trackId": "T0007",
+        "class": "van",
+        "confidence": 0.614,
+        "boundingBox": [
+          336.6,
+          566.0,
+          381.1,
+          598.2
+        ]
+      },
+      {
+        "frame": 195,
+        "trackId": "T0007",
+        "class": "van",
+        "confidence": 0.632,
+        "boundingBox": [
+          335.9,
+          640.1,
+          363.2,
+          652.5
+        ]
+      },
+      {
+        "frame": 195,
+        "trackId": "T0007",
+        "class": "van",
+        "confidence": 0.633,
+        "boundingBox": [
+          336.9,
+          576.2,
+          362.0,
+          599.9
+        ]
+      },
+      {
+        "frame": 195,
+        "trackId": "T0007",
+        "class": "van",
+        "confidence": 0.613,
+        "boundingBox": [
+          335.3,
+          607.3,
+          365.3,
+          620.6
+        ]
+      },
+      {
+        "frame": 195,
+        "trackId": "T0002",
+        "class": "van",
+        "confidence": 0.44,
+        "boundingBox": [
+          0.0,
+          421.3,
+          24.5,
+          474.8
+        ]
+      },
+      {
+        "frame": 210,
+        "trackId": "T0007",
+        "class": "van",
+        "confidence": 0.623,
+        "boundingBox": [
+          335.9,
+          640.5,
+          363.6,
+          652.4
+        ]
+      },
+      {
+        "frame": 210,
+        "trackId": "T0007",
+        "class": "van",
+        "confidence": 0.626,
+        "boundingBox": [
+          337.3,
+          576.2,
+          361.7,
+          600.1
+        ]
+      },
+      {
+        "frame": 210,
+        "trackId": "T0004",
+        "class": "truck",
+        "confidence": 0.405,
+        "boundingBox": [
+          286.7,
+          449.0,
+          377.3,
+          500.3
+        ]
+      },
+      {
+        "frame": 210,
+        "trackId": "T0007",
+        "class": "van",
+        "confidence": 0.606,
+        "boundingBox": [
+          335.9,
+          607.9,
+          365.6,
+          620.2
+        ]
+      },
+      {
+        "frame": 225,
+        "trackId": "T0002",
+        "class": "van",
+        "confidence": 0.464,
+        "boundingBox": [
+          114.0,
+          442.6,
+          138.4,
+          458.7
+        ]
+      },
+      {
+        "frame": 225,
+        "trackId": "T0007",
+        "class": "van",
+        "confidence": 0.604,
+        "boundingBox": [
+          336.5,
+          576.1,
+          362.4,
+          599.8
+        ]
+      },
+      {
+        "frame": 225,
+        "trackId": "T0007",
+        "class": "van",
+        "confidence": 0.601,
+        "boundingBox": [
+          336.2,
+          640.4,
+          362.4,
+          653.8
+        ]
+      },
+      {
+        "frame": 225,
+        "trackId": "T0007",
+        "class": "van",
+        "confidence": 0.588,
+        "boundingBox": [
+          334.9,
+          607.5,
+          365.1,
+          621.7
+        ]
+      },
+      {
+        "frame": 225,
+        "trackId": "T0002",
+        "class": "van",
+        "confidence": 0.453,
+        "boundingBox": [
+          70.4,
+          460.6,
+          96.6,
+          473.8
+        ]
+      },
+      {
+        "frame": 240,
+        "trackId": "T0002",
+        "class": "van",
+        "confidence": 0.481,
+        "boundingBox": [
+          137.6,
+          494.1,
+          164.7,
+          541.9
+        ]
+      },
+      {
+        "frame": 240,
+        "trackId": "T0002",
+        "class": "van",
+        "confidence": 0.5,
+        "boundingBox": [
+          61.0,
+          491.0,
+          94.7,
+          546.0
+        ]
+      },
+      {
+        "frame": 240,
+        "trackId": "T0007",
+        "class": "van",
+        "confidence": 0.593,
+        "boundingBox": [
+          336.2,
+          640.1,
+          361.8,
+          653.2
+        ]
+      },
+      {
+        "frame": 240,
+        "trackId": "T0007",
+        "class": "van",
+        "confidence": 0.587,
+        "boundingBox": [
+          337.0,
+          576.4,
+          362.3,
+          598.2
+        ]
+      },
+      {
+        "frame": 240,
+        "trackId": "T0007",
+        "class": "van",
+        "confidence": 0.581,
+        "boundingBox": [
+          335.3,
+          606.6,
+          365.3,
+          619.9
+        ]
+      },
+      {
+        "frame": 240,
+        "trackId": "T0007",
+        "class": "van",
+        "confidence": 0.573,
+        "boundingBox": [
+          237.7,
+          575.1,
+          265.3,
+          594.7
+        ]
+      },
+      {
+        "frame": 255,
+        "trackId": "T0009",
+        "class": "van",
+        "confidence": 0.591,
+        "boundingBox": [
+          335.0,
+          640.2,
+          365.2,
+          652.7
+        ]
+      },
+      {
+        "frame": 255,
+        "trackId": "T0009",
+        "class": "van",
+        "confidence": 0.525,
+        "boundingBox": [
+          336.4,
+          575.4,
+          361.6,
+          599.4
+        ]
+      },
+      {
+        "frame": 255,
+        "trackId": "T0003",
+        "class": "van",
+        "confidence": 0.419,
+        "boundingBox": [
+          168.4,
+          299.7,
+          196.2,
+          330.0
+        ]
+      },
+      {
+        "frame": 255,
+        "trackId": "T0007",
+        "class": "van",
+        "confidence": 0.564,
+        "boundingBox": [
+          248.3,
+          583.1,
+          291.8,
+          620.8
+        ]
+      },
+      {
+        "frame": 270,
+        "trackId": "T0009",
+        "class": "van",
+        "confidence": 0.599,
+        "boundingBox": [
+          336.0,
+          639.4,
+          363.9,
+          653.0
+        ]
+      },
+      {
+        "frame": 270,
+        "trackId": "T0009",
+        "class": "van",
+        "confidence": 0.621,
+        "boundingBox": [
+          337.2,
+          576.6,
+          361.4,
+          599.9
+        ]
+      },
+      {
+        "frame": 270,
+        "trackId": "T0009",
+        "class": "van",
+        "confidence": 0.617,
+        "boundingBox": [
+          335.9,
+          607.8,
+          365.4,
+          619.9
+        ]
+      },
+      {
+        "frame": 285,
+        "trackId": "T0009",
+        "class": "van",
+        "confidence": 0.648,
+        "boundingBox": [
+          335.6,
+          639.6,
+          365.6,
+          652.6
+        ]
+      },
+      {
+        "frame": 285,
+        "trackId": "T0009",
+        "class": "van",
+        "confidence": 0.638,
+        "boundingBox": [
+          337.1,
+          576.5,
+          361.2,
+          600.2
+        ]
+      },
+      {
+        "frame": 285,
+        "trackId": "T0002",
+        "class": "van",
+        "confidence": 0.498,
+        "boundingBox": [
+          15.6,
+          463.7,
+          68.5,
+          485.1
+        ]
+      },
+      {
+        "frame": 285,
+        "trackId": "T0002",
+        "class": "van",
+        "confidence": 0.492,
+        "boundingBox": [
+          0.1,
+          445.7,
+          35.0,
+          469.0
+        ]
+      },
+      {
+        "frame": 285,
+        "trackId": "T0009",
+        "class": "van",
+        "confidence": 0.603,
+        "boundingBox": [
+          336.6,
+          608.0,
+          365.5,
+          621.9
+        ]
+      },
+      {
+        "frame": 300,
+        "trackId": "T0009",
+        "class": "van",
+        "confidence": 0.602,
+        "boundingBox": [
+          335.6,
+          639.4,
+          363.8,
+          652.9
+        ]
+      },
+      {
+        "frame": 315,
+        "trackId": "T0009",
+        "class": "van",
+        "confidence": 0.615,
+        "boundingBox": [
+          336.0,
+          640.1,
+          362.6,
+          652.8
+        ]
+      },
+      {
+        "frame": 315,
+        "trackId": "T0009",
+        "class": "van",
+        "confidence": 0.611,
+        "boundingBox": [
+          337.4,
+          575.3,
+          361.3,
+          600.6
+        ]
+      },
+      {
+        "frame": 315,
+        "trackId": "T0009",
+        "class": "van",
+        "confidence": 0.607,
+        "boundingBox": [
+          335.6,
+          608.5,
+          365.0,
+          620.5
+        ]
+      },
+      {
+        "frame": 330,
+        "trackId": "T0001",
+        "class": "van",
+        "confidence": 0.57,
+        "boundingBox": [
+          237.0,
+          492.6,
+          268.5,
+          509.9
+        ]
+      },
+      {
+        "frame": 330,
+        "trackId": "T0001",
+        "class": "van",
+        "confidence": 0.574,
+        "boundingBox": [
+          157.7,
+          438.7,
+          181.0,
+          478.7
+        ]
+      },
+      {
+        "frame": 330,
+        "trackId": "T0001",
+        "class": "van",
+        "confidence": 0.576,
+        "boundingBox": [
+          103.5,
+          443.0,
+          123.4,
+          482.2
+        ]
+      },
+      {
+        "frame": 330,
+        "trackId": "T0001",
+        "class": "van",
+        "confidence": 0.576,
+        "boundingBox": [
+          137.4,
+          437.8,
+          154.0,
+          480.1
+        ]
+      },
+      {
+        "frame": 330,
+        "trackId": "T0009",
+        "class": "van",
+        "confidence": 0.604,
+        "boundingBox": [
+          336.2,
+          640.4,
+          363.3,
+          653.0
+        ]
+      },
+      {
+        "frame": 330,
+        "trackId": "T0009",
+        "class": "van",
+        "confidence": 0.597,
+        "boundingBox": [
+          336.7,
+          575.9,
+          361.5,
+          599.4
+        ]
+      },
+      {
+        "frame": 330,
+        "trackId": "T0001",
+        "class": "van",
+        "confidence": 0.569,
+        "boundingBox": [
+          113.9,
+          440.8,
+          131.9,
+          481.8
+        ]
+      },
+      {
+        "frame": 345,
+        "trackId": "T0009",
+        "class": "van",
+        "confidence": 0.604,
+        "boundingBox": [
+          335.3,
+          639.6,
+          361.4,
+          653.0
+        ]
+      },
+      {
+        "frame": 345,
+        "trackId": "T0009",
+        "class": "van",
+        "confidence": 0.607,
+        "boundingBox": [
+          338.8,
+          608.5,
+          363.5,
+          622.0
+        ]
+      },
+      {
+        "frame": 345,
+        "trackId": "T0009",
+        "class": "van",
+        "confidence": 0.608,
+        "boundingBox": [
+          336.8,
+          576.0,
+          361.8,
+          600.0
+        ]
+      },
+      {
+        "frame": 345,
+        "trackId": "T0007",
+        "class": "van",
+        "confidence": 0.556,
+        "boundingBox": [
+          252.7,
+          553.5,
+          291.2,
+          587.7
+        ]
+      },
+      {
+        "frame": 360,
+        "trackId": "T0009",
+        "class": "van",
+        "confidence": 0.617,
+        "boundingBox": [
+          336.0,
+          640.3,
+          366.2,
+          652.5
+        ]
+      },
+      {
+        "frame": 360,
+        "trackId": "T0009",
+        "class": "van",
+        "confidence": 0.623,
+        "boundingBox": [
+          335.6,
+          608.1,
+          366.0,
+          621.1
+        ]
+      },
+      {
+        "frame": 390,
+        "trackId": "T0009",
+        "class": "van",
+        "confidence": 0.625,
+        "boundingBox": [
+          335.6,
+          639.4,
+          363.0,
+          653.1
+        ]
+      },
+      {
+        "frame": 390,
+        "trackId": "T0009",
+        "class": "van",
+        "confidence": 0.626,
+        "boundingBox": [
+          337.3,
+          576.5,
+          362.0,
+          599.8
+        ]
+      },
+      {
+        "frame": 405,
+        "trackId": "T0009",
+        "class": "van",
+        "confidence": 0.633,
+        "boundingBox": [
+          335.9,
+          639.9,
+          362.9,
+          653.1
+        ]
+      },
+      {
+        "frame": 405,
+        "trackId": "T0003",
+        "class": "van",
+        "confidence": 0.45,
+        "boundingBox": [
+          198.9,
+          197.7,
+          242.9,
+          249.7
+        ]
+      },
+      {
+        "frame": 405,
+        "trackId": "T0010",
+        "class": "van",
+        "confidence": 0.54,
+        "boundingBox": [
+          274.9,
+          402.5,
+          308.4,
+          430.7
+        ]
+      },
+      {
+        "frame": 405,
+        "trackId": "T0010",
+        "class": "van",
+        "confidence": 0.511,
+        "boundingBox": [
+          219.4,
+          388.1,
+          245.3,
+          421.1
+        ]
+      },
+      {
+        "frame": 405,
+        "trackId": "T0001",
+        "class": "van",
+        "confidence": 0.565,
+        "boundingBox": [
+          91.2,
+          459.6,
+          106.6,
+          471.6
+        ]
+      },
+      {
+        "frame": 405,
+        "trackId": "T0001",
+        "class": "van",
+        "confidence": 0.561,
+        "boundingBox": [
+          83.3,
+          520.5,
+          104.0,
+          534.0
+        ]
+      },
+      {
+        "frame": 405,
+        "trackId": "T0009",
+        "class": "van",
+        "confidence": 0.626,
+        "boundingBox": [
+          336.7,
+          576.3,
+          362.0,
+          600.5
+        ]
+      },
+      {
+        "frame": 405,
+        "trackId": "T0001",
+        "class": "van",
+        "confidence": 0.558,
+        "boundingBox": [
+          155.2,
+          466.2,
+          183.4,
+          486.1
+        ]
+      },
+      {
+        "frame": 405,
+        "trackId": "T0010",
+        "class": "van",
+        "confidence": 0.488,
+        "boundingBox": [
+          218.8,
+          378.4,
+          244.9,
+          396.3
+        ]
+      },
+      {
+        "frame": 405,
+        "trackId": "T0010",
+        "class": "van",
+        "confidence": 0.465,
+        "boundingBox": [
+          219.1,
+          396.7,
+          242.9,
+          421.6
+        ]
+      },
+      {
+        "frame": 405,
+        "trackId": "T0001",
+        "class": "van",
+        "confidence": 0.551,
+        "boundingBox": [
+          97.8,
+          499.2,
+          127.9,
+          514.3
+        ]
+      },
+      {
+        "frame": 405,
+        "trackId": "T0010",
+        "class": "van",
+        "confidence": 0.445,
+        "boundingBox": [
+          218.4,
+          401.6,
+          247.0,
+          422.6
+        ]
+      },
+      {
+        "frame": 405,
+        "trackId": "T0002",
+        "class": "van",
+        "confidence": 0.483,
+        "boundingBox": [
+          6.4,
+          356.0,
+          32.7,
+          379.2
+        ]
+      },
+      {
+        "frame": 405,
+        "trackId": "T0010",
+        "class": "van",
+        "confidence": 0.431,
+        "boundingBox": [
+          272.6,
+          409.5,
+          305.0,
+          447.4
+        ]
+      },
+      {
+        "frame": 405,
+        "trackId": "T0002",
+        "class": "van",
+        "confidence": 0.474,
+        "boundingBox": [
+          7.9,
+          359.5,
+          30.0,
+          379.9
+        ]
+      },
+      {
+        "frame": 420,
+        "trackId": "T0009",
+        "class": "van",
+        "confidence": 0.626,
+        "boundingBox": [
+          335.8,
+          640.1,
+          363.7,
+          653.0
+        ]
+      },
+      {
+        "frame": 420,
+        "trackId": "T0006",
+        "class": "van",
+        "confidence": 0.514,
+        "boundingBox": [
+          116.7,
+          253.9,
+          155.0,
+          274.4
+        ]
+      },
+      {
+        "frame": 420,
+        "trackId": "T0002",
+        "class": "van",
+        "confidence": 0.479,
+        "boundingBox": [
+          0.0,
+          294.0,
+          23.3,
+          309.4
+        ]
+      },
+      {
+        "frame": 420,
+        "trackId": "T0006",
+        "class": "van",
+        "confidence": 0.498,
+        "boundingBox": [
+          169.7,
+          270.0,
+          217.1,
+          293.7
+        ]
+      },
+      {
+        "frame": 420,
+        "trackId": "T0005",
+        "class": "person",
+        "confidence": 0.411,
+        "boundingBox": [
+          327.9,
+          478.7,
+          342.1,
+          516.7
+        ]
+      },
+      {
+        "frame": 435,
+        "trackId": "T0009",
+        "class": "van",
+        "confidence": 0.63,
+        "boundingBox": [
+          335.5,
+          639.8,
+          362.9,
+          652.4
+        ]
+      },
+      {
+        "frame": 435,
+        "trackId": "T0009",
+        "class": "van",
+        "confidence": 0.634,
+        "boundingBox": [
+          337.4,
+          576.5,
+          361.1,
+          600.3
+        ]
+      },
+      {
+        "frame": 435,
+        "trackId": "T0009",
+        "class": "van",
+        "confidence": 0.626,
+        "boundingBox": [
+          335.9,
+          608.0,
+          365.7,
+          620.1
+        ]
+      },
+      {
+        "frame": 450,
+        "trackId": "T0009",
+        "class": "van",
+        "confidence": 0.631,
+        "boundingBox": [
+          335.3,
+          640.3,
+          363.3,
+          652.8
+        ]
+      },
+      {
+        "frame": 450,
+        "trackId": "T0009",
+        "class": "van",
+        "confidence": 0.626,
+        "boundingBox": [
+          336.7,
+          576.0,
+          362.6,
+          600.3
+        ]
+      },
+      {
+        "frame": 450,
+        "trackId": "T0009",
+        "class": "van",
+        "confidence": 0.618,
+        "boundingBox": [
+          336.1,
+          574.0,
+          364.8,
+          612.8
+        ]
+      },
+      {
+        "frame": 465,
+        "trackId": "T0009",
+        "class": "van",
+        "confidence": 0.618,
+        "boundingBox": [
+          335.9,
+          640.4,
+          362.6,
+          652.7
+        ]
+      },
+      {
+        "frame": 465,
+        "trackId": "T0009",
+        "class": "van",
+        "confidence": 0.614,
+        "boundingBox": [
+          336.7,
+          576.3,
+          362.5,
+          600.0
+        ]
+      },
+      {
+        "frame": 465,
+        "trackId": "T0009",
+        "class": "van",
+        "confidence": 0.606,
+        "boundingBox": [
+          336.0,
+          574.3,
+          364.5,
+          616.7
+        ]
+      }
+    ],
+    "scene_analysis": {
+      "total": 10,
+      "people": 1,
+      "vehicles": 1,
+      "structures": 0,
+      "hazards": 0,
+      "confirmed_objects": 9,
+      "possible_objects": 1,
+      "rejected_objects": 0,
+      "static_objects": 0,
+      "dynamic_objects": 2,
+      "per_object_evidence": [
+        {
+          "track_id": "T0001",
+          "class": "van",
+          "status": "CONFIRMED",
+          "confidence": 0.551,
+          "hits": 26,
+          "persistence": 1.0,
+          "frames_seen": 26,
+          "class_consistent": true,
+          "segmentation_verified": false,
+          "segmentation_status": "UNAVAILABLE",
+          "source": "TRACKING_DERIVED",
+          "first_seen": 0,
+          "last_seen": 405,
+          "confidence_history": [
+            0.541,
+            0.442,
+            0.415,
+            0.74,
+            0.693,
+            0.506,
+            0.586,
+            0.549,
+            0.538,
+            0.409,
+            0.741,
+            0.719,
+            0.651,
+            0.619,
+            0.582,
+            0.422,
+            0.359,
+            0.744,
+            0.641,
+            0.618,
+            0.589,
+            0.411,
+            0.479,
+            0.478,
+            0.467,
+            0.376
+          ]
+        },
+        {
+          "track_id": "T0002",
+          "class": "van",
+          "status": "CONFIRMED",
+          "confidence": 0.479,
+          "hits": 16,
+          "persistence": 1.0,
+          "frames_seen": 16,
+          "class_consistent": true,
+          "segmentation_verified": false,
+          "segmentation_status": "UNAVAILABLE",
+          "source": "TRACKING_DERIVED",
+          "first_seen": 0,
+          "last_seen": 420,
+          "confidence_history": [
+            0.501,
+            0.472,
+            0.395,
+            0.377,
+            0.363,
+            0.577,
+            0.395,
+            0.631,
+            0.369,
+            0.73,
+            0.691,
+            0.472,
+            0.425,
+            0.362,
+            0.353,
+            0.547
+          ]
+        },
+        {
+          "track_id": "T0003",
+          "class": "van",
+          "status": "CONFIRMED",
+          "confidence": 0.45,
+          "hits": 4,
+          "persistence": 1.0,
+          "frames_seen": 4,
+          "class_consistent": true,
+          "segmentation_verified": false,
+          "segmentation_status": "UNAVAILABLE",
+          "source": "TRACKING_DERIVED",
+          "first_seen": 0,
+          "last_seen": 405,
+          "confidence_history": [
+            0.432,
+            0.393,
+            0.431,
+            0.542
+          ]
+        },
+        {
+          "track_id": "T0004",
+          "class": "truck",
+          "status": "CONFIRMED",
+          "confidence": 0.405,
+          "hits": 2,
+          "persistence": 1.0,
+          "frames_seen": 2,
+          "class_consistent": true,
+          "segmentation_verified": false,
+          "segmentation_status": "UNAVAILABLE",
+          "source": "TRACKING_DERIVED",
+          "first_seen": 0,
+          "last_seen": 210,
+          "confidence_history": [
+            0.427,
+            0.384
+          ]
+        },
+        {
+          "track_id": "T0005",
+          "class": "person",
+          "status": "CONFIRMED",
+          "confidence": 0.411,
+          "hits": 2,
+          "persistence": 1.0,
+          "frames_seen": 2,
+          "class_consistent": true,
+          "segmentation_verified": false,
+          "segmentation_status": "UNAVAILABLE",
+          "source": "TRACKING_DERIVED",
+          "first_seen": 60,
+          "last_seen": 420,
+          "confidence_history": [
+            0.394,
+            0.428
+          ]
+        },
+        {
+          "track_id": "T0006",
+          "class": "van",
+          "status": "CONFIRMED",
+          "confidence": 0.498,
+          "hits": 4,
+          "persistence": 1.0,
+          "frames_seen": 4,
+          "class_consistent": true,
+          "segmentation_verified": false,
+          "segmentation_status": "UNAVAILABLE",
+          "source": "TRACKING_DERIVED",
+          "first_seen": 75,
+          "last_seen": 420,
+          "confidence_history": [
+            0.495,
+            0.479,
+            0.569,
+            0.451
+          ]
+        },
+        {
+          "track_id": "T0007",
+          "class": "van",
+          "status": "CONFIRMED",
+          "confidence": 0.556,
+          "hits": 22,
+          "persistence": 1.0,
+          "frames_seen": 22,
+          "class_consistent": true,
+          "segmentation_verified": false,
+          "segmentation_status": "UNAVAILABLE",
+          "source": "TRACKING_DERIVED",
+          "first_seen": 135,
+          "last_seen": 345,
+          "confidence_history": [
+            0.679,
+            0.608,
+            0.742,
+            0.723,
+            0.53,
+            0.663,
+            0.354,
+            0.759,
+            0.638,
+            0.434,
+            0.718,
+            0.664,
+            0.372,
+            0.575,
+            0.549,
+            0.397,
+            0.675,
+            0.495,
+            0.463,
+            0.415,
+            0.391,
+            0.392
+          ]
+        },
+        {
+          "track_id": "T0008",
+          "class": "tricycle",
+          "status": "POSSIBLE",
+          "confidence": 0.612,
+          "hits": 1,
+          "persistence": 0.0,
+          "frames_seen": 1,
+          "class_consistent": true,
+          "segmentation_verified": false,
+          "segmentation_status": "UNAVAILABLE",
+          "source": "TRACKING_DERIVED",
+          "first_seen": 165,
+          "last_seen": 165,
+          "confidence_history": [
+            0.612
+          ]
+        },
+        {
+          "track_id": "T0009",
+          "class": "van",
+          "status": "CONFIRMED",
+          "confidence": 0.606,
+          "hits": 33,
+          "persistence": 1.0,
+          "frames_seen": 33,
+          "class_consistent": true,
+          "segmentation_verified": false,
+          "segmentation_status": "UNAVAILABLE",
+          "source": "TRACKING_DERIVED",
+          "first_seen": 255,
+          "last_seen": 465,
+          "confidence_history": [
+            0.591,
+            0.459,
+            0.746,
+            0.688,
+            0.602,
+            0.802,
+            0.579,
+            0.353,
+            0.601,
+            0.725,
+            0.576,
+            0.564,
+            0.571,
+            0.503,
+            0.699,
+            0.651,
+            0.623,
+            0.767,
+            0.74,
+            0.664,
+            0.635,
+            0.788,
+            0.47,
+            0.631,
+            0.732,
+            0.723,
+            0.431,
+            0.75,
+            0.497,
+            0.375,
+            0.617,
+            0.491,
+            0.361
+          ]
+        },
+        {
+          "track_id": "T0010",
+          "class": "van",
+          "status": "CONFIRMED",
+          "confidence": 0.431,
+          "hits": 6,
+          "persistence": 1.0,
+          "frames_seen": 6,
+          "class_consistent": true,
+          "segmentation_verified": false,
+          "segmentation_status": "UNAVAILABLE",
+          "source": "TRACKING_DERIVED",
+          "first_seen": 405,
+          "last_seen": 405,
+          "confidence_history": [
+            0.54,
+            0.482,
+            0.441,
+            0.398,
+            0.363,
+            0.359
+          ]
+        }
+      ],
+      "status": "PARTIAL",
+      "source": "INFERENCE_DERIVED",
+      "confidence": 0.5
+    },
+    "per_class_detection_summary": {
+      "van": 111,
+      "truck": 2,
+      "pedestrian": 2,
+      "awning-tricycle": 1
+    }
+  },
+  "tracks": [
+    {
+      "trackId": "T0001",
+      "class": "van",
+      "bbox": [
+        97.8,
+        499.2,
+        127.9,
+        514.3
+      ],
+      "confidence": 0.551,
+      "firstSeen": 0,
+      "lastSeen": 405,
+      "hits": 26,
+      "persistence": 1.0,
+      "confidenceHistory": [
+        0.541,
+        0.442,
+        0.415,
+        0.74,
+        0.693,
+        0.506,
+        0.586,
+        0.549,
+        0.538,
+        0.409,
+        0.741,
+        0.719,
+        0.651,
+        0.619,
+        0.582,
+        0.422,
+        0.359,
+        0.744,
+        0.641,
+        0.618,
+        0.589,
+        0.411,
+        0.479,
+        0.478,
+        0.467,
+        0.376
+      ]
+    },
+    {
+      "trackId": "T0002",
+      "class": "van",
+      "bbox": [
+        0.0,
+        294.0,
+        23.3,
+        309.4
+      ],
+      "confidence": 0.479,
+      "firstSeen": 0,
+      "lastSeen": 420,
+      "hits": 16,
+      "persistence": 1.0,
+      "confidenceHistory": [
+        0.501,
+        0.472,
+        0.395,
+        0.377,
+        0.363,
+        0.577,
+        0.395,
+        0.631,
+        0.369,
+        0.73,
+        0.691,
+        0.472,
+        0.425,
+        0.362,
+        0.353,
+        0.547
+      ]
+    },
+    {
+      "trackId": "T0003",
+      "class": "van",
+      "bbox": [
+        198.9,
+        197.7,
+        242.9,
+        249.7
+      ],
+      "confidence": 0.45,
+      "firstSeen": 0,
+      "lastSeen": 405,
+      "hits": 4,
+      "persistence": 1.0,
+      "confidenceHistory": [
+        0.432,
+        0.393,
+        0.431,
+        0.542
+      ]
+    },
+    {
+      "trackId": "T0004",
+      "class": "truck",
+      "bbox": [
+        286.7,
+        449.0,
+        377.3,
+        500.3
+      ],
+      "confidence": 0.405,
+      "firstSeen": 0,
+      "lastSeen": 210,
+      "hits": 2,
+      "persistence": 1.0,
+      "confidenceHistory": [
+        0.427,
+        0.384
+      ]
+    },
+    {
+      "trackId": "T0005",
+      "class": "person",
+      "bbox": [
+        327.9,
+        478.7,
+        342.1,
+        516.7
+      ],
+      "confidence": 0.411,
+      "firstSeen": 60,
+      "lastSeen": 420,
+      "hits": 2,
+      "persistence": 1.0,
+      "confidenceHistory": [
+        0.394,
+        0.428
+      ]
+    },
+    {
+      "trackId": "T0006",
+      "class": "van",
+      "bbox": [
+        169.7,
+        270.0,
+        217.1,
+        293.7
+      ],
+      "confidence": 0.498,
+      "firstSeen": 75,
+      "lastSeen": 420,
+      "hits": 4,
+      "persistence": 1.0,
+      "confidenceHistory": [
+        0.495,
+        0.479,
+        0.569,
+        0.451
+      ]
+    },
+    {
+      "trackId": "T0007",
+      "class": "van",
+      "bbox": [
+        252.7,
+        553.5,
+        291.2,
+        587.7
+      ],
+      "confidence": 0.556,
+      "firstSeen": 135,
+      "lastSeen": 345,
+      "hits": 22,
+      "persistence": 1.0,
+      "confidenceHistory": [
+        0.679,
+        0.608,
+        0.742,
+        0.723,
+        0.53,
+        0.663,
+        0.354,
+        0.759,
+        0.638,
+        0.434,
+        0.718,
+        0.664,
+        0.372,
+        0.575,
+        0.549,
+        0.397,
+        0.675,
+        0.495,
+        0.463,
+        0.415,
+        0.391,
+        0.392
+      ]
+    },
+    {
+      "trackId": "T0008",
+      "class": "tricycle",
+      "bbox": [
+        149.5,
+        352.7,
+        229.1,
+        417.7
+      ],
+      "confidence": 0.612,
+      "firstSeen": 165,
+      "lastSeen": 165,
+      "hits": 1,
+      "persistence": 0.0,
+      "confidenceHistory": [
+        0.612
+      ]
+    },
+    {
+      "trackId": "T0009",
+      "class": "van",
+      "bbox": [
+        336.0,
+        574.3,
+        364.5,
+        616.7
+      ],
+      "confidence": 0.606,
+      "firstSeen": 255,
+      "lastSeen": 465,
+      "hits": 33,
+      "persistence": 1.0,
+      "confidenceHistory": [
+        0.591,
+        0.459,
+        0.746,
+        0.688,
+        0.602,
+        0.802,
+        0.579,
+        0.353,
+        0.601,
+        0.725,
+        0.576,
+        0.564,
+        0.571,
+        0.503,
+        0.699,
+        0.651,
+        0.623,
+        0.767,
+        0.74,
+        0.664,
+        0.635,
+        0.788,
+        0.47,
+        0.631,
+        0.732,
+        0.723,
+        0.431,
+        0.75,
+        0.497,
+        0.375,
+        0.617,
+        0.491,
+        0.361
+      ]
+    },
+    {
+      "trackId": "T0010",
+      "class": "van",
+      "bbox": [
+        272.6,
+        409.5,
+        305.0,
+        447.4
+      ],
+      "confidence": 0.431,
+      "firstSeen": 405,
+      "lastSeen": 405,
+      "hits": 6,
+      "persistence": 1.0,
+      "confidenceHistory": [
+        0.54,
+        0.482,
+        0.441,
+        0.398,
+        0.363,
+        0.359
+      ]
+    }
+  ],
+  "frameQuality": {
+    "estimated": true,
+    "average": {
+      "sharpness": 37.4,
+      "brightness": 21.6,
+      "contrast": 49.5
+    },
+    "samples": [
+      {
+        "frame": 0,
+        "sharpness": 26.1,
+        "brightness": 20.5,
+        "contrast": 45.8
+      },
+      {
+        "frame": 15,
+        "sharpness": 29.2,
+        "brightness": 23.4,
+        "contrast": 49.1
+      },
+      {
+        "frame": 30,
+        "sharpness": 30.8,
+        "brightness": 21.0,
+        "contrast": 45.3
+      },
+      {
+        "frame": 45,
+        "sharpness": 24.1,
+        "brightness": 17.0,
+        "contrast": 40.0
+      },
+      {
+        "frame": 60,
+        "sharpness": 25.4,
+        "brightness": 29.2,
+        "contrast": 63.3
+      },
+      {
+        "frame": 75,
+        "sharpness": 24.6,
+        "brightness": 20.1,
+        "contrast": 46.1
+      },
+      {
+        "frame": 90,
+        "sharpness": 38.3,
+        "brightness": 21.0,
+        "contrast": 48.4
+      },
+      {
+        "frame": 105,
+        "sharpness": 30.5,
+        "brightness": 28.3,
+        "contrast": 63.4
+      },
+      {
+        "frame": 120,
+        "sharpness": 29.0,
+        "brightness": 15.9,
+        "contrast": 40.5
+      },
+      {
+        "frame": 135,
+        "sharpness": 42.5,
+        "brightness": 16.7,
+        "contrast": 48.9
+      },
+      {
+        "frame": 150,
+        "sharpness": 43.9,
+        "brightness": 19.8,
+        "contrast": 46.7
+      },
+      {
+        "frame": 165,
+        "sharpness": 25.8,
+        "brightness": 19.1,
+        "contrast": 44.6
+      },
+      {
+        "frame": 180,
+        "sharpness": 36.1,
+        "brightness": 42.3,
+        "contrast": 82.7
+      },
+      {
+        "frame": 195,
+        "sharpness": 36.1,
+        "brightness": 16.7,
+        "contrast": 43.3
+      },
+      {
+        "frame": 210,
+        "sharpness": 37.8,
+        "brightness": 16.7,
+        "contrast": 44.6
+      },
+      {
+        "frame": 225,
+        "sharpness": 39.9,
+        "brightness": 26.6,
+        "contrast": 56.5
+      },
+      {
+        "frame": 240,
+        "sharpness": 28.4,
+        "brightness": 18.6,
+        "contrast": 43.1
+      },
+      {
+        "frame": 255,
+        "sharpness": 35.5,
+        "brightness": 26.6,
+        "contrast": 56.4
+      },
+      {
+        "frame": 270,
+        "sharpness": 61.9,
+        "brightness": 18.4,
+        "contrast": 51.1
+      },
+      {
+        "frame": 285,
+        "sharpness": 66.8,
+        "brightness": 16.9,
+        "contrast": 43.1
+      },
+      {
+        "frame": 300,
+        "sharpness": 44.3,
+        "brightness": 18.6,
+        "contrast": 44.9
+      },
+      {
+        "frame": 315,
+        "sharpness": 46.8,
+        "brightness": 20.9,
+        "contrast": 48.1
+      },
+      {
+        "frame": 330,
+        "sharpness": 35.3,
+        "brightness": 20.9,
+        "contrast": 46.8
+      },
+      {
+        "frame": 345,
+        "sharpness": 32.5,
+        "brightness": 24.9,
+        "contrast": 53.4
+      },
+      {
+        "frame": 360,
+        "sharpness": 60.8,
+        "brightness": 20.4,
+        "contrast": 53.8
+      },
+      {
+        "frame": 375,
+        "sharpness": 50.4,
+        "brightness": 20.8,
+        "contrast": 46.9
+      },
+      {
+        "frame": 390,
+        "sharpness": 52.6,
+        "brightness": 20.8,
+        "contrast": 47.9
+      },
+      {
+        "frame": 405,
+        "sharpness": 27.8,
+        "brightness": 22.2,
+        "contrast": 46.9
+      },
+      {
+        "frame": 420,
+        "sharpness": 33.9,
+        "brightness": 21.3,
+        "contrast": 45.6
+      },
+      {
+        "frame": 435,
+        "sharpness": 40.3,
+        "brightness": 21.1,
+        "contrast": 45.5
+      },
+      {
+        "frame": 450,
+        "sharpness": 35.0,
+        "brightness": 22.8,
+        "contrast": 51.9
+      },
+      {
+        "frame": 465,
+        "sharpness": 25.0,
+        "brightness": 20.8,
+        "contrast": 48.7
+      }
+    ]
+  },
+  "reconstruction": {
+    "status": "PARTIAL",
+    "point_count": 0,
+    "success": false,
+    "method": "pycolmap",
+    "processing_time_s": 0.69,
+    "output_path": null,
+    "error": "pycolmap/colmap not installed: No module named 'pycolmap'"
+  },
+  "measurements": null,
+  "findings": [],
+  "metadata": {
+    "frame_sampling": 2,
+    "inference_resolution": 640,
+    "detection_confidence": 0.35,
+    "reconstruction_quality": "medium",
+    "video_summary": {
+      "frames_total": 477,
+      "frames_valid": 477,
+      "duration_seconds": 15.9,
+      "resolution": {
+        "width": 384,
+        "height": 850
+      },
+      "fps": 30.0,
+      "quality": {
+        "average": {
+          "sharpness": 38.1,
+          "brightness": 21.1,
+          "contrast": 48.8
+        },
+        "keyframes": 477
+      },
+      "camera_motion": {
+        "status": "AVAILABLE",
+        "estimated_motion_score": 5366.64,
+        "source": "VIDEO_DERIVED",
+        "confidence": 0.9
+      }
+    },
+    "damage_detection": {
+      "available": false,
+      "status": "UNKNOWN",
+      "reason": "ROBOFLOW_API_KEY or ROBOFLOW_MODEL_ID was not set.",
+      "findings": [],
+      "processing_time_s": 0.0,
+      "method": "roboflow"
+    },
+    "entry_exit_detection": {
+      "available": true,
+      "status": "POSSIBLE",
+      "points": [
+        {
+          "id": "entry-exit-1",
+          "frame": "damage_00039.jpg",
+          "bbox": [
+            10,
+            382,
+            83,
+            415
+          ],
+          "confidence": 0.31,
+          "status": "POSSIBLE",
+          "method": "opencv_heuristic",
+          "note": "Heuristic contour-based opening detector; lower accuracy than a trained door/window model."
+        },
+        {
+          "id": "entry-exit-2",
+          "frame": "damage_00117.jpg",
+          "bbox": [
+            273,
+            535,
+            316,
+            650
+          ],
+          "confidence": 0.42,
+          "status": "POSSIBLE",
+          "method": "opencv_heuristic",
+          "note": "Heuristic contour-based opening detector; lower accuracy than a trained door/window model."
+        },
+        {
+          "id": "entry-exit-3",
+          "frame": "damage_00117.jpg",
+          "bbox": [
+            354,
+            505,
+            384,
+            561
+          ],
+          "confidence": 0.31,
+          "status": "POSSIBLE",
+          "method": "opencv_heuristic",
+          "note": "Heuristic contour-based opening detector; lower accuracy than a trained door/window model."
+        },
+        {
+          "id": "entry-exit-4",
+          "frame": "damage_00156.jpg",
+          "bbox": [
+            24,
+            505,
+            50,
+            552
+          ],
+          "confidence": 0.31,
+          "status": "POSSIBLE",
+          "method": "opencv_heuristic",
+          "note": "Heuristic contour-based opening detector; lower accuracy than a trained door/window model."
+        },
+        {
+          "id": "entry-exit-5",
+          "frame": "damage_00156.jpg",
+          "bbox": [
+            121,
+            199,
+            377,
+            336
+          ],
+          "confidence": 0.42,
+          "status": "POSSIBLE",
+          "method": "opencv_heuristic",
+          "note": "Heuristic contour-based opening detector; lower accuracy than a trained door/window model."
+        }
+      ],
+      "method": "opencv_heuristic"
+    },
+    "reconstruction": {
+      "success": false,
+      "status": "PARTIAL",
+      "method": "pycolmap",
+      "processing_time_s": 0.69,
+      "point_count": 0,
+      "output_path": null,
+      "frames_extracted": 69,
+      "frames_dir": "C:\\Users\\kc889\\OneDrive\\Desktop\\Sih\\data\\missions\\040bcc51-8e0\\reconstruction\\frames",
+      "error": "pycolmap/colmap not installed: No module named 'pycolmap'"
+    }
+  },
+  "entry_exit_points": [
+    {
+      "id": "entry-exit-1",
+      "frame": "damage_00039.jpg",
+      "bbox": [
+        10,
+        382,
+        83,
+        415
+      ],
+      "confidence": 0.31,
+      "status": "POSSIBLE",
+      "method": "opencv_heuristic",
+      "note": "Heuristic contour-based opening detector; lower accuracy than a trained door/window model."
+    },
+    {
+      "id": "entry-exit-2",
+      "frame": "damage_00117.jpg",
+      "bbox": [
+        273,
+        535,
+        316,
+        650
+      ],
+      "confidence": 0.42,
+      "status": "POSSIBLE",
+      "method": "opencv_heuristic",
+      "note": "Heuristic contour-based opening detector; lower accuracy than a trained door/window model."
+    },
+    {
+      "id": "entry-exit-3",
+      "frame": "damage_00117.jpg",
+      "bbox": [
+        354,
+        505,
+        384,
+        561
+      ],
+      "confidence": 0.31,
+      "status": "POSSIBLE",
+      "method": "opencv_heuristic",
+      "note": "Heuristic contour-based opening detector; lower accuracy than a trained door/window model."
+    },
+    {
+      "id": "entry-exit-4",
+      "frame": "damage_00156.jpg",
+      "bbox": [
+        24,
+        505,
+        50,
+        552
+      ],
+      "confidence": 0.31,
+      "status": "POSSIBLE",
+      "method": "opencv_heuristic",
+      "note": "Heuristic contour-based opening detector; lower accuracy than a trained door/window model."
+    },
+    {
+      "id": "entry-exit-5",
+      "frame": "damage_00156.jpg",
+      "bbox": [
+        121,
+        199,
+        377,
+        336
+      ],
+      "confidence": 0.42,
+      "status": "POSSIBLE",
+      "method": "opencv_heuristic",
+      "note": "Heuristic contour-based opening detector; lower accuracy than a trained door/window model."
+    }
+  ],
+  "entry_exit_detection": {
+    "available": true,
+    "status": "POSSIBLE",
+    "points": [
+      {
+        "id": "entry-exit-1",
+        "frame": "damage_00039.jpg",
+        "bbox": [
+          10,
+          382,
+          83,
+          415
+        ],
+        "confidence": 0.31,
+        "status": "POSSIBLE",
+        "method": "opencv_heuristic",
+        "note": "Heuristic contour-based opening detector; lower accuracy than a trained door/window model."
+      },
+      {
+        "id": "entry-exit-2",
+        "frame": "damage_00117.jpg",
+        "bbox": [
+          273,
+          535,
+          316,
+          650
+        ],
+        "confidence": 0.42,
+        "status": "POSSIBLE",
+        "method": "opencv_heuristic",
+        "note": "Heuristic contour-based opening detector; lower accuracy than a trained door/window model."
+      },
+      {
+        "id": "entry-exit-3",
+        "frame": "damage_00117.jpg",
+        "bbox": [
+          354,
+          505,
+          384,
+          561
+        ],
+        "confidence": 0.31,
+        "status": "POSSIBLE",
+        "method": "opencv_heuristic",
+        "note": "Heuristic contour-based opening detector; lower accuracy than a trained door/window model."
+      },
+      {
+        "id": "entry-exit-4",
+        "frame": "damage_00156.jpg",
+        "bbox": [
+          24,
+          505,
+          50,
+          552
+        ],
+        "confidence": 0.31,
+        "status": "POSSIBLE",
+        "method": "opencv_heuristic",
+        "note": "Heuristic contour-based opening detector; lower accuracy than a trained door/window model."
+      },
+      {
+        "id": "entry-exit-5",
+        "frame": "damage_00156.jpg",
+        "bbox": [
+          121,
+          199,
+          377,
+          336
+        ],
+        "confidence": 0.42,
+        "status": "POSSIBLE",
+        "method": "opencv_heuristic",
+        "note": "Heuristic contour-based opening detector; lower accuracy than a trained door/window model."
+      }
+    ],
+    "method": "opencv_heuristic"
+  },
+  "detector": {
+    "model": "aeromesh_yolo",
+    "dataset": "VisDrone (fine-tuned on aerial drone footage)",
+    "domain": "Aerial / drone-based detection",
+    "confidence_threshold": 0.35,
+    "per_class_thresholds": {
+      "car": 0.5,
+      "bicycle": 0.5,
+      "van": 0.25,
+      "bus": 0.25,
+      "tricycle": 0.25,
+      "truck": 0.35,
+      "person": 0.35,
+      "motorcycle": 0.35
+    },
+    "input_resolution": 640,
+    "suitability": "Aerial-specialized detector trained on VisDrone dataset; per-class performance variance requires individual thresholds.",
+    "known_weaknesses": [
+      "car detection (mAP50 < 10%)",
+      "bicycle detection (mAP50 < 10%)"
+    ],
+    "known_strengths": [
+      "van detection",
+      "bus detection",
+      "tricycle detection"
+    ],
+    "status": "AVAILABLE",
+    "source": "MODEL_METADATA"
+  },
+  "scene_analysis": {
+    "total": 10,
+    "people": 1,
+    "vehicles": 1,
+    "structures": 0,
+    "hazards": 0,
+    "confirmed_objects": 9,
+    "possible_objects": 1,
+    "rejected_objects": 0,
+    "static_objects": 0,
+    "dynamic_objects": 2,
+    "per_object_evidence": [
+      {
+        "track_id": "T0001",
+        "class": "van",
+        "status": "CONFIRMED",
+        "confidence": 0.551,
+        "hits": 26,
+        "persistence": 1.0,
+        "frames_seen": 26,
+        "class_consistent": true,
+        "segmentation_verified": false,
+        "segmentation_status": "UNAVAILABLE",
+        "source": "TRACKING_DERIVED",
+        "first_seen": 0,
+        "last_seen": 405,
+        "confidence_history": [
+          0.541,
+          0.442,
+          0.415,
+          0.74,
+          0.693,
+          0.506,
+          0.586,
+          0.549,
+          0.538,
+          0.409,
+          0.741,
+          0.719,
+          0.651,
+          0.619,
+          0.582,
+          0.422,
+          0.359,
+          0.744,
+          0.641,
+          0.618,
+          0.589,
+          0.411,
+          0.479,
+          0.478,
+          0.467,
+          0.376
+        ]
+      },
+      {
+        "track_id": "T0002",
+        "class": "van",
+        "status": "CONFIRMED",
+        "confidence": 0.479,
+        "hits": 16,
+        "persistence": 1.0,
+        "frames_seen": 16,
+        "class_consistent": true,
+        "segmentation_verified": false,
+        "segmentation_status": "UNAVAILABLE",
+        "source": "TRACKING_DERIVED",
+        "first_seen": 0,
+        "last_seen": 420,
+        "confidence_history": [
+          0.501,
+          0.472,
+          0.395,
+          0.377,
+          0.363,
+          0.577,
+          0.395,
+          0.631,
+          0.369,
+          0.73,
+          0.691,
+          0.472,
+          0.425,
+          0.362,
+          0.353,
+          0.547
+        ]
+      },
+      {
+        "track_id": "T0003",
+        "class": "van",
+        "status": "CONFIRMED",
+        "confidence": 0.45,
+        "hits": 4,
+        "persistence": 1.0,
+        "frames_seen": 4,
+        "class_consistent": true,
+        "segmentation_verified": false,
+        "segmentation_status": "UNAVAILABLE",
+        "source": "TRACKING_DERIVED",
+        "first_seen": 0,
+        "last_seen": 405,
+        "confidence_history": [
+          0.432,
+          0.393,
+          0.431,
+          0.542
+        ]
+      },
+      {
+        "track_id": "T0004",
+        "class": "truck",
+        "status": "CONFIRMED",
+        "confidence": 0.405,
+        "hits": 2,
+        "persistence": 1.0,
+        "frames_seen": 2,
+        "class_consistent": true,
+        "segmentation_verified": false,
+        "segmentation_status": "UNAVAILABLE",
+        "source": "TRACKING_DERIVED",
+        "first_seen": 0,
+        "last_seen": 210,
+        "confidence_history": [
+          0.427,
+          0.384
+        ]
+      },
+      {
+        "track_id": "T0005",
+        "class": "person",
+        "status": "CONFIRMED",
+        "confidence": 0.411,
+        "hits": 2,
+        "persistence": 1.0,
+        "frames_seen": 2,
+        "class_consistent": true,
+        "segmentation_verified": false,
+        "segmentation_status": "UNAVAILABLE",
+        "source": "TRACKING_DERIVED",
+        "first_seen": 60,
+        "last_seen": 420,
+        "confidence_history": [
+          0.394,
+          0.428
+        ]
+      },
+      {
+        "track_id": "T0006",
+        "class": "van",
+        "status": "CONFIRMED",
+        "confidence": 0.498,
+        "hits": 4,
+        "persistence": 1.0,
+        "frames_seen": 4,
+        "class_consistent": true,
+        "segmentation_verified": false,
+        "segmentation_status": "UNAVAILABLE",
+        "source": "TRACKING_DERIVED",
+        "first_seen": 75,
+        "last_seen": 420,
+        "confidence_history": [
+          0.495,
+          0.479,
+          0.569,
+          0.451
+        ]
+      },
+      {
+        "track_id": "T0007",
+        "class": "van",
+        "status": "CONFIRMED",
+        "confidence": 0.556,
+        "hits": 22,
+        "persistence": 1.0,
+        "frames_seen": 22,
+        "class_consistent": true,
+        "segmentation_verified": false,
+        "segmentation_status": "UNAVAILABLE",
+        "source": "TRACKING_DERIVED",
+        "first_seen": 135,
+        "last_seen": 345,
+        "confidence_history": [
+          0.679,
+          0.608,
+          0.742,
+          0.723,
+          0.53,
+          0.663,
+          0.354,
+          0.759,
+          0.638,
+          0.434,
+          0.718,
+          0.664,
+          0.372,
+          0.575,
+          0.549,
+          0.397,
+          0.675,
+          0.495,
+          0.463,
+          0.415,
+          0.391,
+          0.392
+        ]
+      },
+      {
+        "track_id": "T0008",
+        "class": "tricycle",
+        "status": "POSSIBLE",
+        "confidence": 0.612,
+        "hits": 1,
+        "persistence": 0.0,
+        "frames_seen": 1,
+        "class_consistent": true,
+        "segmentation_verified": false,
+        "segmentation_status": "UNAVAILABLE",
+        "source": "TRACKING_DERIVED",
+        "first_seen": 165,
+        "last_seen": 165,
+        "confidence_history": [
+          0.612
+        ]
+      },
+      {
+        "track_id": "T0009",
+        "class": "van",
+        "status": "CONFIRMED",
+        "confidence": 0.606,
+        "hits": 33,
+        "persistence": 1.0,
+        "frames_seen": 33,
+        "class_consistent": true,
+        "segmentation_verified": false,
+        "segmentation_status": "UNAVAILABLE",
+        "source": "TRACKING_DERIVED",
+        "first_seen": 255,
+        "last_seen": 465,
+        "confidence_history": [
+          0.591,
+          0.459,
+          0.746,
+          0.688,
+          0.602,
+          0.802,
+          0.579,
+          0.353,
+          0.601,
+          0.725,
+          0.576,
+          0.564,
+          0.571,
+          0.503,
+          0.699,
+          0.651,
+          0.623,
+          0.767,
+          0.74,
+          0.664,
+          0.635,
+          0.788,
+          0.47,
+          0.631,
+          0.732,
+          0.723,
+          0.431,
+          0.75,
+          0.497,
+          0.375,
+          0.617,
+          0.491,
+          0.361
+        ]
+      },
+      {
+        "track_id": "T0010",
+        "class": "van",
+        "status": "CONFIRMED",
+        "confidence": 0.431,
+        "hits": 6,
+        "persistence": 1.0,
+        "frames_seen": 6,
+        "class_consistent": true,
+        "segmentation_verified": false,
+        "segmentation_status": "UNAVAILABLE",
+        "source": "TRACKING_DERIVED",
+        "first_seen": 405,
+        "last_seen": 405,
+        "confidence_history": [
+          0.54,
+          0.482,
+          0.441,
+          0.398,
+          0.363,
+          0.359
+        ]
+      }
+    ],
+    "status": "PARTIAL",
+    "source": "INFERENCE_DERIVED",
+    "confidence": 0.5
+  },
+  "objects": {
+    "total": 10,
+    "people": 1,
+    "vehicles": 1,
+    "structures": 0,
+    "hazards": 0,
+    "confirmed_objects": 9,
+    "possible_objects": 1,
+    "rejected_objects": 0,
+    "static_objects": 0,
+    "dynamic_objects": 2
+  },
+  "provenance": {
+    "processing": {
+      "value": 32,
+      "source": "VIDEO_DERIVED",
+      "confidence": 0.8,
+      "timestamp": "processing",
+      "status": "UNKNOWN",
+      "display": "Frames sampled from uploaded video"
+    },
+    "detections": {
+      "value": 10,
+      "source": "DETECTION_DERIVED",
+      "confidence": 0.8,
+      "timestamp": "processing",
+      "status": "UNKNOWN",
+      "display": "Object detections observed from frame evidence"
+    },
+    "reconstruction": {
+      "value": 0,
+      "source": "RECONSTRUCTION_DERIVED",
+      "confidence": 0.0,
+      "timestamp": "processing",
+      "status": "UNKNOWN",
+      "display": "Reconstruction output from pycolmap extraction and model fitting"
+    }
+  },
+  "evidence_state": {
+    "scene": {
+      "value": 10,
+      "status": "PARTIAL",
+      "source": "VIDEO_DERIVED",
+      "confidence": 0.5,
+      "frame_id": null,
+      "timestamp": "2026-08-31T15:50:51.177386",
+      "note": "Object totals are derived only from actual inference evidence and temporal verification.",
+      "display": "Validated from available evidence"
+    },
+    "reconstruction": {
+      "value": 0,
+      "status": "PARTIAL",
+      "source": "RECONSTRUCTION_DERIVED",
+      "confidence": 0.0,
+      "frame_id": null,
+      "timestamp": "2026-08-31T15:50:51.177430",
+      "note": "pycolmap/colmap not installed: No module named 'pycolmap'",
+      "display": "Reconstruction unavailable"
+    },
+    "damage": {
+      "value": 0,
+      "status": "UNKNOWN",
+      "source": "UNKNOWN",
+      "confidence": 0.0,
+      "frame_id": null,
+      "timestamp": "2026-08-31T15:50:51.177446",
+      "note": "ROBOFLOW_API_KEY or ROBOFLOW_MODEL_ID was not set.",
+      "display": "Damage analysis unavailable"
+    }
+  },
+  "damage_detection": {
+    "available": false,
+    "status": "UNKNOWN",
+    "reason": "ROBOFLOW_API_KEY or ROBOFLOW_MODEL_ID was not set.",
+    "findings": [],
+    "processing_time_s": 0.0,
+    "method": "roboflow"
+  }
+}

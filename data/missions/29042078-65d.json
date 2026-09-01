@@ -1,0 +1,18 @@
+{
+  "id": "29042078-65d",
+  "name": "Validation Mission",
+  "type": "single-pass",
+  "location": "Test",
+  "operator": "Copilot",
+  "createdAt": "2026-08-30T17:42:59.876464",
+  "status": "created",
+  "video": null,
+  "processing": null,
+  "detections": null,
+  "tracks": null,
+  "frameQuality": null,
+  "reconstruction": null,
+  "measurements": null,
+  "findings": [],
+  "metadata": {}
+}
