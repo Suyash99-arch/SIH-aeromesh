@@ -1,6 +1,7 @@
+import { motion, useReducedMotion } from "framer-motion";
 import { useMemo, useState } from "react";
 import Icon from "../components/ui/Icon";
-import { Button, Panel, Progress, Status } from "../components/ui/UI";
+import { Button, CountUp, Panel, Progress, Status } from "../components/ui/UI";
 import { missions, pipelineStages } from "../data/missions";
 import ReconstructionViewer from "../components/reconstruction/ReconstructionViewer";
 import VideoPlayer from "../components/reconstruction/VideoPlayer";
@@ -16,12 +17,68 @@ const Header = ({ kicker, title, copy, children }) => (
   </div>
 );
 
-const Stat = ({ label, value }) => (
-  <div className="data-stat">
-    <span>{label}</span>
-    <strong>{value}</strong>
-  </div>
-);
+const Stat = ({
+  label,
+  value,
+  tone = "violet",
+  loading = false,
+  icon = null,
+  unit = null,
+}) => {
+  const numericValue =
+    typeof value === "number"
+      ? value
+      : Number(String(value).replace(/[^\d.-]/g, ""));
+  const isNumeric =
+    Number.isFinite(numericValue) && String(value).trim() !== "";
+  const reduceMotion = useReducedMotion();
+
+  if (loading) {
+    return (
+      <motion.div
+        className={`data-stat data-stat--${tone} is-loading`}
+        initial={reduceMotion ? false : { opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+      >
+        <div className="stat-header">
+          <span className="stat-icon-box shimmer" />
+          <span className="stat-label shimmer" />
+        </div>
+        <strong className="stat-value shimmer" />
+      </motion.div>
+    );
+  }
+
+  return (
+    <motion.div
+      className={`data-stat data-stat--${tone}`}
+      initial={reduceMotion ? false : { opacity: 0, y: 12 }}
+      animate={reduceMotion ? { opacity: 1, y: 0 } : { opacity: 1, y: 0 }}
+      transition={{ duration: 0.2, ease: [0.22, 1, 0.36, 1] }}
+      whileHover={
+        reduceMotion ? undefined : { y: -3, boxShadow: "var(--shadow-md)" }
+      }
+    >
+      <div className="stat-header">
+        {icon && (
+          <div className={`stat-icon-box stat-icon-box--${tone}`}>
+            <Icon name={icon} size={18} />
+          </div>
+        )}
+        <span className="stat-label">{label}</span>
+      </div>
+      <strong className="stat-value">
+        {isNumeric && !String(value).includes(":") ? (
+          <CountUp value={numericValue} />
+        ) : (
+          value
+        )}
+        {unit && <span className="stat-unit">{unit}</span>}
+      </strong>
+    </motion.div>
+  );
+};
 
 function Findings({ mission, onAction }) {
   return (
@@ -79,19 +136,45 @@ function StagePipeline({ navigate }) {
 }
 
 export function OverviewPage({ mission, navigate }) {
+  const safeMission = mission || {};
+  const safeFindings = Array.isArray(safeMission.findings)
+    ? safeMission.findings
+    : [];
+  const safeRecommendations =
+    Array.isArray(safeMission.recommendations) &&
+    safeMission.recommendations.length
+      ? safeMission.recommendations
+      : ["Upload a drone video to start automatic analysis."];
+  const safeObjects =
+    safeMission.objects && typeof safeMission.objects === "object"
+      ? safeMission.objects
+      : { total: 0, people: 0, vehicles: 0, structures: 0, hazards: 0 };
+  const safeFrames = Number.isFinite(Number(safeMission.frames))
+    ? Number(safeMission.frames)
+    : 0;
+
   return (
     <>
       <Header
         kicker="AEROMESH / MISSION COMMAND"
-        title={`${mission.name} — ${mission.sector}`}
+        title={`${safeMission.name || "Mission"} — ${safeMission.sector || "Overview"}`}
         copy="One flight converted into transparent, actionable aerial intelligence."
       >
-        <Status tone={mission.status === "processing" ? "info" : "success"}>
-          {mission.status.toUpperCase()}
+        <Status tone={safeMission.status === "processing" ? "info" : "success"}>
+          {(safeMission.status || "READY").toUpperCase()}
         </Status>
       </Header>
 
-      <section className="hero command-hero">
+      <motion.section
+        className="hero command-hero"
+        initial={useReducedMotion() ? false : { opacity: 0, scale: 0.98 }}
+        animate={
+          useReducedMotion()
+            ? { opacity: 1, scale: 1 }
+            : { opacity: 1, scale: 1 }
+        }
+        transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+      >
         <div className="hero-copy">
           <span className="eyebrow">
             <i /> SINGLE-FLIGHT INTELLIGENCE
@@ -119,28 +202,94 @@ export function OverviewPage({ mission, navigate }) {
             </Button>
           </div>
         </div>
-        <div className="mission-radar">
+        <motion.div
+          className="mission-radar"
+          animate={
+            useReducedMotion()
+              ? undefined
+              : { rotate: [0, 2, -2, 0], y: [0, -6, 0] }
+          }
+          transition={
+            useReducedMotion()
+              ? undefined
+              : { duration: 9, repeat: Infinity, ease: "easeInOut" }
+          }
+        >
           <span>3D CONFIDENCE</span>
-          <b>{mission.confidence}%</b>
+          <b>{safeMission.confidence ?? 0}%</b>
           <small>
-            {mission.coverage} COVERAGE · {mission.duration} FLIGHT
+            {safeMission.coverage || "0.00 km²"} COVERAGE ·{" "}
+            {safeMission.duration || "00:00"} FLIGHT
           </small>
-        </div>
-      </section>
+        </motion.div>
+      </motion.section>
 
       <div className="command-stats">
         {[
-          ["Coverage", mission.coverage],
-          ["Flight duration", mission.duration],
-          ["Frames processed", mission.frames.toLocaleString()],
-          ["Objects detected", mission.objects.total],
-          ["AI findings", mission.findings.length],
-          [
-            "Critical findings",
-            mission.findings.filter((f) => f.severity === "critical").length,
-          ],
-        ].map((x) => (
-          <Stat key={x[0]} label={x[0]} value={x[1]} />
+          {
+            label: "Coverage",
+            value: safeMission.coverage || "0.00 km²",
+            icon: "MapPin",
+            unit: "",
+            tone: "violet",
+          },
+          {
+            label: "Flight duration",
+            value: safeMission.duration || "00:00",
+            icon: "Clock",
+            unit: "",
+            tone: "violet",
+          },
+          {
+            label: "Frames processed",
+            value: safeFrames.toLocaleString(),
+            icon: "Film",
+            unit: "",
+            tone: "violet",
+          },
+          {
+            label: "Objects detected",
+            value: safeObjects.total ?? 0,
+            icon: "Grid3x3",
+            unit: "",
+            tone: "violet",
+          },
+          {
+            label: "AI findings",
+            value: safeFindings.length,
+            icon: "AlertTriangle",
+            unit: "",
+            tone: "violet",
+          },
+          {
+            label: "Critical findings",
+            value: safeFindings.filter((f) => f?.severity === "critical")
+              .length,
+            icon: "AlertCircle",
+            unit: "",
+            tone: "hazards",
+          },
+        ].map((item, i) => (
+          <motion.div
+            key={item.label}
+            initial={useReducedMotion() ? false : { opacity: 0, y: 12 }}
+            animate={
+              useReducedMotion() ? { opacity: 1, y: 0 } : { opacity: 1, y: 0 }
+            }
+            transition={{
+              duration: 0.2,
+              delay: i * 0.05,
+              ease: [0.22, 1, 0.36, 1],
+            }}
+          >
+            <Stat
+              label={item.label}
+              value={item.value}
+              icon={item.icon}
+              unit={item.unit}
+              tone={item.tone}
+            />
+          </motion.div>
         ))}
       </div>
 
@@ -150,9 +299,9 @@ export function OverviewPage({ mission, navigate }) {
         <StagePipeline navigate={navigate} />
         <div className="progress-head">
           <span>Mission processing</span>
-          <b>{mission.progress}%</b>
+          <b>{safeMission.progress ?? 0}%</b>
         </div>
-        <Progress value={mission.progress} />
+        <Progress value={safeMission.progress ?? 0} />
       </Panel>
 
       <div className="overview-grid">
@@ -160,8 +309,8 @@ export function OverviewPage({ mission, navigate }) {
           <span className="eyebrow">MISSION-SPECIFIC RECOMMENDATIONS</span>
           <h3>Actionable intelligence</h3>
           <ol className="recommendations">
-            {mission.recommendations.map((r, i) => (
-              <li key={r}>
+            {safeRecommendations.map((r, i) => (
+              <li key={`${r}-${i}`}>
                 <b>0{i + 1}</b>
                 {r}
               </li>
@@ -203,14 +352,29 @@ export function MissionsPage({ mission, setMission, navigate, notice }) {
             placeholder="Search mission"
           />
         </header>
-        {list.map((m) => (
-          <button
+        {list.map((m, index) => (
+          <motion.button
             className={`mission-row ${mission.id === m.id ? "selected" : ""}`}
             key={m.id}
             onClick={() => {
               setMission(m.id);
               notice(`${m.name} is now active`);
             }}
+            initial={useReducedMotion() ? false : { opacity: 0, y: 12 }}
+            animate={
+              useReducedMotion() ? { opacity: 1, y: 0 } : { opacity: 1, y: 0 }
+            }
+            transition={{
+              duration: 0.2,
+              delay: index * 0.05,
+              ease: [0.22, 1, 0.36, 1],
+            }}
+            whileHover={
+              useReducedMotion()
+                ? undefined
+                : { y: -3, boxShadow: "0 8px 20px rgba(76, 29, 149, 0.12)" }
+            }
+            whileTap={useReducedMotion() ? undefined : { scale: 0.995 }}
           >
             <span className={`mission-dot ${m.status}`} />
             <section>
@@ -235,7 +399,7 @@ export function MissionsPage({ mission, setMission, navigate, notice }) {
               </Status>
               <Progress value={m.progress} />
             </div>
-          </button>
+          </motion.button>
         ))}
       </Panel>
 
@@ -760,12 +924,38 @@ export function IntelligencePage({ kind, mission, navigate, notice }) {
 
         <div className="command-stats">
           {[
-            ["Flight path", mission.telemetry.position],
-            ["Coverage", mission.coverage],
-            ["Detections", mission.findings.length],
-            ["Accuracy", mission.telemetry.accuracy],
-          ].map((x) => (
-            <Stat key={x[0]} label={x[0]} value={x[1]} />
+            {
+              label: "Flight path",
+              value: mission.telemetry.position,
+              icon: "Compass",
+              tone: "confidence",
+            },
+            {
+              label: "Coverage",
+              value: mission.coverage,
+              icon: "MapPin",
+              tone: "confidence",
+            },
+            {
+              label: "Detections",
+              value: mission.findings.length,
+              icon: "Radar",
+              tone: "confidence",
+            },
+            {
+              label: "Accuracy",
+              value: mission.telemetry.accuracy,
+              icon: "Target",
+              tone: "confidence",
+            },
+          ].map((item) => (
+            <Stat
+              key={item.label}
+              label={item.label}
+              value={item.value}
+              icon={item.icon}
+              tone={item.tone}
+            />
           ))}
         </div>
       </>
@@ -780,11 +970,41 @@ export function IntelligencePage({ kind, mission, navigate, notice }) {
           <Panel>
             <span className="eyebrow">OBJECT SUMMARY</span>
             <div className="object-stats">
-              <Stat label="Total" value={mission.objects.total} />
-              <Stat label="People" value={mission.objects.people} />
-              <Stat label="Vehicles" value={mission.objects.vehicles} />
-              <Stat label="Structures" value={mission.objects.structures} />
-              <Stat label="Hazards" value={mission.objects.hazards} />
+              <Stat
+                label="Total"
+                value={mission.objects.total}
+                tone="confidence"
+                icon="Grid3x3"
+                loading={!mission || !mission.objects}
+              />
+              <Stat
+                label="People"
+                value={mission.objects.people}
+                tone="people"
+                icon="Users"
+                loading={!mission || !mission.objects}
+              />
+              <Stat
+                label="Vehicles"
+                value={mission.objects.vehicles}
+                tone="vehicles"
+                icon="Truck"
+                loading={!mission || !mission.objects}
+              />
+              <Stat
+                label="Structures"
+                value={mission.objects.structures}
+                tone="structures"
+                icon="Building2"
+                loading={!mission || !mission.objects}
+              />
+              <Stat
+                label="Hazards"
+                value={mission.objects.hazards}
+                tone="hazards"
+                icon="AlertTriangle"
+                loading={!mission || !mission.objects}
+              />
             </div>
           </Panel>
 

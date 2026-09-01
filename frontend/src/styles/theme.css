@@ -1,3 +1,380 @@
-:root{--bg:#061017;--bg2:#091720;--surface:#0b1b25;--surface2:#102530;--glass:rgba(10,25,35,.72);--border:#1a3846;--border-hi:#2d6477;--text:#e5f3f7;--text2:#91adb8;--muted:#53707d;--cyan:#42d7ff;--cyan-soft:rgba(66,215,255,.12);--violet:#ae8cff;--success:#55dca3;--warning:#f3b45e;--danger:#ff7180;--shadow:0 22px 60px rgba(0,0,0,.27)}
-[data-theme="light"]{--bg:#eaf1f5;--bg2:#f4f8fa;--surface:#f8fbfc;--surface2:#edf5f8;--glass:rgba(248,252,253,.72);--border:#c8dae2;--border-hi:#79aec0;--text:#102b38;--text2:#406170;--muted:#66808d;--cyan:#008fbd;--cyan-soft:rgba(0,143,189,.11);--violet:#714fc4;--success:#13895b;--warning:#ad6b11;--danger:#c9394a;--shadow:0 20px 55px rgba(20,57,72,.12)}
-html{background:var(--bg);color:var(--text);font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}body{min-width:320px;background:var(--bg);transition:background-color .35s ease,color .35s ease}button,input,select{color:inherit}button{border:0}button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--cyan);outline-offset:2px}@media(prefers-reduced-motion:reduce){*,*:before,*:after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;scroll-behavior:auto!important}}
+/* AeroMesh Unified Dark Theme - Single Source of Truth */
+:root {
+  /* Backgrounds */
+  --bg-page: #0a0e1a;
+  --bg-surface: #101827;
+  --bg-elevated: #131c2d;
+  --bg-sidebar: #0c1220;
+  --border: rgba(255, 255, 255, 0.06);
+
+  /* Accent Colors */
+  --accent-primary: #2e7cf6;
+  --accent-secondary: #22d3ee;
+
+  /* Text Colors */
+  --text-primary: #f8fafc;
+  --text-secondary: #8b93a7;
+  --text-muted: rgba(148, 163, 184, 0.8);
+  --text-labels: rgba(255, 255, 255, 0.92);
+  --text-light: #f8fafc;
+
+  /* Category Colors (adapted for dark bg) */
+  --color-people: #f97316;
+  --color-vehicles: #0ea5e9;
+  --color-structures: #8b5cf6;
+  --color-hazards: #ef4444;
+  --color-terrain: #10b981;
+  --color-confidence: #06b6d4;
+
+  /* Status Colors */
+  --success: #10b981;
+  --warning: #f59e0b;
+  --danger: #ef4444;
+
+  /* Typography Scale */
+  --text-xs: 11px;
+  --text-sm: 13px;
+  --text-base: 15px;
+  --text-lg: 18px;
+  --text-xl: 28px;
+  --text-2xl: 40px;
+
+  /* Shadows with cyan glow */
+  --shadow-sm: 0 2px 8px rgba(0, 217, 255, 0.08);
+  --shadow-md: 0 8px 24px rgba(0, 217, 255, 0.12);
+  --shadow-lg: 0 16px 48px rgba(0, 217, 255, 0.16);
+
+  /* Border Radius */
+  --radius-pill: 999px;
+  --radius-card: 16px;
+  --radius-sm: 12px;
+  --radius-md: 14px;
+  --radius-lg: 18px;
+  --radius-xl: 24px;
+
+  /* Glass/Backdrop Effects */
+  --bg-sidebar: rgba(15, 18, 53, 0.8);
+  --glass-panel: rgba(15, 18, 53, 0.7);
+  --surface-hover: rgba(0, 217, 255, 0.04);
+
+  /* Utility Aliases for consistency */
+  --bg: var(--bg-page);
+  --bg2: #0d1220;
+  --surface: var(--bg-surface);
+  --surface2: var(--bg-elevated);
+  --glass: var(--glass-panel);
+  --border-hi: rgba(255, 255, 255, 0.08);
+  --text: var(--text-primary);
+  --text2: var(--text-secondary);
+  --muted: var(--text-muted);
+  --cyan: var(--accent-secondary);
+  --cyan-soft: rgba(34, 211, 238, 0.12);
+  --violet: #8b5cf6;
+  --shadow: var(--shadow-lg);
+  --shadow-soft: var(--shadow-md);
+  --text-on-accent: #f8fafc;
+
+  /* Homepage-specific aliases (for backward compatibility) */
+  --hp-text-primary: #f8fafc;
+  --hp-text-secondary: #8b93a7;
+  --hp-text-muted: rgba(148, 163, 184, 0.8);
+  --hp-accent-primary: #00d9ff;
+  --hp-accent-secondary: #0ea5e9;
+  --hp-bg: #0a0e27;
+  --hp-bg-surface: #0f1235;
+  --hp-bg-elevated: #14192f;
+  --hp-border: #1e2454;
+  --hp-success: #10b981;
+  --hp-text-2xl: 40px;
+  --hp-text-lg: 18px;
+  --hp-text-base: 15px;
+  --hp-text-sm: 13px;
+  --hp-radius: 16px;
+  --hp-radius-lg: 24px;
+}
+
+/* Dark theme is now the default. Keep all pages in a light-on-dark palette. */
+:root,
+[data-theme="dark"],
+[data-theme="light"] {
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+  width: 100%;
+  margin: 0;
+  background:
+    radial-gradient(
+      circle at 20% 0%,
+      rgba(46, 124, 246, 0.16),
+      transparent 30%
+    ),
+    radial-gradient(
+      circle at 80% 20%,
+      rgba(34, 211, 238, 0.12),
+      transparent 32%
+    ),
+    var(--bg-page);
+  color: var(--text-primary);
+  font-family: Inter, "Segoe UI", sans-serif;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+body {
+  background:
+    radial-gradient(
+      circle at 20% 0%,
+      rgba(46, 124, 246, 0.16),
+      transparent 30%
+    ),
+    radial-gradient(
+      circle at 80% 20%,
+      rgba(34, 211, 238, 0.12),
+      transparent 32%
+    ),
+    var(--bg-page);
+  color: var(--text-primary);
+  transition:
+    background-color 0.2s ease,
+    color 0.2s ease;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: var(--text-primary);
+}
+
+button {
+  border: 0;
+  background: none;
+}
+
+.page-header h1,
+.page-header p,
+.hero h2,
+.hero p,
+.command-hero h2,
+.command-hero p,
+.section-line h2,
+.mission-detail h2,
+.mission-detail h4,
+.button,
+.nav-login,
+.dashboard-button,
+.nav-item span,
+.workspace strong,
+.brand strong,
+.topbar .crumbs strong,
+.topbar .systems,
+.topbar .operator-name,
+.eyebrow,
+.status,
+.command-hero .eyebrow,
+.data-stat .stat-label,
+.data-stat strong,
+.mission-radar span,
+.mission-radar small,
+.hero-copy > div button,
+.hero-copy > div .button {
+  color: var(--text-primary) !important;
+}
+
+/* Force every page text to a light color and never let black font bleed back in. */
+html,
+body,
+#root,
+* {
+  color: var(--text-primary) !important;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+label,
+strong,
+span,
+small,
+p,
+div,
+li,
+button,
+a,
+input,
+select,
+textarea,
+.nav-brand strong,
+.logo-text strong,
+.workspace strong,
+.nav-item span,
+.crumbs strong,
+.systems,
+.operator-name,
+.hero-text h1,
+.hero-text p,
+.metric strong,
+.metric span,
+.capability-card h3,
+.capability-card p,
+.section-header h2,
+.section-header p,
+.brand section strong,
+.command-hero h2,
+.command-hero p,
+.mission-row strong,
+.mission-detail h2,
+.mission-detail h4,
+.topbar .crumbs strong,
+.topbar .systems,
+.topbar .operator-name {
+  color: var(--text-primary) !important;
+}
+
+p,
+.muted,
+small,
+small *,
+.brand small,
+.nav-title,
+.eyebrow,
+.mission-row small,
+.timeline small,
+.section-line p,
+.detail-data strong,
+.video-source,
+.recon-legend,
+.video-loading,
+.operator small,
+.workspace small {
+  color: var(--text-secondary) !important;
+}
+
+.nav-menu a,
+.hero-text p,
+.metric span,
+.page-header p,
+.section-line p,
+.company-blurb,
+.mission-summary,
+.card-subtle,
+.secondary-copy {
+  color: var(--text-secondary) !important;
+}
+
+h2 em,
+.mission-row strong em,
+.mission-detail h2 em,
+.hero h2 em,
+.hero-copy h2 em,
+.radar-visual > span,
+.radar b,
+.radar-visual > small,
+.hud.rec,
+.hud.telemetry,
+.brand > div,
+.sidebar footer i,
+.nav-item .nav-active-pill,
+.metric strong,
+.data-stat strong,
+.hero-badge,
+.logo-icon,
+.nav-item.active span,
+.nav-item.active b,
+.nav-item.active svg,
+.nav-item.create-mission-btn span,
+.nav-item.create-mission-btn svg {
+  color: var(--accent-primary) !important;
+}
+
+html,
+body,
+#root,
+* {
+  color: #fff !important;
+}
+
+h1,
+h2,
+h3,
+h4,
+h5,
+h6,
+span,
+strong,
+small,
+p,
+div,
+button,
+a,
+li,
+label,
+input,
+select,
+textarea,
+.nav-item,
+.workspace,
+.brand,
+.topbar,
+.crumbs,
+.operator,
+.page-header,
+.mission-detail,
+.hero-copy,
+.section-line,
+.metric,
+.data-stat,
+.card,
+.panel,
+.table-tools {
+  color: #fff !important;
+}
+
+p {
+  color: var(--text-secondary);
+}
+
+a {
+  color: var(--accent-primary);
+}
+
+small,
+.small {
+  color: var(--text-muted);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--text-muted);
+  opacity: 0.7;
+}
+
+button:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  outline: 2px solid var(--accent-primary);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

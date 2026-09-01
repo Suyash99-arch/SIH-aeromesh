@@ -260,7 +260,7 @@
   overflow: hidden;
   font-size: 12px;
   font-weight: 600;
-  color: #000;
+  color: var(--text-primary);
   flex-direction: column;
   gap: 2px;
 }
@@ -334,7 +334,7 @@
 
 .btn.primary {
   background: var(--cyan);
-  color: #000;
+  color: var(--text-primary);
 }
 
 .btn.primary:hover:not(:disabled) {
