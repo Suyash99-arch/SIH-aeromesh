@@ -3,20 +3,20 @@
  * Single source of truth for all mission data
  */
 
-import { getMission as getSeedMission } from "../data/missions";
+import { missions as seededMissions } from "../data/missions";
 
 // API base URL
 const API_BASE = "http://localhost:8000/api";
 
 const fallbackMission = {
-  id: "mission-overview",
-  name: "Mission Overview",
-  sector: "Awaiting upload",
+  id: "sector-04",
+  name: "Disaster Response",
+  sector: "Sector 04",
   status: "ready",
   priority: "medium",
   type: "Single-Pass Aerial Reconstruction",
   drone: "AERO-X4",
-  coverage: "UNKNOWN",
+  coverage: "0.00 km²",
   duration: "00:00",
   frames: 0,
   progress: 0,
@@ -27,22 +27,17 @@ const fallbackMission = {
     vehicles: 0,
     structures: 0,
     hazards: 0,
-    confirmed_objects: 0,
-    possible_objects: 0,
-    rejected_objects: 0,
-    static_objects: 0,
-    dynamic_objects: 0,
   },
   telemetry: {
-    altitude: "UNKNOWN",
-    speed: "UNKNOWN",
-    heading: "UNKNOWN",
-    gps: "UNKNOWN",
-    accuracy: "UNKNOWN",
+    altitude: "0 m",
+    speed: "0 m/s",
+    heading: "0°",
+    gps: "WAITING",
+    accuracy: "N/A",
     satellites: "0",
-    battery: "UNKNOWN",
-    signal: "UNKNOWN",
-    position: "UNKNOWN",
+    battery: "0%",
+    signal: "NONE",
+    position: "N/A",
   },
   quality: {
     sharpness: 0,
@@ -63,132 +58,24 @@ const fallbackMission = {
     occluded: 0,
   },
   measurements: {
-    distance: "UNKNOWN",
-    area: "UNKNOWN",
-    height: "UNKNOWN",
-    length: "UNKNOWN",
-    width: "UNKNOWN",
+    distance: "0 m",
+    area: "0 m²",
+    height: "0 m",
+    length: "0 m",
+    width: "0 m",
     confidence: "0%",
-    uncertainty: "UNKNOWN",
+    uncertainty: "N/A",
   },
   findings: [],
   recommendations: ["Upload a drone video to start automatic analysis."],
 };
 
-function toSafeNumber(value, fallback = 0) {
-  const numeric = Number(value);
-  return Number.isFinite(numeric) ? numeric : fallback;
-}
-
-function normalizeSceneAnalysis(rawMission = {}) {
-  const sceneAnalysis =
-    rawMission.scene_analysis || rawMission.sceneAnalysis || {};
-  const objects = rawMission.objects || {};
-  const total = toSafeNumber(
-    sceneAnalysis.total ?? objects.total ?? objects.confirmed_objects ?? 0,
-    0,
-  );
-  const people = toSafeNumber(sceneAnalysis.people ?? objects.people ?? 0, 0);
-  const vehicles = toSafeNumber(
-    sceneAnalysis.vehicles ?? objects.vehicles ?? 0,
-    0,
-  );
-  const structures = toSafeNumber(
-    sceneAnalysis.structures ?? objects.structures ?? 0,
-    0,
-  );
-  const hazards = toSafeNumber(
-    sceneAnalysis.hazards ?? objects.hazards ?? 0,
-    0,
-  );
-
-  return {
-    total,
-    people,
-    vehicles,
-    structures,
-    hazards,
-    confirmed_objects: toSafeNumber(
-      sceneAnalysis.confirmed_objects ?? objects.confirmed_objects ?? 0,
-      0,
-    ),
-    possible_objects: toSafeNumber(
-      sceneAnalysis.possible_objects ?? objects.possible_objects ?? 0,
-      0,
-    ),
-    rejected_objects: toSafeNumber(
-      sceneAnalysis.rejected_objects ?? objects.rejected_objects ?? 0,
-      0,
-    ),
-    static_objects: toSafeNumber(
-      sceneAnalysis.static_objects ??
-        objects.static_objects ??
-        structures + hazards,
-      0,
-    ),
-    dynamic_objects: toSafeNumber(
-      sceneAnalysis.dynamic_objects ??
-        objects.dynamic_objects ??
-        people + vehicles,
-      0,
-    ),
-    per_object_evidence: Array.isArray(sceneAnalysis.per_object_evidence)
-      ? sceneAnalysis.per_object_evidence
-      : [],
-  };
-}
-
-function normalizeFindings(rawMission = {}, sceneAnalysis = {}) {
-  const findings = Array.isArray(rawMission.findings)
-    ? rawMission.findings
-    : [];
-  const explicitSceneAnalysis =
-    rawMission.scene_analysis || rawMission.sceneAnalysis || null;
-  const total = toSafeNumber(sceneAnalysis.total ?? 0, 0);
-
-  if (!explicitSceneAnalysis && !findings.length) {
-    return [];
-  }
-
-  if (total <= 0) {
-    return [];
-  }
-
-  return findings.filter(Boolean);
-}
-
-function formatDuration(seconds) {
-  if (!Number.isFinite(seconds) || seconds < 0) return "00:00";
-  const rounded = Math.round(seconds);
-  const mins = Math.floor(rounded / 60);
-  const secs = rounded % 60;
-  return `${String(mins).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
-}
-
 function normalizeMission(rawMission = {}) {
   const videoUrl = rawMission.video?.url || rawMission.videoUrl || "";
-  const sceneAnalysis = normalizeSceneAnalysis(rawMission);
-  const findings = normalizeFindings(rawMission, sceneAnalysis);
-
-  // Format duration from seconds if available
-  const duration =
-    rawMission.duration ||
-    (rawMission.video?.duration_seconds
-      ? formatDuration(rawMission.video.duration_seconds)
-      : "00:00");
-
-  // Use frames from video data if available
-  const frames = rawMission.frames || rawMission.video?.total_frames || 0;
-
   const mission = {
     ...fallbackMission,
     ...rawMission,
-    duration,
-    frames,
-    objects: {
-      ...fallbackMission.objects,
-      ...sceneAnalysis,
-    },
+    objects: { ...fallbackMission.objects, ...(rawMission.objects || {}) },
     telemetry: {
       ...fallbackMission.telemetry,
       ...(rawMission.telemetry || {}),
@@ -202,11 +89,10 @@ function normalizeMission(rawMission = {}) {
       ...fallbackMission.measurements,
       ...(rawMission.measurements || {}),
     },
-    findings,
+    findings: Array.isArray(rawMission.findings) ? rawMission.findings : [],
     recommendations: Array.isArray(rawMission.recommendations)
       ? rawMission.recommendations
       : fallbackMission.recommendations,
-    scene_analysis: sceneAnalysis,
     assets: {
       ...(rawMission.assets || {}),
       video: videoUrl || rawMission.assets?.video || "",
@@ -217,14 +103,22 @@ function normalizeMission(rawMission = {}) {
     },
   };
 
-  if (!mission.sector && mission.location) mission.sector = mission.location;
-  if (!mission.type && mission.missionType) mission.type = mission.missionType;
+  if (!mission.sector && mission.location) {
+    mission.sector = mission.location;
+  }
+
+  if (!mission.type && mission.missionType) {
+    mission.type = mission.missionType;
+  }
 
   return mission;
 }
 
 // Mission state cache
 const missionCache = new Map();
+
+const getSeededMission = (missionId) =>
+  seededMissions.find((mission) => mission.id === missionId);
 
 async function parseResponse(response) {
   const contentType = response.headers.get("content-type") || "";
@@ -279,63 +173,104 @@ export async function createMission({ name, missionType, location, operator }) {
 }
 
 export async function getMission(missionId) {
-  const seededMission = getSeedMission(missionId);
   if (missionCache.has(missionId)) {
-    return missionCache.get(missionId);
-  }
-
-  if (seededMission && seededMission.id === missionId) {
-    const mission = normalizeMission(seededMission);
-    missionCache.set(missionId, mission);
-    return mission;
+    const cached = missionCache.get(missionId);
+    console.log(`[Mission] Cache hit for mission ${missionId}`);
+    return cached;
   }
 
   try {
     const response = await fetch(`${API_BASE}/missions/${missionId}`);
+
     if (response.status === 404) {
-      const fallbackMission = seededMission
-        ? normalizeMission(seededMission)
-        : normalizeMission({ id: missionId, name: "Mission Overview" });
-      missionCache.set(missionId, fallbackMission);
-      return fallbackMission;
+      // Mission not found on backend
+      // IMPORTANT: Only return seeded mission if missionId exactly matches a seeded mission ID
+      const seeded = getSeededMission(missionId);
+      if (seeded) {
+        console.log(
+          `[Mission] API returned 404 but found seeded mission ${missionId}`,
+        );
+        return normalizeMission(seeded);
+      }
+      // Real mission not found - return error state, NOT another mission
+      console.warn(
+        `[Mission] Mission ${missionId} not found on backend or in seeded data`,
+      );
+      return {
+        id: missionId,
+        name: `Mission Not Found: ${missionId}`,
+        status: "unavailable",
+        error: "MISSION_NOT_FOUND",
+        backendUnavailable: false,
+        hasError: true,
+      };
     }
+
     const data = await parseResponse(response);
     if (data.success) {
       const mission = normalizeMission(data.mission);
-      if (
-        !mission.assets?.video &&
-        !mission.reconstruction?.pointCloud &&
-        seededMission
-      ) {
-        const seededFallback = normalizeMission(seededMission);
-        missionCache.set(missionId, seededFallback);
-        return seededFallback;
-      }
       missionCache.set(missionId, mission);
+      console.log(`[Mission] Loaded mission ${missionId} from API`, {
+        video: mission.video?.url || "no video",
+      });
       return mission;
     }
-    const fallbackMission = seededMission
-      ? normalizeMission(seededMission)
-      : normalizeMission({ id: missionId, name: "Mission Overview" });
-    missionCache.set(missionId, fallbackMission);
-    return fallbackMission;
+
+    // API returned success: false - treat as error
+    console.error(
+      `[Mission] API returned success: false for mission ${missionId}`,
+    );
+    return {
+      id: missionId,
+      name: `Error Loading Mission: ${missionId}`,
+      status: "unavailable",
+      error: "API_ERROR",
+      backendUnavailable: false,
+      hasError: true,
+    };
   } catch (error) {
     if (error instanceof TypeError) {
+      // Backend is unavailable (network error)
       console.warn(
-        "Backend unavailable; using local demo mission data until the API is reachable.",
+        `[Mission] Backend unavailable for mission ${missionId} (network error)`,
       );
-      const fallbackMission = seededMission
-        ? normalizeMission(seededMission)
-        : normalizeMission({ id: missionId, name: "Mission Overview" });
+
+      // Only fall back to seeded data if missionId exactly matches a seeded mission
+      const seeded = getSeededMission(missionId);
+      if (seeded) {
+        console.warn(
+          `[Mission] Using seeded mission ${missionId} due to backend unavailability`,
+        );
+        return { ...normalizeMission(seeded), backendUnavailable: true };
+      }
+
+      // Real mission requested but backend is down
       return {
-        ...fallbackMission,
+        id: missionId,
+        name: `Backend Unavailable`,
+        status: "unavailable",
+        error: "BACKEND_UNAVAILABLE",
         backendUnavailable: true,
+        hasError: true,
+        detail:
+          "Backend server is not responding. Start the FastAPI server on localhost:8000.",
       };
     }
-    const fallbackMission = seededMission
-      ? normalizeMission(seededMission)
-      : normalizeMission({ id: missionId, name: "Mission Overview" });
-    return fallbackMission;
+
+    // Other error
+    console.error(
+      `[Mission] Unexpected error fetching mission ${missionId}:`,
+      error,
+    );
+    return {
+      id: missionId,
+      name: `Error Loading Mission`,
+      status: "unavailable",
+      error: "UNKNOWN_ERROR",
+      backendUnavailable: false,
+      hasError: true,
+      detail: error.message,
+    };
   }
 }
 
@@ -357,6 +292,7 @@ export async function listMissions() {
 
 export async function uploadVideo(missionId, file) {
   try {
+    console.log(`[Upload] Starting video upload for mission ${missionId}`);
     const formData = new FormData();
     formData.append("file", file);
 
@@ -367,14 +303,19 @@ export async function uploadVideo(missionId, file) {
 
     const data = await response.json();
     if (data.success) {
+      console.log(
+        `[Upload] Video uploaded successfully for mission ${missionId}`,
+        { size: data.video?.size_mb, fps: data.video?.fps },
+      );
       missionCache.delete(missionId);
       const mission = await getMission(missionId);
       missionCache.set(missionId, mission);
       return data;
     }
+    console.error(`[Upload] Upload failed for mission ${missionId}:`, data);
     throw new Error(data.message || "Upload failed");
   } catch (error) {
-    console.error("Upload error:", error);
+    console.error(`[Upload] Upload error for mission ${missionId}:`, error);
     throw error;
   }
 }
@@ -387,6 +328,11 @@ export async function processVideo(
   reconstructionQuality = "medium",
 ) {
   try {
+    console.log(`[Process] Starting processing for mission ${missionId}`, {
+      frameSampling,
+      detectionConfidence,
+    });
+
     const params = new URLSearchParams({
       frame_sampling: frameSampling,
       inference_resolution: inferenceResolution,
@@ -402,15 +348,39 @@ export async function processVideo(
     );
 
     const data = await response.json();
+
+    // Handle special error states from backend
+    if (data.status === "UNAVAILABLE") {
+      console.error(
+        `[Process] Video unavailable for mission ${missionId}:`,
+        data.error,
+      );
+      throw new Error(
+        `Video unavailable (${data.error}): ${data.detail || "Unknown reason"}`,
+      );
+    }
+
     if (data.success) {
+      console.log(`[Process] Processing completed for mission ${missionId}`, {
+        tracks: data.detections?.uniqueTracks || 0,
+        status: data.processing?.status,
+      });
       missionCache.delete(missionId);
       const mission = await getMission(missionId);
       missionCache.set(missionId, mission);
       return data;
     }
+
+    console.error(
+      `[Process] Processing failed for mission ${missionId}:`,
+      data,
+    );
     throw new Error(data.message || "Processing failed");
   } catch (error) {
-    console.error("Processing error:", error);
+    console.error(
+      `[Process] Processing error for mission ${missionId}:`,
+      error,
+    );
     throw error;
   }
 }

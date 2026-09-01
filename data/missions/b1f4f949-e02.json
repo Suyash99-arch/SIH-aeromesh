@@ -1,0 +1,937 @@
+{
+  "id": "b1f4f949-e02",
+  "name": "Validation Mission",
+  "type": "single-pass",
+  "location": "Test",
+  "operator": "Copilot",
+  "createdAt": "2026-08-30T17:43:44.517111",
+  "status": "processing_complete",
+  "video": {
+    "filename": "video.mp4",
+    "url": "http://127.0.0.1:8000/media/missions/b1f4f949-e02/video.mp4",
+    "size_mb": 12.45,
+    "fps": 25.0,
+    "total_frames": 125,
+    "duration_seconds": 5.0,
+    "resolution": {
+      "width": 1920,
+      "height": 1080
+    },
+    "codec": "detected",
+    "durationSeconds": 5.0,
+    "frames_total": 125,
+    "frames_valid": 125,
+    "quality": {
+      "average": {
+        "sharpness": 100.0,
+        "brightness": 26.4,
+        "contrast": 36.3
+      },
+      "keyframes": 125
+    },
+    "camera_motion": {
+      "status": "AVAILABLE",
+      "estimated_motion_score": 2531.07,
+      "source": "VIDEO_DERIVED",
+      "confidence": 0.9
+    },
+    "sha256": "A12B772DCF185C2A5988188806FF494A866A6E39BD15A4348AAD050F5F123C93"
+  },
+  "processing": {
+    "status": "COMPLETE",
+    "sampleFps": 2,
+    "framesAnalyzed": 11,
+    "inferenceFps": 5.0,
+    "warning": ""
+  },
+  "detections": {
+    "uniqueTracks": 9,
+    "byGroup": {},
+    "byClass": {
+      "car": 9
+    },
+    "observations": [
+      {
+        "frame": 0,
+        "trackId": "T0001",
+        "class": "car",
+        "confidence": 0.508,
+        "boundingBox": [
+          73.3,
+          389.1,
+          140.0,
+          420.7
+        ]
+      },
+      {
+        "frame": 0,
+        "trackId": "T0002",
+        "class": "car",
+        "confidence": 0.477,
+        "boundingBox": [
+          902.0,
+          647.9,
+          940.8,
+          686.2
+        ]
+      },
+      {
+        "frame": 12,
+        "trackId": "T0003",
+        "class": "car",
+        "confidence": 0.45,
+        "boundingBox": [
+          826.6,
+          805.5,
+          873.5,
+          872.6
+        ]
+      },
+      {
+        "frame": 60,
+        "trackId": "T0001",
+        "class": "car",
+        "confidence": 0.461,
+        "boundingBox": [
+          124.1,
+          470.4,
+          163.7,
+          502.0
+        ]
+      },
+      {
+        "frame": 72,
+        "trackId": "T0004",
+        "class": "car",
+        "confidence": 0.594,
+        "boundingBox": [
+          614.6,
+          975.3,
+          669.4,
+          1055.6
+        ]
+      },
+      {
+        "frame": 84,
+        "trackId": "T0005",
+        "class": "car",
+        "confidence": 0.442,
+        "boundingBox": [
+          663.4,
+          666.1,
+          706.5,
+          726.5
+        ]
+      },
+      {
+        "frame": 84,
+        "trackId": "T0006",
+        "class": "car",
+        "confidence": 0.414,
+        "boundingBox": [
+          703.9,
+          863.3,
+          748.5,
+          922.5
+        ]
+      },
+      {
+        "frame": 108,
+        "trackId": "T0006",
+        "class": "car",
+        "confidence": 0.516,
+        "boundingBox": [
+          656.6,
+          842.4,
+          705.1,
+          904.4
+        ]
+      },
+      {
+        "frame": 108,
+        "trackId": "T0007",
+        "class": "car",
+        "confidence": 0.428,
+        "boundingBox": [
+          760.1,
+          607.9,
+          795.5,
+          644.5
+        ]
+      },
+      {
+        "frame": 108,
+        "trackId": "T0001",
+        "class": "car",
+        "confidence": 0.437,
+        "boundingBox": [
+          183.1,
+          485.4,
+          254.2,
+          518.8
+        ]
+      },
+      {
+        "frame": 108,
+        "trackId": "T0008",
+        "class": "car",
+        "confidence": 0.356,
+        "boundingBox": [
+          1873.5,
+          470.6,
+          1919.3,
+          530.2
+        ]
+      },
+      {
+        "frame": 120,
+        "trackId": "T0001",
+        "class": "car",
+        "confidence": 0.45,
+        "boundingBox": [
+          109.8,
+          544.1,
+          188.4,
+          576.6
+        ]
+      },
+      {
+        "frame": 120,
+        "trackId": "T0001",
+        "class": "car",
+        "confidence": 0.453,
+        "boundingBox": [
+          18.2,
+          530.8,
+          91.6,
+          579.2
+        ]
+      },
+      {
+        "frame": 120,
+        "trackId": "T0009",
+        "class": "car",
+        "confidence": 0.423,
+        "boundingBox": [
+          512.0,
+          451.6,
+          545.7,
+          493.8
+        ]
+      },
+      {
+        "frame": 120,
+        "trackId": "T0006",
+        "class": "car",
+        "confidence": 0.471,
+        "boundingBox": [
+          608.5,
+          891.7,
+          664.9,
+          953.8
+        ]
+      }
+    ],
+    "scene_analysis": {
+      "total": 9,
+      "people": 0,
+      "vehicles": 9,
+      "structures": 0,
+      "hazards": 0,
+      "confirmed_objects": 2,
+      "possible_objects": 7,
+      "rejected_objects": 0,
+      "static_objects": 0,
+      "dynamic_objects": 9,
+      "per_object_evidence": [
+        {
+          "track_id": "T0001",
+          "class": "car",
+          "status": "CONFIRMED",
+          "confidence": 0.453,
+          "hits": 5,
+          "persistence": 1.0,
+          "frames_seen": 5,
+          "class_consistent": true,
+          "segmentation_verified": false,
+          "segmentation_status": "UNAVAILABLE",
+          "source": "TRACKING_DERIVED",
+          "first_seen": 0,
+          "last_seen": 120,
+          "confidence_history": [
+            0.508,
+            0.413,
+            0.389,
+            0.491,
+            0.464
+          ]
+        },
+        {
+          "track_id": "T0002",
+          "class": "car",
+          "status": "POSSIBLE",
+          "confidence": 0.477,
+          "hits": 1,
+          "persistence": 0.0,
+          "frames_seen": 1,
+          "class_consistent": true,
+          "segmentation_verified": false,
+          "segmentation_status": "UNAVAILABLE",
+          "source": "TRACKING_DERIVED",
+          "first_seen": 0,
+          "last_seen": 0,
+          "confidence_history": [
+            0.477
+          ]
+        },
+        {
+          "track_id": "T0003",
+          "class": "car",
+          "status": "POSSIBLE",
+          "confidence": 0.45,
+          "hits": 1,
+          "persistence": 0.0,
+          "frames_seen": 1,
+          "class_consistent": true,
+          "segmentation_verified": false,
+          "segmentation_status": "UNAVAILABLE",
+          "source": "TRACKING_DERIVED",
+          "first_seen": 12,
+          "last_seen": 12,
+          "confidence_history": [
+            0.45
+          ]
+        },
+        {
+          "track_id": "T0004",
+          "class": "car",
+          "status": "POSSIBLE",
+          "confidence": 0.594,
+          "hits": 1,
+          "persistence": 0.0,
+          "frames_seen": 1,
+          "class_consistent": true,
+          "segmentation_verified": false,
+          "segmentation_status": "UNAVAILABLE",
+          "source": "TRACKING_DERIVED",
+          "first_seen": 72,
+          "last_seen": 72,
+          "confidence_history": [
+            0.594
+          ]
+        },
+        {
+          "track_id": "T0005",
+          "class": "car",
+          "status": "POSSIBLE",
+          "confidence": 0.442,
+          "hits": 1,
+          "persistence": 0.0,
+          "frames_seen": 1,
+          "class_consistent": true,
+          "segmentation_verified": false,
+          "segmentation_status": "UNAVAILABLE",
+          "source": "TRACKING_DERIVED",
+          "first_seen": 84,
+          "last_seen": 84,
+          "confidence_history": [
+            0.442
+          ]
+        },
+        {
+          "track_id": "T0006",
+          "class": "car",
+          "status": "CONFIRMED",
+          "confidence": 0.471,
+          "hits": 3,
+          "persistence": 1.0,
+          "frames_seen": 3,
+          "class_consistent": true,
+          "segmentation_verified": false,
+          "segmentation_status": "UNAVAILABLE",
+          "source": "TRACKING_DERIVED",
+          "first_seen": 84,
+          "last_seen": 120,
+          "confidence_history": [
+            0.414,
+            0.619,
+            0.38
+          ]
+        },
+        {
+          "track_id": "T0007",
+          "class": "car",
+          "status": "POSSIBLE",
+          "confidence": 0.428,
+          "hits": 1,
+          "persistence": 0.0,
+          "frames_seen": 1,
+          "class_consistent": true,
+          "segmentation_verified": false,
+          "segmentation_status": "UNAVAILABLE",
+          "source": "TRACKING_DERIVED",
+          "first_seen": 108,
+          "last_seen": 108,
+          "confidence_history": [
+            0.428
+          ]
+        },
+        {
+          "track_id": "T0008",
+          "class": "car",
+          "status": "POSSIBLE",
+          "confidence": 0.356,
+          "hits": 1,
+          "persistence": 0.0,
+          "frames_seen": 1,
+          "class_consistent": true,
+          "segmentation_verified": false,
+          "segmentation_status": "UNAVAILABLE",
+          "source": "TRACKING_DERIVED",
+          "first_seen": 108,
+          "last_seen": 108,
+          "confidence_history": [
+            0.356
+          ]
+        },
+        {
+          "track_id": "T0009",
+          "class": "car",
+          "status": "POSSIBLE",
+          "confidence": 0.423,
+          "hits": 1,
+          "persistence": 0.0,
+          "frames_seen": 1,
+          "class_consistent": true,
+          "segmentation_verified": false,
+          "segmentation_status": "UNAVAILABLE",
+          "source": "TRACKING_DERIVED",
+          "first_seen": 120,
+          "last_seen": 120,
+          "confidence_history": [
+            0.423
+          ]
+        }
+      ],
+      "status": "PARTIAL",
+      "source": "INFERENCE_DERIVED",
+      "confidence": 0.455
+    }
+  },
+  "tracks": [
+    {
+      "trackId": "T0001",
+      "class": "car",
+      "bbox": [
+        18.2,
+        530.8,
+        91.6,
+        579.2
+      ],
+      "confidence": 0.453,
+      "firstSeen": 0,
+      "lastSeen": 120,
+      "hits": 5,
+      "persistence": 1.0,
+      "confidenceHistory": [
+        0.508,
+        0.413,
+        0.389,
+        0.491,
+        0.464
+      ]
+    },
+    {
+      "trackId": "T0002",
+      "class": "car",
+      "bbox": [
+        902.0,
+        647.9,
+        940.8,
+        686.2
+      ],
+      "confidence": 0.477,
+      "firstSeen": 0,
+      "lastSeen": 0,
+      "hits": 1,
+      "persistence": 0.0,
+      "confidenceHistory": [
+        0.477
+      ]
+    },
+    {
+      "trackId": "T0003",
+      "class": "car",
+      "bbox": [
+        826.6,
+        805.5,
+        873.5,
+        872.6
+      ],
+      "confidence": 0.45,
+      "firstSeen": 12,
+      "lastSeen": 12,
+      "hits": 1,
+      "persistence": 0.0,
+      "confidenceHistory": [
+        0.45
+      ]
+    },
+    {
+      "trackId": "T0004",
+      "class": "car",
+      "bbox": [
+        614.6,
+        975.3,
+        669.4,
+        1055.6
+      ],
+      "confidence": 0.594,
+      "firstSeen": 72,
+      "lastSeen": 72,
+      "hits": 1,
+      "persistence": 0.0,
+      "confidenceHistory": [
+        0.594
+      ]
+    },
+    {
+      "trackId": "T0005",
+      "class": "car",
+      "bbox": [
+        663.4,
+        666.1,
+        706.5,
+        726.5
+      ],
+      "confidence": 0.442,
+      "firstSeen": 84,
+      "lastSeen": 84,
+      "hits": 1,
+      "persistence": 0.0,
+      "confidenceHistory": [
+        0.442
+      ]
+    },
+    {
+      "trackId": "T0006",
+      "class": "car",
+      "bbox": [
+        608.5,
+        891.7,
+        664.9,
+        953.8
+      ],
+      "confidence": 0.471,
+      "firstSeen": 84,
+      "lastSeen": 120,
+      "hits": 3,
+      "persistence": 1.0,
+      "confidenceHistory": [
+        0.414,
+        0.619,
+        0.38
+      ]
+    },
+    {
+      "trackId": "T0007",
+      "class": "car",
+      "bbox": [
+        760.1,
+        607.9,
+        795.5,
+        644.5
+      ],
+      "confidence": 0.428,
+      "firstSeen": 108,
+      "lastSeen": 108,
+      "hits": 1,
+      "persistence": 0.0,
+      "confidenceHistory": [
+        0.428
+      ]
+    },
+    {
+      "trackId": "T0008",
+      "class": "car",
+      "bbox": [
+        1873.5,
+        470.6,
+        1919.3,
+        530.2
+      ],
+      "confidence": 0.356,
+      "firstSeen": 108,
+      "lastSeen": 108,
+      "hits": 1,
+      "persistence": 0.0,
+      "confidenceHistory": [
+        0.356
+      ]
+    },
+    {
+      "trackId": "T0009",
+      "class": "car",
+      "bbox": [
+        512.0,
+        451.6,
+        545.7,
+        493.8
+      ],
+      "confidence": 0.423,
+      "firstSeen": 120,
+      "lastSeen": 120,
+      "hits": 1,
+      "persistence": 0.0,
+      "confidenceHistory": [
+        0.423
+      ]
+    }
+  ],
+  "frameQuality": {
+    "estimated": true,
+    "average": {
+      "sharpness": 100.0,
+      "brightness": 26.3,
+      "contrast": 36.3
+    },
+    "samples": [
+      {
+        "frame": 0,
+        "sharpness": 100.0,
+        "brightness": 27.1,
+        "contrast": 37.5
+      },
+      {
+        "frame": 12,
+        "sharpness": 100.0,
+        "brightness": 27.2,
+        "contrast": 38.6
+      },
+      {
+        "frame": 24,
+        "sharpness": 100.0,
+        "brightness": 26.8,
+        "contrast": 38.2
+      },
+      {
+        "frame": 36,
+        "sharpness": 100.0,
+        "brightness": 27.0,
+        "contrast": 36.4
+      },
+      {
+        "frame": 48,
+        "sharpness": 100.0,
+        "brightness": 26.4,
+        "contrast": 35.4
+      },
+      {
+        "frame": 60,
+        "sharpness": 100.0,
+        "brightness": 25.8,
+        "contrast": 36.4
+      },
+      {
+        "frame": 72,
+        "sharpness": 100.0,
+        "brightness": 26.2,
+        "contrast": 36.0
+      },
+      {
+        "frame": 84,
+        "sharpness": 100.0,
+        "brightness": 26.0,
+        "contrast": 36.1
+      },
+      {
+        "frame": 96,
+        "sharpness": 100.0,
+        "brightness": 25.6,
+        "contrast": 35.3
+      },
+      {
+        "frame": 108,
+        "sharpness": 100.0,
+        "brightness": 25.9,
+        "contrast": 34.7
+      },
+      {
+        "frame": 120,
+        "sharpness": 100.0,
+        "brightness": 25.2,
+        "contrast": 34.6
+      }
+    ]
+  },
+  "reconstruction": null,
+  "measurements": null,
+  "findings": [],
+  "metadata": {
+    "frame_sampling": 2,
+    "inference_resolution": 640,
+    "detection_confidence": 0.35,
+    "reconstruction_quality": "medium",
+    "video_summary": {
+      "frames_total": 125,
+      "frames_valid": 125,
+      "duration_seconds": 5.0,
+      "resolution": {
+        "width": 1920,
+        "height": 1080
+      },
+      "fps": 25.0,
+      "quality": {
+        "average": {
+          "sharpness": 100.0,
+          "brightness": 26.4,
+          "contrast": 36.3
+        },
+        "keyframes": 125
+      },
+      "camera_motion": {
+        "status": "AVAILABLE",
+        "estimated_motion_score": 2531.07,
+        "source": "VIDEO_DERIVED",
+        "confidence": 0.9
+      }
+    }
+  },
+  "detector": {
+    "model": "YOLO11n",
+    "dataset": "COCO (general-purpose)",
+    "domain": "General / aerial-use requires validation",
+    "confidence_threshold": 0.35,
+    "input_resolution": 640,
+    "suitability": "General-purpose detector; results must be temporal-confirmed before being treated as confirmed objects.",
+    "status": "AVAILABLE",
+    "source": "MODEL_METADATA"
+  },
+  "scene_analysis": {
+    "total": 9,
+    "people": 0,
+    "vehicles": 9,
+    "structures": 0,
+    "hazards": 0,
+    "confirmed_objects": 2,
+    "possible_objects": 7,
+    "rejected_objects": 0,
+    "static_objects": 0,
+    "dynamic_objects": 9,
+    "per_object_evidence": [
+      {
+        "track_id": "T0001",
+        "class": "car",
+        "status": "CONFIRMED",
+        "confidence": 0.453,
+        "hits": 5,
+        "persistence": 1.0,
+        "frames_seen": 5,
+        "class_consistent": true,
+        "segmentation_verified": false,
+        "segmentation_status": "UNAVAILABLE",
+        "source": "TRACKING_DERIVED",
+        "first_seen": 0,
+        "last_seen": 120,
+        "confidence_history": [
+          0.508,
+          0.413,
+          0.389,
+          0.491,
+          0.464
+        ]
+      },
+      {
+        "track_id": "T0002",
+        "class": "car",
+        "status": "POSSIBLE",
+        "confidence": 0.477,
+        "hits": 1,
+        "persistence": 0.0,
+        "frames_seen": 1,
+        "class_consistent": true,
+        "segmentation_verified": false,
+        "segmentation_status": "UNAVAILABLE",
+        "source": "TRACKING_DERIVED",
+        "first_seen": 0,
+        "last_seen": 0,
+        "confidence_history": [
+          0.477
+        ]
+      },
+      {
+        "track_id": "T0003",
+        "class": "car",
+        "status": "POSSIBLE",
+        "confidence": 0.45,
+        "hits": 1,
+        "persistence": 0.0,
+        "frames_seen": 1,
+        "class_consistent": true,
+        "segmentation_verified": false,
+        "segmentation_status": "UNAVAILABLE",
+        "source": "TRACKING_DERIVED",
+        "first_seen": 12,
+        "last_seen": 12,
+        "confidence_history": [
+          0.45
+        ]
+      },
+      {
+        "track_id": "T0004",
+        "class": "car",
+        "status": "POSSIBLE",
+        "confidence": 0.594,
+        "hits": 1,
+        "persistence": 0.0,
+        "frames_seen": 1,
+        "class_consistent": true,
+        "segmentation_verified": false,
+        "segmentation_status": "UNAVAILABLE",
+        "source": "TRACKING_DERIVED",
+        "first_seen": 72,
+        "last_seen": 72,
+        "confidence_history": [
+          0.594
+        ]
+      },
+      {
+        "track_id": "T0005",
+        "class": "car",
+        "status": "POSSIBLE",
+        "confidence": 0.442,
+        "hits": 1,
+        "persistence": 0.0,
+        "frames_seen": 1,
+        "class_consistent": true,
+        "segmentation_verified": false,
+        "segmentation_status": "UNAVAILABLE",
+        "source": "TRACKING_DERIVED",
+        "first_seen": 84,
+        "last_seen": 84,
+        "confidence_history": [
+          0.442
+        ]
+      },
+      {
+        "track_id": "T0006",
+        "class": "car",
+        "status": "CONFIRMED",
+        "confidence": 0.471,
+        "hits": 3,
+        "persistence": 1.0,
+        "frames_seen": 3,
+        "class_consistent": true,
+        "segmentation_verified": false,
+        "segmentation_status": "UNAVAILABLE",
+        "source": "TRACKING_DERIVED",
+        "first_seen": 84,
+        "last_seen": 120,
+        "confidence_history": [
+          0.414,
+          0.619,
+          0.38
+        ]
+      },
+      {
+        "track_id": "T0007",
+        "class": "car",
+        "status": "POSSIBLE",
+        "confidence": 0.428,
+        "hits": 1,
+        "persistence": 0.0,
+        "frames_seen": 1,
+        "class_consistent": true,
+        "segmentation_verified": false,
+        "segmentation_status": "UNAVAILABLE",
+        "source": "TRACKING_DERIVED",
+        "first_seen": 108,
+        "last_seen": 108,
+        "confidence_history": [
+          0.428
+        ]
+      },
+      {
+        "track_id": "T0008",
+        "class": "car",
+        "status": "POSSIBLE",
+        "confidence": 0.356,
+        "hits": 1,
+        "persistence": 0.0,
+        "frames_seen": 1,
+        "class_consistent": true,
+        "segmentation_verified": false,
+        "segmentation_status": "UNAVAILABLE",
+        "source": "TRACKING_DERIVED",
+        "first_seen": 108,
+        "last_seen": 108,
+        "confidence_history": [
+          0.356
+        ]
+      },
+      {
+        "track_id": "T0009",
+        "class": "car",
+        "status": "POSSIBLE",
+        "confidence": 0.423,
+        "hits": 1,
+        "persistence": 0.0,
+        "frames_seen": 1,
+        "class_consistent": true,
+        "segmentation_verified": false,
+        "segmentation_status": "UNAVAILABLE",
+        "source": "TRACKING_DERIVED",
+        "first_seen": 120,
+        "last_seen": 120,
+        "confidence_history": [
+          0.423
+        ]
+      }
+    ],
+    "status": "PARTIAL",
+    "source": "INFERENCE_DERIVED",
+    "confidence": 0.455
+  },
+  "objects": {
+    "total": 9,
+    "people": 0,
+    "vehicles": 9,
+    "structures": 0,
+    "hazards": 0,
+    "confirmed_objects": 2,
+    "possible_objects": 7,
+    "rejected_objects": 0,
+    "static_objects": 0,
+    "dynamic_objects": 9
+  },
+  "provenance": {
+    "processing": {
+      "value": 11,
+      "source": "VIDEO_DERIVED",
+      "confidence": 0.8,
+      "timestamp": "processing",
+      "status": "UNKNOWN",
+      "display": "Frames sampled from uploaded video"
+    },
+    "detections": {
+      "value": 9,
+      "source": "DETECTION_DERIVED",
+      "confidence": 0.8,
+      "timestamp": "processing",
+      "status": "UNKNOWN",
+      "display": "Object detections observed from frame evidence"
+    }
+  },
+  "evidence_state": {
+    "scene": {
+      "value": 9,
+      "status": "PARTIAL",
+      "source": "VIDEO_DERIVED",
+      "confidence": 0.455,
+      "frame_id": null,
+      "timestamp": "2026-08-30T17:44:06.710953",
+      "note": "Object totals are derived only from actual inference evidence and temporal verification.",
+      "display": "Validated from available evidence"
+    }
+  }
+}

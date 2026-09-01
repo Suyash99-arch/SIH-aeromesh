@@ -1,3 +1,4 @@
+import { motion, useReducedMotion } from "framer-motion";
 import { useState } from "react";
 import Icon from "../ui/Icon";
 import MissionSelectorPanel from "./MissionSelectorPanel";
@@ -9,20 +10,37 @@ import {
 } from "../../data/navigation";
 
 function Nav({ title, items, activePage, navigate }) {
+  const reduceMotion = useReducedMotion();
+
   return (
     <nav className="nav-group">
       <span className="nav-title">{title}</span>
-      {items.map(([id, label, icon, count]) => (
-        <button
-          className={`nav-item ${activePage === id ? "active" : ""}`}
-          onClick={() => navigate(id)}
-          key={id}
-        >
-          <Icon name={icon} />
-          <span>{label}</span>
-          {count && <b>{count}</b>}
-        </button>
-      ))}
+      {items.map(([id, label, icon, count]) => {
+        const isActive = activePage === id;
+
+        return (
+          <motion.button
+            layout
+            key={id}
+            className={`nav-item ${isActive ? "active" : ""}`}
+            onClick={() => navigate(id)}
+            whileHover={reduceMotion ? undefined : { scale: 1.01 }}
+            whileTap={reduceMotion ? undefined : { scale: 0.97, rotate: -3 }}
+            transition={{ duration: 0.15, ease: "easeOut" }}
+          >
+            {isActive && !reduceMotion && (
+              <motion.span
+                layoutId="nav-active-pill"
+                className="nav-active-pill"
+                transition={{ type: "spring", stiffness: 380, damping: 28 }}
+              />
+            )}
+            <Icon name={icon} />
+            <span>{label}</span>
+            {count && <b>{count}</b>}
+          </motion.button>
+        );
+      })}
     </nav>
   );
 }

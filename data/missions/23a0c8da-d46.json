@@ -17,7 +17,8 @@
       "width": 320,
       "height": 240
     },
-    "codec": "detected"
+    "codec": "detected",
+    "sha256": "94F5D56B246BD43AAEF7B5050BD5A6D3F7954D784BA02402D5028B375298372E"
   },
   "processing": {
     "status": "COMPLETE",

@@ -1,3 +1,14 @@
+:root {
+  --accent-primary: var(--cyan);
+  --accent-primary-rgb: 66, 215, 255;
+  --bg-primary: var(--bg2);
+  --bg-secondary: var(--surface);
+  --text-primary: var(--text);
+  --text-secondary: var(--text2);
+  --border-color: var(--border);
+  --success-color: var(--success);
+}
+
 /* Mission Creation Modal */
 
 .modal-overlay {
@@ -22,12 +33,8 @@
 }
 
 .modal {
-  background: linear-gradient(
-    180deg,
-    rgba(11, 27, 37, 0.98),
-    rgba(9, 23, 32, 0.98)
-  );
-  border: 1px solid rgba(66, 215, 255, 0.22);
+  background: var(--bg-surface);
+  border: 1px solid rgba(0, 217, 255, 0.25);
   border-radius: 20px;
   max-width: 640px;
   width: min(92vw, 640px);
@@ -40,13 +47,13 @@
 
 .modal-header {
   padding: 24px 24px 20px;
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border);
   display: flex;
   justify-content: space-between;
   align-items: center;
   position: sticky;
   top: 0;
-  background: rgba(11, 27, 37, 0.94);
+  background: rgba(15, 18, 53, 0.94);
   backdrop-filter: blur(10px);
   z-index: 10;
 }
@@ -81,9 +88,9 @@
 /* Progress Indicator */
 .modal-progress {
   padding: 22px 24px 18px;
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border);
   position: relative;
-  background: rgba(9, 23, 32, 0.42);
+  background: rgba(10, 14, 39, 0.4);
 }
 
 .progress-steps {
@@ -109,23 +116,27 @@
   justify-content: center;
   font-weight: 700;
   font-size: 13px;
-  border: 1px solid rgba(145, 173, 184, 0.35);
-  background: rgba(16, 37, 48, 0.9);
-  color: var(--text-secondary);
+  border: 2px solid var(--border);
+  background: var(--bg-surface);
+  color: var(--text-muted);
   transition: all 0.3s;
 }
 
 .progress-step.active span {
-  background: linear-gradient(135deg, var(--cyan), rgba(66, 215, 255, 0.8));
-  color: #02171d;
-  border-color: rgba(66, 215, 255, 0.8);
-  box-shadow: 0 0 18px rgba(66, 215, 255, 0.25);
+  background: linear-gradient(
+    135deg,
+    var(--accent-primary),
+    rgba(0, 217, 255, 0.8)
+  );
+  color: var(--bg-page);
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 18px rgba(0, 217, 255, 0.25);
 }
 
 .progress-step.completed span {
   background: linear-gradient(135deg, var(--success), #38c98e);
-  color: #021712;
-  border-color: rgba(85, 220, 163, 0.8);
+  color: var(--bg-page);
+  border-color: var(--success);
 }
 
 .progress-step label {
@@ -222,9 +233,9 @@
 .form-group input[type="email"],
 .form-group select {
   padding: 12px 14px;
-  border: 1px solid rgba(145, 173, 184, 0.28);
+  border: 1px solid var(--accent-primary);
   border-radius: 10px;
-  background: rgba(10, 25, 35, 0.95);
+  background: var(--bg-elevated);
   color: var(--text-primary);
   font-size: 14px;
   font-family: inherit;
@@ -232,21 +243,33 @@
     border-color 0.2s,
     background-color 0.2s,
     box-shadow 0.2s;
+  box-shadow: inset 0 0 0 1px rgba(0, 217, 255, 0.1);
+}
+
+.form-group input[type="text"]::placeholder,
+.form-group input[type="email"]::placeholder,
+.form-group select::placeholder {
+  color: var(--text-muted);
+  opacity: 0.7;
 }
 
 .form-group input[type="text"]:hover,
 .form-group input[type="email"]:hover,
 .form-group select:hover {
   border-color: var(--accent-primary);
+  background: var(--bg-elevated);
+  box-shadow: inset 0 0 0 1px rgba(0, 217, 255, 0.2);
 }
 
 .form-group input[type="text"]:focus,
 .form-group input[type="email"]:focus,
 .form-group select:focus {
   outline: none;
-  border-color: rgba(66, 215, 255, 0.9);
-  background: rgba(10, 25, 35, 1);
-  box-shadow: 0 0 0 4px rgba(66, 215, 255, 0.08);
+  border-color: var(--accent-primary);
+  background: var(--bg-elevated);
+  box-shadow:
+    inset 0 0 0 1px rgba(0, 217, 255, 0.3),
+    0 0 0 3px rgba(0, 217, 255, 0.1);
 }
 
 .form-group input[type="text"]:disabled,
@@ -518,7 +541,7 @@
 
 .btn.primary {
   background: linear-gradient(135deg, var(--cyan), rgba(66, 215, 255, 0.8));
-  color: #041d28;
+  color: var(--text-primary);
   box-shadow: 0 10px 22px rgba(66, 215, 255, 0.2);
 }
 

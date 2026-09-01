@@ -59,7 +59,13 @@ export const missions = [
       byGroup: { vehicles: 15 },
       byClass: { car: 15 },
     },
-    objects: ["car"],
+    objects: {
+      total: 15,
+      people: 0,
+      vehicles: 15,
+      structures: 0,
+      hazards: 0,
+    },
     telemetry: {
       altitude: "116.2 m",
       speed: "7.4 m/s",
@@ -139,7 +145,13 @@ export const missions = [
       byGroup: { other: 3 },
       byClass: { "traffic light": 1, airplane: 2 },
     },
-    objects: ["traffic light", "airplane"],
+    objects: {
+      total: 3,
+      people: 0,
+      vehicles: 0,
+      structures: 1,
+      hazards: 0,
+    },
     telemetry: {
       altitude: "132.6 m",
       speed: "8.9 m/s",
@@ -237,7 +249,13 @@ export const missions = [
         truck: 1,
       },
     },
-    objects: ["train", "boat", "car", "truck", "skateboard"],
+    objects: {
+      total: 30,
+      people: 0,
+      vehicles: 12,
+      structures: 18,
+      hazards: 0,
+    },
     telemetry: {
       altitude: "146.4 m",
       speed: "9.5 m/s",
@@ -346,7 +364,13 @@ export const missions = [
       byGroup: { other: 13 },
       byClass: { clock: 1, "traffic light": 12 },
     },
-    objects: ["clock", "traffic light"],
+    objects: {
+      total: 13,
+      people: 0,
+      vehicles: 0,
+      structures: 13,
+      hazards: 0,
+    },
     telemetry: {
       altitude: "102.8 m",
       speed: "6.8 m/s",

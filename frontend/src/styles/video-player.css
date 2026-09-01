@@ -2,7 +2,7 @@
 .video-player-wrapper {
   position: relative;
   width: 100%;
-  background: #061017;
+  background: var(--bg-page);
 }
 
 .video-player-container {
@@ -15,7 +15,7 @@
   width: 100%;
   height: auto;
   display: block;
-  background: #061017;
+  background: var(--bg-page);
 }
 
 .video-hud-overlay {
@@ -31,10 +31,10 @@
 
 .hud {
   position: absolute;
-  color: #42d7ff;
-  background: rgba(6, 16, 23, 0.7);
+  color: var(--accent-primary);
+  background: rgba(10, 14, 39, 0.7);
   padding: 6px 10px;
-  border: 1px solid rgba(66, 215, 255, 0.3);
+  border: 1px solid rgba(0, 217, 255, 0.3);
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.1em;
@@ -49,7 +49,7 @@
   display: inline-block;
   width: 8px;
   height: 8px;
-  background: #ff5c70;
+  background: var(--danger);
   border-radius: 50%;
   margin-right: 4px;
   animation: pulse 1s ease-in-out infinite;
@@ -68,17 +68,18 @@
   left: 50%;
   transform: translate(-50%, -50%);
   font-size: 24px;
-  color: rgba(66, 215, 255, 0.4);
+  color: var(--accent-primary);
   font-weight: 300;
+  opacity: 0.4;
 }
 
 .detection {
   position: absolute;
   bottom: 20px;
   left: 20px;
-  color: #ff6978;
-  background: rgba(255, 105, 120, 0.1);
-  border: 2px solid #ff6978;
+  color: var(--danger);
+  background: rgba(239, 68, 68, 0.1);
+  border: 2px solid var(--danger);
   padding: 8px 12px;
 }
 
@@ -115,17 +116,21 @@
 }
 
 .detection-badge.critical {
-  border-color: #ff6978;
-  background: rgba(255, 105, 120, 0.05);
+  border-color: var(--danger);
+  background: rgba(239, 68, 68, 0.1);
+  color: var(--danger);
 }
 
 .detection-badge.high {
-  border-color: #ffb15d;
-  background: rgba(255, 177, 93, 0.05);
+  border-color: var(--warning);
+  background: rgba(245, 158, 11, 0.1);
+  color: var(--warning);
 }
 
 .detection-badge.medium {
-  border-color: #f3b45e;
+  border-color: var(--warning);
+  background: rgba(245, 158, 11, 0.05);
+  color: var(--warning);
 }
 
 .detection-badge span {

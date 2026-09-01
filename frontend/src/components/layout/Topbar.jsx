@@ -1,8 +1,6 @@
 import Icon from "../ui/Icon";
 
-export default function Topbar({ title, theme, setTheme, notice }) {
-  const dark = theme === "dark";
-
+export default function Topbar({ title, notice }) {
   return (
     <header className="topbar">
       <div className="crumbs">
@@ -13,36 +11,16 @@ export default function Topbar({ title, theme, setTheme, notice }) {
 
       <div className="top-actions">
         <span className="systems">
-          <i /> Engine · Online
+          <i /> ALL SYSTEMS OPERATIONAL
         </span>
-
-        <button
-          className="icon-button"
-          aria-label={`Switch to ${dark ? "light" : "dark"} theme`}
-          title="Toggle color theme"
-          onClick={() => setTheme(dark ? "light" : "dark")}
-        >
-          <Icon name={dark ? "Sun" : "Moon"} size={17} />
-        </button>
-
-        <button
-          className="icon-button notification"
-          aria-label="Notifications"
-          onClick={() => notice("No new operational alerts")}
-        >
-          <Icon name="Bell" size={17} />
-          <b>3</b>
-        </button>
 
         <button
           className="operator"
           onClick={() => notice("Operator profile opened")}
+          type="button"
         >
-          <span className="operator-avatar">AO</span>
-          <section>
-            <strong>Aero Operator</strong>
-          </section>
-          <Icon name="ChevronDown" size={14} />
+          <span className="operator-avatar">KS</span>
+          <span className="operator-name">Kumar Suyash</span>
         </button>
       </div>
     </header>
