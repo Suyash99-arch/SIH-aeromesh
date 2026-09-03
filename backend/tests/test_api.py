@@ -149,3 +149,24 @@ def test_report_contract(client):
     report = response.json()["report"]
     assert report["missionId"] == mission["id"]
     assert {"summary", "video", "processing", "detections", "reconstruction", "measurements", "findings", "limitations"}.issubset(report["sections"])
+
+
+def test_processing_job_creation_and_status(client):
+    mission = create_mission(client)
+
+    created = client.post("/api/jobs", params={"mission_id": mission["id"]})
+    job_id = created.json()["job"]["id"]
+    fetched = client.get(f"/api/jobs/{job_id}")
+    status = client.get(f"/api/missions/{mission['id']}/processing-status")
+
+    assert created.status_code == 200
+    assert fetched.status_code == 200
+    assert fetched.json()["job"]["id"] == job_id
+    assert status.status_code == 200
+    assert status.json()["job"]["status"] == "COMPLETED"
+
+
+def test_processing_job_unknown_mission_is_rejected(client):
+    response = client.post("/api/jobs", params={"mission_id": "missing-mission"})
+
+    assert response.status_code == 404

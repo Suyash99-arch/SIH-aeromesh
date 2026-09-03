@@ -54,6 +54,16 @@ class MissionRepository:
         self.session.flush()
         return payload
 
+    def record_video(self, mission_id: str, metadata: dict[str, Any]) -> None:
+        self.session.add(Video(
+            mission_id=mission_id,
+            filename=metadata.get("filename", "video"),
+            storage_path=metadata.get("storage_key"),
+            sha256=metadata.get("sha256"),
+            metadata_json=metadata,
+        ))
+        self.session.flush()
+
 
 def _parse_datetime(value: Any) -> datetime:
     if isinstance(value, datetime):

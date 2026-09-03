@@ -18,11 +18,14 @@ import cv2
 import numpy as np
 from fastapi import FastAPI, File, UploadFile, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 import uvicorn
 from backend.database import check_database, get_configured_engine, init_database, session_scope
 from backend.repository import MissionRepository
+from backend.jobs import JOB_STAGES, create_job, get_job, update_job
+from backend.storage import get_storage, mission_object_key
+from backend.tasks import enqueue_processing_job
 
 try:
     from dotenv import load_dotenv
@@ -235,11 +238,14 @@ class MissionData:
     def load(self):
         database_engine = get_configured_engine()
         if database_engine is not None:
-            with session_scope(database_engine) as session:
-                database_payload = MissionRepository(session).get(self.mission_id)
-            if database_payload is not None:
-                self.data = database_payload
-                return
+            try:
+                with session_scope(database_engine) as session:
+                    database_payload = MissionRepository(session).get(self.mission_id)
+                if database_payload is not None:
+                    self.data = database_payload
+                    return
+            except Exception as exc:
+                logger.warning("Database read unavailable; using JSON fallback: %s", exc)
         mission_file = MISSIONS_DIR / f"{self.mission_id}.json"
         if mission_file.exists():
             with open(mission_file) as f:
@@ -248,13 +254,16 @@ class MissionData:
     def save(self):
         database_engine = get_configured_engine()
         if database_engine is not None:
-            with session_scope(database_engine) as session:
-                repository = MissionRepository(session)
-                if repository.get(self.mission_id) is None:
-                    repository.create(self.data)
-                else:
-                    repository.update(self.mission_id, self.data)
-            return
+            try:
+                with session_scope(database_engine) as session:
+                    repository = MissionRepository(session)
+                    if repository.get(self.mission_id) is None:
+                        repository.create(self.data)
+                    else:
+                        repository.update(self.mission_id, self.data)
+                return
+            except Exception as exc:
+                logger.warning("Database write unavailable; using JSON fallback: %s", exc)
         mission_file = MISSIONS_DIR / f"{self.mission_id}.json"
         with open(mission_file, 'w') as f:
             json.dump(self.data, f, indent=2)
@@ -677,16 +686,18 @@ async def upload_video(
     if Path(file.filename).suffix.lower() not in allowed:
         raise HTTPException(status_code=400, detail=f"Unsupported format: {Path(file.filename).suffix}")
     
-    # Create mission directory
-    mission_dir = MISSIONS_DIR / mission_id
-    mission_dir.mkdir(parents=True, exist_ok=True)
-    
-    # Save video
-    video_path = mission_dir / f"video{Path(file.filename).suffix.lower()}"
-    with video_path.open("wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
-    
-    # Get video info
+    storage = get_storage(DATA_DIR / "objects")
+    storage_key = mission_object_key(mission_id, file.filename)
+    storage_metadata = storage.upload(
+        storage_key,
+        file.file,
+        file.filename,
+        file.content_type,
+    )
+
+    # Get video info from a temporary local representation only when the local
+    # fallback is active; processing resolves the storage object on demand.
+    video_path = DATA_DIR / "objects" / storage_key
     cap = cv2.VideoCapture(str(video_path))
     fps = cap.get(cv2.CAP_PROP_FPS) or 30
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
@@ -696,8 +707,12 @@ async def upload_video(
     
     video_info = {
         "filename": file.filename,
-        "url": f"{str(request.base_url).rstrip('/')}/media/missions/{mission_id}/{video_path.name}",
-        "size_mb": round(video_path.stat().st_size / (1024 * 1024), 2),
+        "url": f"{str(request.base_url).rstrip('/')}/api/storage/{storage_key}",
+        "storage_key": storage_metadata.key,
+        "content_type": storage_metadata.content_type,
+        "size_bytes": storage_metadata.size,
+        "sha256": storage_metadata.checksum,
+        "size_mb": round(storage_metadata.size / (1024 * 1024), 2),
         "fps": round(fps, 2),
         "total_frames": total_frames,
         "duration_seconds": round(total_frames / fps, 2) if fps > 0 else 0,
@@ -709,12 +724,69 @@ async def upload_video(
         "status": "video_uploaded",
         "video": video_info
     })
+    database_engine = get_configured_engine()
+    if database_engine is not None and check_database(database_engine):
+        with session_scope(database_engine) as session:
+            MissionRepository(session).record_video(mission_id, video_info)
     
     return {
         "success": True,
         "video": video_info,
         "next_step": "configure_processing"
     }
+
+
+@app.get("/api/storage/{storage_key:path}")
+async def download_storage_object(storage_key: str):
+    """Download an object through the configured local or S3 storage adapter."""
+    storage = get_storage(DATA_DIR / "objects")
+    if not storage.exists(storage_key):
+        raise HTTPException(status_code=404, detail="Storage object not found")
+    content_type = "application/octet-stream"
+    if hasattr(storage, "download"):
+        body = storage.download(storage_key)
+        return Response(content=body, media_type=content_type)
+
+
+@app.post("/api/jobs")
+async def create_processing_job(
+    mission_id: str = Query(...),
+    frame_sampling: int = Query(2),
+    inference_resolution: int = Query(640),
+    detection_confidence: float = Query(0.35),
+    reconstruction_quality: str = Query("medium"),
+):
+    mission = MissionData(mission_id)
+    if not mission.data:
+        raise HTTPException(status_code=404, detail="Mission not found")
+    job = create_job(mission_id, {
+        "frame_sampling": frame_sampling,
+        "inference_resolution": inference_resolution,
+        "detection_confidence": detection_confidence,
+        "reconstruction_quality": reconstruction_quality,
+    })
+    mission.update({"processing_job_id": job["id"]})
+    enqueue_processing_job(job["id"])
+    job = get_job(job["id"]) or job
+    return {"success": True, "job": job}
+
+
+@app.get("/api/jobs/{job_id}")
+async def get_processing_job(job_id: str):
+    job = get_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Processing job not found")
+    return {"success": True, "job": job, "stages": list(JOB_STAGES)}
+
+
+@app.get("/api/missions/{mission_id}/processing-status")
+async def get_processing_status(mission_id: str):
+    mission = MissionData(mission_id)
+    if not mission.data:
+        raise HTTPException(status_code=404, detail="Mission not found")
+    job_id = mission.get("processing_job_id")
+    job = get_job(str(job_id)) if job_id else None
+    return {"success": True, "mission_id": mission_id, "job": job, "stages": list(JOB_STAGES)}
 
 # ============================================================
 # PROCESSING
@@ -737,12 +809,31 @@ async def process_video(
     if not video_info:
         raise HTTPException(status_code=400, detail="No video uploaded")
 
+    job = create_job(mission_id, {
+        "frame_sampling": frame_sampling,
+        "inference_resolution": inference_resolution,
+        "detection_confidence": detection_confidence,
+        "reconstruction_quality": reconstruction_quality,
+    })
+    mission.update({"processing_job_id": job["id"]})
+    update_job(job["id"], status="VALIDATING", stage="VALIDATING", progress_percent=5, message="Validating uploaded video")
+
     mission_dir = MISSIONS_DIR / mission_id
-    video_path = next(mission_dir.glob("video.*"), None)
+    storage_key = video_info.get("storage_key")
+    storage = get_storage(DATA_DIR / "objects")
+    storage_root = getattr(storage, "root", None)
+    stored_path = storage_root / storage_key if storage_key and storage_root else None
+    if storage_key and (stored_path is None or not stored_path.exists()):
+        materialized_path = DATA_DIR / "processing" / mission_id / Path(video_info.get("filename", "video.mp4")).name
+        materialized_path.parent.mkdir(parents=True, exist_ok=True)
+        materialized_path.write_bytes(storage.download(storage_key))
+        stored_path = materialized_path
+    video_path = stored_path if stored_path and stored_path.exists() else next(mission_dir.glob("video.*"), None)
     if not video_path or not video_path.exists():
         raise HTTPException(status_code=400, detail="Video file not found")
 
     try:
+        update_job(job["id"], status="EXTRACTING_FRAMES", stage="EXTRACTING_FRAMES", progress_percent=15, message="Analyzing video frames")
         real_summary = summarize_uploaded_video(video_path)
         result = _basic_process(video_path, frame_sampling, detection_confidence)
         result["video"] = {**video_info, **result.get("video", {}), **real_summary}
@@ -874,8 +965,10 @@ async def process_video(
         if damage_result.get("findings"):
             findings.extend(damage_result["findings"])
         mission.update({"findings": findings})
+        update_job(job["id"], status="COMPLETED", stage="COMPLETED", progress_percent=100, message="Processing completed")
         return {
             "success": True,
+            "job_id": job["id"],
             "processing": result.get("processing"),
             "detections": result.get("detections"),
             "scene_analysis": scene_analysis,
@@ -886,6 +979,7 @@ async def process_video(
         }
 
     except Exception as e:
+        update_job(job["id"], status="FAILED", stage="FAILED", error_message=str(e), message="Processing failed")
         logger.error(f"Processing failed: {e}")
         raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}")
 
