@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from .jobs import update_job
+from .model_registry import ModelUnavailableError
 
 try:
     from celery import Celery
@@ -15,8 +16,45 @@ if celery_app is not None:
 
 
 def _placeholder(job_id: str):
-    update_job(job_id, status="COMPLETED", stage="COMPLETED", progress_percent=100, message="Placeholder pipeline completed; expensive processing is not enabled in Phase 3")
+    update_job(job_id, status="COMPLETED", stage="COMPLETED", progress_percent=100, message="Placeholder pipeline completed; expensive processing is not enabled in Phase 4")
     return get_job_result(job_id)
+
+
+def _detection_task(job_id: str, video_path=None, sample_fps: float = 2.0, confidence: float | None = None, iou: float | None = None, classes=None, *args, **kwargs):
+    update_job(job_id, status="DETECTING_OBJECTS", stage="DETECTING_OBJECTS", progress_percent=40, message="Running YOLO object detection")
+    try:
+        from .detection import DetectionService
+        from .model_registry import ModelRegistry
+        service = DetectionService(ModelRegistry())
+        record = service.registry.require_available()
+        detections = service.detect_video(video_path, sample_fps=sample_fps, confidence=confidence or float(__import__("os").getenv("YOLO_CONFIDENCE", "0.35")), iou=iou or float(__import__("os").getenv("YOLO_IOU", "0.7")), classes=set(classes) if classes else None) if video_path else []
+    except ModelUnavailableError as exc:
+        update_job(job_id, status="FAILED", stage="FAILED", error_message=f"MODEL_NOT_FOUND: {exc}", message="YOLO model unavailable")
+        return get_job_result(job_id)
+    except Exception as exc:
+        update_job(job_id, status="FAILED", stage="FAILED", error_message=f"DETECTION_FAILED: {exc}", message="Object detection failed")
+        return get_job_result(job_id)
+    update_job(job_id, status="DETECTING_OBJECTS", stage="DETECTING_OBJECTS", progress_percent=55, message=f"Object detections available: {len(detections)}")
+    result = get_job_result(job_id) or {}
+    result["detections"] = [record.__dict__ for record in detections]
+    result["model"] = record.__dict__
+    return result
+
+
+def _tracking_task(job_id: str, detections=None, *args, **kwargs):
+    update_job(job_id, status="TRACKING", stage="TRACKING", progress_percent=70, message="Tracking detected objects")
+    from .detection import DetectionRecord
+    from .tracking import ByteTrackAdapter
+    grouped = {}
+    for item in detections or []:
+        detection = item if isinstance(item, DetectionRecord) else DetectionRecord(**item)
+        grouped.setdefault(detection.frame_id, []).append(detection)
+    tracks = ByteTrackAdapter().track(grouped.values())
+    update_job(job_id, status="TRACKING", stage="TRACKING", progress_percent=85, message="Persistent tracks available")
+    result = get_job_result(job_id) or {}
+    result["tracks"] = [track.to_dict() for track in tracks]
+    result["unique_objects"] = len(tracks)
+    return result
 
 
 def get_job_result(job_id):
@@ -32,8 +70,12 @@ def _register(name):
 
 validate_video = _register("validate_video")
 extract_frames = _register("extract_frames")
-detect_objects = _register("detect_objects")
-track_objects = _register("track_objects")
+if celery_app is not None:
+    detect_objects = celery_app.task(name="aeromesh.detect_objects")(_detection_task)
+    track_objects = celery_app.task(name="aeromesh.track_objects")(_tracking_task)
+else:
+    detect_objects = _detection_task
+    track_objects = _tracking_task
 reconstruct = _register("reconstruct")
 generate_mesh = _register("generate_mesh")
 analyze = _register("analyze")

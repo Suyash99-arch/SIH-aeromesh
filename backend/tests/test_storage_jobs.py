@@ -9,6 +9,7 @@ from backend.jobs import create_job, get_job, update_job
 from backend.models import Mission, ProcessingJob, Video
 from backend.storage import LocalObjectStorage, mission_object_key
 from backend.tasks import celery_app, run_processing_pipeline
+from backend.tasks import detect_objects, track_objects
 
 
 def test_local_storage_upload_download_exists_and_delete(tmp_path):
@@ -42,6 +43,31 @@ def test_celery_task_is_registered_or_fallback_exists():
     assert run_processing_pipeline is not None
     if celery_app is not None:
         assert "aeromesh.run_processing_pipeline" in celery_app.tasks
+        assert "aeromesh.detect_objects" in celery_app.tasks
+        assert "aeromesh.track_objects" in celery_app.tasks
+
+
+def test_detection_task_records_missing_model_failure(monkeypatch):
+    monkeypatch.setattr(main, "get_configured_engine", lambda: None)
+    job = create_job("mission-3")
+
+    detect_objects(job["id"])
+
+    result = get_job(job["id"])
+    assert result["status"] == "FAILED"
+    assert result["stage"] == "FAILED"
+    assert result["error_message"].startswith("MODEL_NOT_FOUND:")
+
+
+def test_tracking_task_updates_progress(monkeypatch):
+    monkeypatch.setattr(main, "get_configured_engine", lambda: None)
+    job = create_job("mission-4")
+
+    track_objects(job["id"])
+
+    result = get_job(job["id"])
+    assert result["stage"] == "TRACKING"
+    assert result["progress_percent"] == 85
 
 
 def test_database_stores_object_metadata_without_bytes(tmp_path):

@@ -163,7 +163,8 @@ def _load_detection_model(use_aeromesh: bool = True):
     """
     from ultralytics import YOLO
     
-    aeromesh_path = BASE_DIR / "backend" / "models" / "aeromesh_yolo.pt"
+    configured_path = os.getenv("YOLO_MODEL_PATH", "").strip()
+    aeromesh_path = Path(configured_path) if configured_path else BASE_DIR / "backend" / "models" / "aeromesh_yolo.pt"
     fallback_path = BASE_DIR / "yolo11n.pt"
     
     if use_aeromesh and aeromesh_path.exists():
@@ -185,7 +186,7 @@ def _load_detection_model(use_aeromesh: bool = True):
             logger.error("Failed to load fallback model yolo11n.pt: %s", exc)
             raise
     
-    raise FileNotFoundError(f"No detection model found at {aeromesh_path} or {fallback_path}")
+    raise FileNotFoundError(f"MODEL_NOT_FOUND: No detection model found at {aeromesh_path} or {fallback_path}. Set YOLO_MODEL_PATH to an authorized local model file.")
 
 
 def _get_confidence_threshold(class_name: str, is_aeromesh: bool = True) -> float:
@@ -850,7 +851,9 @@ async def process_video(
         except Exception as exc:
             logger.warning("Detection model inference unavailable: %s", exc)
             result["processing"]["status"] = "PARTIAL"
-            result["processing"]["warning"] = "Detection model available but inference failed; object counts remain unconfirmed."
+            result["processing"]["error_code"] = "MODEL_NOT_FOUND" if "MODEL_NOT_FOUND" in str(exc) or isinstance(exc, FileNotFoundError) else "DETECTION_FAILED"
+            result["processing"]["warning"] = f"{result['processing']['error_code']}: object counts remain unconfirmed."
+            result["detector"] = {"available": False, "error_code": result["processing"]["error_code"], "error": str(exc)}
 
         scene_analysis = result.get("scene_analysis") or build_scene_analysis(result.get("detections"), result.get("tracks"))
 
@@ -965,6 +968,14 @@ async def process_video(
         if damage_result.get("findings"):
             findings.extend(damage_result["findings"])
         mission.update({"findings": findings})
+        database_engine = get_configured_engine()
+        if database_engine is not None and check_database(database_engine):
+            with session_scope(database_engine) as session:
+                MissionRepository(session).replace_detection_results(
+                    mission_id,
+                    (result.get("detections") or {}).get("observations", []),
+                    result.get("tracks", []),
+                )
         update_job(job["id"], status="COMPLETED", stage="COMPLETED", progress_percent=100, message="Processing completed")
         return {
             "success": True,
@@ -1117,6 +1128,50 @@ def _run_yolo_detection(video_path: Path, model, sample_fps: int, confidence: fl
     Returns:
         Detection results dict with tracks, detections, scene_analysis, etc.
     """
+    from backend.detection import DetectionRecord
+    from backend.tracking import UltralyticsTracker
+
+    records = UltralyticsTracker(model).track_video(
+        video_path,
+        sample_fps=sample_fps,
+        confidence=confidence,
+        iou=float(os.getenv("YOLO_IOU", "0.7")),
+    )
+    filtered = []
+    for record in records:
+        if is_aeromesh and record.confidence < _get_confidence_threshold(record.class_name, True):
+            continue
+        class_name = _remap_visdrone_class(record.class_name) if is_aeromesh else record.class_name
+        filtered.append(DetectionRecord(record.frame_id, class_name, record.confidence, record.bbox, record.timestamp, record.track_id))
+    tracks_by_id = {}
+    observations = []
+    for index, record in enumerate(filtered):
+        track_id = record.track_id or f"T{index + 1:04d}"
+        track = tracks_by_id.setdefault(track_id, {"trackId": track_id, "class": record.class_name, "firstSeen": int(record.frame_id), "lastSeen": int(record.frame_id), "hits": 0, "confidences": [], "trajectory": []})
+        track["lastSeen"] = int(record.frame_id)
+        track["hits"] += 1
+        track["confidences"].append(record.confidence)
+        track["trajectory"].append([(record.bbox[0] + record.bbox[2]) / 2, (record.bbox[1] + record.bbox[3]) / 2])
+        observations.append({"frame": int(record.frame_id), "trackId": track_id, "class": record.class_name, "confidence": record.confidence, "boundingBox": record.bbox, "timestamp": record.timestamp})
+    all_tracks = []
+    for track in tracks_by_id.values():
+        track["averageConfidence"] = round(sum(track["confidences"]) / len(track["confidences"]), 3)
+        del track["confidences"]
+        all_tracks.append(track)
+    scene_analysis = build_scene_analysis({"observations": observations}, all_tracks)
+    by_class = {}
+    for track in all_tracks:
+        by_class[track["class"]] = by_class.get(track["class"], 0) + 1
+    return {
+        "video": {"filename": video_path.name},
+        "detector": get_detector_metadata(is_aeromesh=is_aeromesh),
+        "processing": {"status": "COMPLETE", "sampleFps": sample_fps, "framesAnalyzed": len({item["frame"] for item in observations}), "inferenceFps": 0, "warning": "" if all_tracks else "No detections met the configured confidence threshold."},
+        "detections": {"uniqueTracks": len(all_tracks), "byGroup": {}, "byClass": by_class, "observations": observations, "scene_analysis": scene_analysis},
+        "tracks": all_tracks,
+        "frameQuality": {"estimated": True, "average": {}, "samples": []},
+        "scene_analysis": scene_analysis,
+    }
+
     capture = cv2.VideoCapture(str(video_path))
     if not capture.isOpened():
         raise ValueError("OpenCV could not decode the uploaded video")
@@ -1264,6 +1319,49 @@ async def get_mission_reconstruction(mission_id: str):
         "error": "No reconstruction was generated yet.",
     }
     return {"success": bool(reconstruction.get("success")), "reconstruction": reconstruction}
+
+
+@app.get("/api/model-status")
+async def get_model_status():
+    from backend.model_registry import ModelRegistry
+    return {"success": True, "model": ModelRegistry().metadata()}
+
+
+def _object_payload(mission_id: str) -> dict:
+    mission = MissionData(mission_id)
+    if not mission.data:
+        raise HTTPException(status_code=404, detail="Mission not found")
+    detections = mission.get("detections") or {}
+    tracks = mission.get("tracks") or []
+    observations = detections.get("observations") if isinstance(detections, dict) else []
+    return {"mission_id": mission_id, "detections": observations or [], "tracks": tracks, "summary": {
+        "total_unique_objects": len(tracks),
+        "counts_by_class": detections.get("byClass", {}) if isinstance(detections, dict) else {},
+    }}
+
+
+@app.get("/api/missions/{mission_id}/detections")
+async def get_mission_detections(mission_id: str):
+    payload = _object_payload(mission_id)
+    return {"success": True, "mission_id": mission_id, "detections": payload["detections"]}
+
+
+@app.get("/api/missions/{mission_id}/tracks")
+async def get_mission_tracks(mission_id: str):
+    payload = _object_payload(mission_id)
+    return {"success": True, "mission_id": mission_id, "tracks": payload["tracks"]}
+
+
+@app.get("/api/missions/{mission_id}/objects")
+async def get_mission_objects(mission_id: str):
+    payload = _object_payload(mission_id)
+    return {"success": True, "mission_id": mission_id, "objects": payload["tracks"], "summary": payload["summary"]}
+
+
+@app.get("/api/missions/{mission_id}/object-summary")
+async def get_mission_object_summary(mission_id: str):
+    payload = _object_payload(mission_id)
+    return {"success": True, "mission_id": mission_id, **payload["summary"]}
 
 
 @app.get("/api/missions/{mission_id}/reconstruction/pointcloud")

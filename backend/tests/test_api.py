@@ -170,3 +170,26 @@ def test_processing_job_unknown_mission_is_rejected(client):
     response = client.post("/api/jobs", params={"mission_id": "missing-mission"})
 
     assert response.status_code == 404
+
+
+def test_object_endpoints_and_model_status(client):
+    mission = create_mission(client)
+    stored = main.MissionData(mission["id"])
+    stored.update({
+        "tracks": [{"track_id": "T0001", "class_name": "car", "detection_count": 2}],
+        "detections": {"observations": [{"track_id": "T0001", "class_name": "car", "confidence": 0.9}], "byClass": {"car": 1}},
+    })
+
+    objects = client.get(f"/api/missions/{mission['id']}/objects")
+    detections = client.get(f"/api/missions/{mission['id']}/detections")
+    tracks = client.get(f"/api/missions/{mission['id']}/tracks")
+    summary = client.get(f"/api/missions/{mission['id']}/object-summary")
+    model_status = client.get("/api/model-status")
+
+    assert objects.status_code == detections.status_code == tracks.status_code == summary.status_code == 200
+    assert objects.json()["summary"]["total_unique_objects"] == 1
+    assert detections.json()["detections"][0]["class_name"] == "car"
+    assert tracks.json()["tracks"][0]["track_id"] == "T0001"
+    assert summary.json()["counts_by_class"] == {"car": 1}
+    assert model_status.status_code == 200
+    assert model_status.json()["model"]["available"] is False
