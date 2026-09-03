@@ -1,0 +1,14 @@
+services:
+  postgis:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_DB: aeromesh
+      POSTGRES_USER: aeromesh
+      POSTGRES_PASSWORD: aeromesh
+    ports:
+      - "5432:5432"
+    volumes:
+      - aeromesh-postgis:/var/lib/postgresql/data
+
+volumes:
+  aeromesh-postgis:

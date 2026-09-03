@@ -21,6 +21,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 import uvicorn
+from backend.database import check_database, get_configured_engine, init_database, session_scope
+from backend.repository import MissionRepository
 
 try:
     from dotenv import load_dotenv
@@ -78,6 +80,14 @@ if load_dotenv:
 
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 MISSIONS_DIR.mkdir(parents=True, exist_ok=True)
+
+configured_engine = get_configured_engine()
+if configured_engine is not None:
+    try:
+        init_database(configured_engine)
+        logger.info("Database storage enabled")
+    except Exception as exc:
+        logger.warning("Database unavailable; JSON storage fallback remains active: %s", exc)
 
 # ============================================================
 # FASTAPI APP
@@ -216,19 +226,35 @@ def _remap_visdrone_class(class_name: str) -> str:
 
 
 class MissionData:
-    """In-memory mission tracking"""
+    """Mission service facade with database-first and JSON fallback storage."""
     def __init__(self, mission_id: str):
         self.mission_id = mission_id
         self.data = {}
         self.load()
     
     def load(self):
+        database_engine = get_configured_engine()
+        if database_engine is not None:
+            with session_scope(database_engine) as session:
+                database_payload = MissionRepository(session).get(self.mission_id)
+            if database_payload is not None:
+                self.data = database_payload
+                return
         mission_file = MISSIONS_DIR / f"{self.mission_id}.json"
         if mission_file.exists():
             with open(mission_file) as f:
                 self.data = json.load(f)
     
     def save(self):
+        database_engine = get_configured_engine()
+        if database_engine is not None:
+            with session_scope(database_engine) as session:
+                repository = MissionRepository(session)
+                if repository.get(self.mission_id) is None:
+                    repository.create(self.data)
+                else:
+                    repository.update(self.mission_id, self.data)
+            return
         mission_file = MISSIONS_DIR / f"{self.mission_id}.json"
         with open(mission_file, 'w') as f:
             json.dump(self.data, f, indent=2)
@@ -522,12 +548,15 @@ async def root():
 
 @app.get("/health")
 async def health():
+    database_engine = get_configured_engine()
+    database_configured = database_engine is not None
+    database_ready = check_database(database_engine) if database_configured else False
     return {
         "status": "healthy",
         "backend": "ready",
         "processing_engine": "ready",
         "reconstruction_engine": "ready",
-        "database": "ready"
+        "database": "ready" if database_ready else ("configured_unavailable" if database_configured else "json_fallback"),
     }
 
 
@@ -610,6 +639,13 @@ async def get_mission(mission_id: str):
 @app.get("/api/missions")
 async def list_missions():
     """List all missions"""
+    database_engine = get_configured_engine()
+    if database_engine is not None and check_database(database_engine):
+        with session_scope(database_engine) as session:
+            return {
+                "success": True,
+                "missions": MissionRepository(session).list(),
+            }
     missions = []
     for mission_file in MISSIONS_DIR.glob("*.json"):
         with open(mission_file) as f:
