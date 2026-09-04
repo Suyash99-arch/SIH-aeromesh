@@ -1,0 +1,1037 @@
+{
+  "validation_phase": "Phase 6 \u2014 AI-to-3D Spatial Fusion",
+  "mission_id": "phase5_drone_validation",
+  "coordinate_system": "LOCAL_ARBITRARY",
+  "scale_status": "RELATIVE_SCALE",
+  "georeferencing_status": "UNREFERENCED",
+  "reprojection_threshold_configured_px": 25.0,
+  "reprojection_threshold_note": "Initial configurable engineering threshold; not an absolute accuracy claim",
+  "reprojection_statistics": {
+    "mean_reprojection_error_px": 2.3931,
+    "median_reprojection_error_px": 1.8266,
+    "p90_reprojection_error_px": 4.1367,
+    "max_reprojection_error_px": 8.0327,
+    "total_observations_evaluated": 23,
+    "accepted_observations_count": 23,
+    "rejected_observations_count": 0,
+    "acceptance_rate_pct": 100.0
+  },
+  "object_counts": {
+    "phase4_authoritative_track_count": 23,
+    "tracks_used_for_fusion": 3,
+    "by_status": {
+      "VALID": 1,
+      "LOW_CONFIDENCE": 1,
+      "INSUFFICIENT_EVIDENCE": 1,
+      "REJECTED": 0
+    },
+    "by_motion_state": {
+      "STATIC": 3,
+      "MOVING": 0,
+      "UNKNOWN": 0
+    },
+    "valid_association_percentage": 33.33,
+    "usable_association_percentage": 66.67
+  },
+  "status_semantics": {
+    "VALID": "Tracks with >= 2 supporting views, reprojection error <= 25px, and high confidence (>= 0.60)",
+    "LOW_CONFIDENCE": "Tracks with >= 2 supporting views, reprojection error <= 25px, and moderate confidence (0.35 - 0.60)",
+    "INSUFFICIENT_EVIDENCE": "Tracks with < 2 supporting views in the reconstructed camera views or insufficient parallax baseline to resolve 3D depth independently",
+    "REJECTED": "Observations that failed reprojection error threshold (> 25px) or fell behind the camera plane"
+  },
+  "reconstruction_context": {
+    "model_path": "data\\missions\\phase5_drone_validation\\reconstruction\\pinhole_model\\0",
+    "camera_model": "SIMPLE_PINHOLE",
+    "registered_cameras": 20,
+    "sparse_points_count": 12916,
+    "mesh_path": "data\\missions\\phase5_drone_validation\\reconstruction\\mesh.ply",
+    "mesh_vertex_count": 28139,
+    "mesh_face_count": 56120
+  },
+  "fused_objects": [
+    {
+      "object_id": "OBJ_T0001",
+      "track_id": "T0001",
+      "class": "car",
+      "class_name": "car",
+      "motion_state": "STATIC",
+      "coordinate_system": "LOCAL_ARBITRARY",
+      "position_3d": [
+        -17.521,
+        -5.4751,
+        145.6369
+      ],
+      "trajectory_3d": [
+        {
+          "timestamp": 0.0,
+          "frame_id": "frame_00000.jpg",
+          "x": -18.0052,
+          "y": -5.5346,
+          "z": 148.3363,
+          "reprojection_error_px": 1.84
+        },
+        {
+          "timestamp": 1.292,
+          "frame_id": "frame_00001.jpg",
+          "x": -18.0247,
+          "y": -5.421,
+          "z": 148.3025,
+          "reprojection_error_px": 3.3
+        },
+        {
+          "timestamp": 2.625,
+          "frame_id": "frame_00002.jpg",
+          "x": -17.8766,
+          "y": -5.543,
+          "z": 148.5232,
+          "reprojection_error_px": 1.11
+        },
+        {
+          "timestamp": 3.958,
+          "frame_id": "frame_00003.jpg",
+          "x": -18.023,
+          "y": -5.5599,
+          "z": 148.3167,
+          "reprojection_error_px": 1.83
+        },
+        {
+          "timestamp": 5.292,
+          "frame_id": "frame_00004.jpg",
+          "x": -18.0344,
+          "y": -5.6531,
+          "z": 148.3108,
+          "reprojection_error_px": 2.52
+        },
+        {
+          "timestamp": 6.625,
+          "frame_id": "frame_00005.jpg",
+          "x": -17.9419,
+          "y": -5.6105,
+          "z": 148.4326,
+          "reprojection_error_px": 0.73
+        },
+        {
+          "timestamp": 7.958,
+          "frame_id": "frame_00006.jpg",
+          "x": -17.8369,
+          "y": -5.5581,
+          "z": 148.5824,
+          "reprojection_error_px": 1.51
+        },
+        {
+          "timestamp": 9.25,
+          "frame_id": "frame_00007.jpg",
+          "x": -17.9363,
+          "y": -5.5638,
+          "z": 148.4361,
+          "reprojection_error_px": 0.72
+        },
+        {
+          "timestamp": 10.625,
+          "frame_id": "frame_00008.jpg",
+          "x": -17.8222,
+          "y": -5.6272,
+          "z": 148.613,
+          "reprojection_error_px": 1.7
+        },
+        {
+          "timestamp": 12.0,
+          "frame_id": "frame_00009.jpg",
+          "x": -17.828,
+          "y": -5.5589,
+          "z": 148.5954,
+          "reprojection_error_px": 1.68
+        },
+        {
+          "timestamp": 13.333,
+          "frame_id": "frame_00010.jpg",
+          "x": -17.6944,
+          "y": -5.6984,
+          "z": 148.8161,
+          "reprojection_error_px": 4.34
+        },
+        {
+          "timestamp": 14.667,
+          "frame_id": "frame_00011.jpg",
+          "x": -17.8491,
+          "y": -5.748,
+          "z": 148.5881,
+          "reprojection_error_px": 2.66
+        },
+        {
+          "timestamp": 16.0,
+          "frame_id": "frame_00012.jpg",
+          "x": -17.7336,
+          "y": -5.7238,
+          "z": 148.7539,
+          "reprojection_error_px": 3.08
+        },
+        {
+          "timestamp": 17.292,
+          "frame_id": "frame_00013.jpg",
+          "x": -17.7057,
+          "y": -5.5335,
+          "z": 148.7704,
+          "reprojection_error_px": 2.79
+        },
+        {
+          "timestamp": 18.667,
+          "frame_id": "frame_00014.jpg",
+          "x": -17.8462,
+          "y": -5.4878,
+          "z": 148.5596,
+          "reprojection_error_px": 1.75
+        },
+        {
+          "timestamp": 20.0,
+          "frame_id": "frame_00015.jpg",
+          "x": -17.7818,
+          "y": -5.5513,
+          "z": 148.6609,
+          "reprojection_error_px": 0.75
+        },
+        {
+          "timestamp": 21.333,
+          "frame_id": "frame_00016.jpg",
+          "x": -17.8516,
+          "y": -5.6443,
+          "z": 148.573,
+          "reprojection_error_px": 1.54
+        },
+        {
+          "timestamp": 22.667,
+          "frame_id": "frame_00017.jpg",
+          "x": -17.8679,
+          "y": -5.577,
+          "z": 148.5403,
+          "reprojection_error_px": 1.26
+        },
+        {
+          "timestamp": 24.0,
+          "frame_id": "frame_00018.jpg",
+          "x": -17.8158,
+          "y": -5.4851,
+          "z": 148.603,
+          "reprojection_error_px": 1.94
+        },
+        {
+          "timestamp": 25.333,
+          "frame_id": "frame_00019.jpg",
+          "x": -17.8477,
+          "y": -5.6078,
+          "z": 148.5736,
+          "reprojection_error_px": 1.93
+        }
+      ],
+      "association_status": "VALID",
+      "association_confidence": 0.8131,
+      "reprojection_error": 1.95,
+      "mean_reprojection_error_px": 1.95,
+      "median_reprojection_error_px": 1.79,
+      "p90_reprojection_error_px": 3.1,
+      "evidence_count": 20,
+      "rejected_count": 0,
+      "association_method": "MULTI_VIEW_TRIANGULATION",
+      "observations": [
+        {
+          "frame_id": "frame_00000.jpg",
+          "image_name": "frame_00000.jpg",
+          "camera_id": 1,
+          "bbox_2d": [
+            559.54,
+            366.32,
+            643.06,
+            412.15
+          ],
+          "pixel_center": [
+            601.3,
+            389.24
+          ],
+          "timestamp": 0.0,
+          "detection_confidence": 0.6232,
+          "point_3d": [
+            -17.521,
+            -5.4751,
+            145.6369
+          ],
+          "reprojected_pixel": [
+            603.03,
+            388.6
+          ],
+          "reprojection_error_px": 1.84,
+          "depth_zc": 146.209,
+          "accepted": true,
+          "rejection_reason": null
+        },
+        {
+          "frame_id": "frame_00001.jpg",
+          "image_name": "frame_00001.jpg",
+          "camera_id": 1,
+          "bbox_2d": [
+            556.23,
+            368.24,
+            634.89,
+            411.39
+          ],
+          "pixel_center": [
+            595.56,
+            389.81
+          ],
+          "timestamp": 1.292,
+          "detection_confidence": 0.5641,
+          "point_3d": [
+            -17.521,
+            -5.4751,
+            145.6369
+          ],
+          "reprojected_pixel": [
+            597.84,
+            387.42
+          ],
+          "reprojection_error_px": 3.3,
+          "depth_zc": 146.132,
+          "accepted": true,
+          "rejection_reason": null
+        },
+        {
+          "frame_id": "frame_00002.jpg",
+          "image_name": "frame_00002.jpg",
+          "camera_id": 1,
+          "bbox_2d": [
+            546.57,
+            366.82,
+            624.39,
+            409.54
+          ],
+          "pixel_center": [
+            585.48,
+            388.18
+          ],
+          "timestamp": 2.625,
+          "detection_confidence": 0.5004,
+          "point_3d": [
+            -17.521,
+            -5.4751,
+            145.6369
+          ],
+          "reprojected_pixel": [
+            584.54,
+            387.59
+          ],
+          "reprojection_error_px": 1.11,
+          "depth_zc": 146.486,
+          "accepted": true,
+          "rejection_reason": null
+        },
+        {
+          "frame_id": "frame_00003.jpg",
+          "image_name": "frame_00003.jpg",
+          "camera_id": 1,
+          "bbox_2d": [
+            529.63,
+            368.68,
+            607.06,
+            411.1
+          ],
+          "pixel_center": [
+            568.35,
+            389.89
+          ],
+          "timestamp": 3.958,
+          "detection_confidence": 0.7284,
+          "point_3d": [
+            -17.521,
+            -5.4751,
+            145.6369
+          ],
+          "reprojected_pixel": [
+            570.15,
+            389.63
+          ],
+          "reprojection_error_px": 1.83,
+          "depth_zc": 146.647,
+          "accepted": true,
+          "rejection_reason": null
+        },
+        {
+          "frame_id": "frame_00004.jpg",
+          "image_name": "frame_00004.jpg",
+          "camera_id": 1,
+          "bbox_2d": [
+            511.33,
+            372.0,
+            588.14,
+            413.96
+          ],
+          "pixel_center": [
+            549.74,
+            392.98
+          ],
+          "timestamp": 5.292,
+          "detection_confidence": 0.5802,
+          "point_3d": [
+            -17.521,
+            -5.4751,
+            145.6369
+          ],
+          "reprojected_pixel": [
+            551.94,
+            394.21
+          ],
+          "reprojection_error_px": 2.52,
+          "depth_zc": 146.061,
+          "accepted": true,
+          "rejection_reason": null
+        },
+        {
+          "frame_id": "frame_00005.jpg",
+          "image_name": "frame_00005.jpg",
+          "camera_id": 1,
+          "bbox_2d": [
+            495.88,
+            380.06,
+            566.77,
+            418.47
+          ],
+          "pixel_center": [
+            531.33,
+            399.26
+          ],
+          "timestamp": 6.625,
+          "detection_confidence": 0.7104,
+          "point_3d": [
+            -17.521,
+            -5.4751,
+            145.6369
+          ],
+          "reprojected_pixel": [
+            531.9,
+            399.72
+          ],
+          "reprojection_error_px": 0.73,
+          "depth_zc": 145.727,
+          "accepted": true,
+          "rejection_reason": null
+        },
+        {
+          "frame_id": "frame_00006.jpg",
+          "image_name": "frame_00006.jpg",
+          "camera_id": 1,
+          "bbox_2d": [
+            477.66,
+            385.73,
+            547.33,
+            423.18
+          ],
+          "pixel_center": [
+            512.5,
+            404.46
+          ],
+          "timestamp": 7.958,
+          "detection_confidence": 0.7123,
+          "point_3d": [
+            -17.521,
+            -5.4751,
+            145.6369
+          ],
+          "reprojected_pixel": [
+            511.06,
+            403.98
+          ],
+          "reprojection_error_px": 1.51,
+          "depth_zc": 145.56,
+          "accepted": true,
+          "rejection_reason": null
+        },
+        {
+          "frame_id": "frame_00007.jpg",
+          "image_name": "frame_00007.jpg",
+          "camera_id": 1,
+          "bbox_2d": [
+            452.1,
+            388.58,
+            529.51,
+            430.13
+          ],
+          "pixel_center": [
+            490.81,
+            409.36
+          ],
+          "timestamp": 9.25,
+          "detection_confidence": 0.7682,
+          "point_3d": [
+            -17.521,
+            -5.4751,
+            145.6369
+          ],
+          "reprojected_pixel": [
+            491.42,
+            408.98
+          ],
+          "reprojection_error_px": 0.72,
+          "depth_zc": 145.341,
+          "accepted": true,
+          "rejection_reason": null
+        },
+        {
+          "frame_id": "frame_00008.jpg",
+          "image_name": "frame_00008.jpg",
+          "camera_id": 1,
+          "bbox_2d": [
+            424.69,
+            391.79,
+            505.79,
+            435.23
+          ],
+          "pixel_center": [
+            465.24,
+            413.51
+          ],
+          "timestamp": 10.625,
+          "detection_confidence": 0.6718,
+          "point_3d": [
+            -17.521,
+            -5.4751,
+            145.6369
+          ],
+          "reprojected_pixel": [
+            463.67,
+            414.17
+          ],
+          "reprojection_error_px": 1.7,
+          "depth_zc": 144.996,
+          "accepted": true,
+          "rejection_reason": null
+        },
+        {
+          "frame_id": "frame_00009.jpg",
+          "image_name": "frame_00009.jpg",
+          "camera_id": 1,
+          "bbox_2d": [
+            389.9,
+            394.44,
+            471.01,
+            437.75
+          ],
+          "pixel_center": [
+            430.45,
+            416.1
+          ],
+          "timestamp": 12.0,
+          "detection_confidence": 0.6514,
+          "point_3d": [
+            -17.521,
+            -5.4751,
+            145.6369
+          ],
+          "reprojected_pixel": [
+            428.82,
+            415.68
+          ],
+          "reprojection_error_px": 1.68,
+          "depth_zc": 144.678,
+          "accepted": true,
+          "rejection_reason": null
+        },
+        {
+          "frame_id": "frame_00010.jpg",
+          "image_name": "frame_00010.jpg",
+          "camera_id": 1,
+          "bbox_2d": [
+            358.06,
+            403.59,
+            436.21,
+            445.32
+          ],
+          "pixel_center": [
+            397.13,
+            424.45
+          ],
+          "timestamp": 13.333,
+          "detection_confidence": 0.6783,
+          "point_3d": [
+            -17.521,
+            -5.4751,
+            145.6369
+          ],
+          "reprojected_pixel": [
+            393.21,
+            426.33
+          ],
+          "reprojection_error_px": 4.34,
+          "depth_zc": 143.56,
+          "accepted": true,
+          "rejection_reason": null
+        },
+        {
+          "frame_id": "frame_00011.jpg",
+          "image_name": "frame_00011.jpg",
+          "camera_id": 1,
+          "bbox_2d": [
+            323.86,
+            412.36,
+            407.08,
+            456.75
+          ],
+          "pixel_center": [
+            365.47,
+            434.56
+          ],
+          "timestamp": 14.667,
+          "detection_confidence": 0.6387,
+          "point_3d": [
+            -17.521,
+            -5.4751,
+            145.6369
+          ],
+          "reprojected_pixel": [
+            365.29,
+            437.21
+          ],
+          "reprojection_error_px": 2.66,
+          "depth_zc": 142.24,
+          "accepted": true,
+          "rejection_reason": null
+        },
+        {
+          "frame_id": "frame_00012.jpg",
+          "image_name": "frame_00012.jpg",
+          "camera_id": 1,
+          "bbox_2d": [
+            290.92,
+            426.8,
+            370.77,
+            469.16
+          ],
+          "pixel_center": [
+            330.85,
+            447.98
+          ],
+          "timestamp": 16.0,
+          "detection_confidence": 0.8288,
+          "point_3d": [
+            -17.521,
+            -5.4751,
+            145.6369
+          ],
+          "reprojected_pixel": [
+            328.95,
+            450.41
+          ],
+          "reprojection_error_px": 3.08,
+          "depth_zc": 140.932,
+          "accepted": true,
+          "rejection_reason": null
+        },
+        {
+          "frame_id": "frame_00013.jpg",
+          "image_name": "frame_00013.jpg",
+          "camera_id": 1,
+          "bbox_2d": [
+            253.68,
+            435.33,
+            338.22,
+            480.34
+          ],
+          "pixel_center": [
+            295.95,
+            457.83
+          ],
+          "timestamp": 17.292,
+          "detection_confidence": 0.7303,
+          "point_3d": [
+            -17.521,
+            -5.4751,
+            145.6369
+          ],
+          "reprojected_pixel": [
+            293.27,
+            457.08
+          ],
+          "reprojection_error_px": 2.79,
+          "depth_zc": 140.198,
+          "accepted": true,
+          "rejection_reason": null
+        },
+        {
+          "frame_id": "frame_00014.jpg",
+          "image_name": "frame_00014.jpg",
+          "camera_id": 1,
+          "bbox_2d": [
+            216.57,
+            440.72,
+            301.67,
+            486.08
+          ],
+          "pixel_center": [
+            259.12,
+            463.4
+          ],
+          "timestamp": 18.667,
+          "detection_confidence": 0.7376,
+          "point_3d": [
+            -17.521,
+            -5.4751,
+            145.6369
+          ],
+          "reprojected_pixel": [
+            259.66,
+            461.74
+          ],
+          "reprojection_error_px": 1.75,
+          "depth_zc": 139.082,
+          "accepted": true,
+          "rejection_reason": null
+        },
+        {
+          "frame_id": "frame_00015.jpg",
+          "image_name": "frame_00015.jpg",
+          "camera_id": 1,
+          "bbox_2d": [
+            183.9,
+            451.03,
+            267.17,
+            495.57
+          ],
+          "pixel_center": [
+            225.54,
+            473.3
+          ],
+          "timestamp": 20.0,
+          "detection_confidence": 0.6673,
+          "point_3d": [
+            -17.521,
+            -5.4751,
+            145.6369
+          ],
+          "reprojected_pixel": [
+            225.04,
+            472.73
+          ],
+          "reprojection_error_px": 0.75,
+          "depth_zc": 138.407,
+          "accepted": true,
+          "rejection_reason": null
+        },
+        {
+          "frame_id": "frame_00016.jpg",
+          "image_name": "frame_00016.jpg",
+          "camera_id": 1,
+          "bbox_2d": [
+            142.65,
+            461.26,
+            229.64,
+            507.9
+          ],
+          "pixel_center": [
+            186.14,
+            484.58
+          ],
+          "timestamp": 21.333,
+          "detection_confidence": 0.6873,
+          "point_3d": [
+            -17.521,
+            -5.4751,
+            145.6369
+          ],
+          "reprojected_pixel": [
+            187.44,
+            485.41
+          ],
+          "reprojection_error_px": 1.54,
+          "depth_zc": 137.663,
+          "accepted": true,
+          "rejection_reason": null
+        },
+        {
+          "frame_id": "frame_00017.jpg",
+          "image_name": "frame_00017.jpg",
+          "camera_id": 1,
+          "bbox_2d": [
+            108.05,
+            467.72,
+            194.44,
+            514.11
+          ],
+          "pixel_center": [
+            151.25,
+            490.92
+          ],
+          "timestamp": 22.667,
+          "detection_confidence": 0.6414,
+          "point_3d": [
+            -17.521,
+            -5.4751,
+            145.6369
+          ],
+          "reprojected_pixel": [
+            152.43,
+            490.51
+          ],
+          "reprojection_error_px": 1.26,
+          "depth_zc": 137.645,
+          "accepted": true,
+          "rejection_reason": null
+        },
+        {
+          "frame_id": "frame_00018.jpg",
+          "image_name": "frame_00018.jpg",
+          "camera_id": 1,
+          "bbox_2d": [
+            64.97,
+            479.31,
+            154.63,
+            527.83
+          ],
+          "pixel_center": [
+            109.8,
+            503.57
+          ],
+          "timestamp": 24.0,
+          "detection_confidence": 0.7271,
+          "point_3d": [
+            -17.521,
+            -5.4751,
+            145.6369
+          ],
+          "reprojected_pixel": [
+            110.56,
+            501.78
+          ],
+          "reprojection_error_px": 1.94,
+          "depth_zc": 136.211,
+          "accepted": true,
+          "rejection_reason": null
+        },
+        {
+          "frame_id": "frame_00019.jpg",
+          "image_name": "frame_00019.jpg",
+          "camera_id": 1,
+          "bbox_2d": [
+            21.92,
+            490.63,
+            116.97,
+            542.81
+          ],
+          "pixel_center": [
+            69.44,
+            516.72
+          ],
+          "timestamp": 25.333,
+          "detection_confidence": 0.7057,
+          "point_3d": [
+            -17.521,
+            -5.4751,
+            145.6369
+          ],
+          "reprojected_pixel": [
+            71.36,
+            516.96
+          ],
+          "reprojection_error_px": 1.93,
+          "depth_zc": 135.465,
+          "accepted": true,
+          "rejection_reason": null
+        }
+      ],
+      "rejected_observations": [],
+      "source_frames": [
+        "frame_00000.jpg",
+        "frame_00001.jpg",
+        "frame_00002.jpg",
+        "frame_00003.jpg",
+        "frame_00004.jpg",
+        "frame_00005.jpg",
+        "frame_00006.jpg",
+        "frame_00007.jpg",
+        "frame_00008.jpg",
+        "frame_00009.jpg",
+        "frame_00010.jpg",
+        "frame_00011.jpg",
+        "frame_00012.jpg",
+        "frame_00013.jpg",
+        "frame_00014.jpg",
+        "frame_00015.jpg",
+        "frame_00016.jpg",
+        "frame_00017.jpg",
+        "frame_00018.jpg",
+        "frame_00019.jpg"
+      ]
+    },
+    {
+      "object_id": "OBJ_T0002",
+      "track_id": "T0002",
+      "class": "car",
+      "class_name": "car",
+      "motion_state": "STATIC",
+      "coordinate_system": "LOCAL_ARBITRARY",
+      "position_3d": [
+        -13.271,
+        -7.6488,
+        152.1145
+      ],
+      "trajectory_3d": [
+        {
+          "timestamp": 0.0,
+          "frame_id": "frame_00000.jpg",
+          "x": -13.271,
+          "y": -7.6488,
+          "z": 152.1145,
+          "reprojection_error_px": 0.0
+        }
+      ],
+      "association_status": "INSUFFICIENT_EVIDENCE",
+      "association_confidence": 0.5991,
+      "reprojection_error": 0.0,
+      "mean_reprojection_error_px": 0.0,
+      "median_reprojection_error_px": 0.0,
+      "p90_reprojection_error_px": 0.0,
+      "evidence_count": 1,
+      "rejected_count": 0,
+      "association_method": "MESH_SURFACE_INTERSECTION",
+      "observations": [
+        {
+          "frame_id": "frame_00000.jpg",
+          "image_name": "frame_00000.jpg",
+          "camera_id": 1,
+          "bbox_2d": [
+            657.44,
+            341.66,
+            713.27,
+            375.36
+          ],
+          "pixel_center": [
+            685.36,
+            358.51
+          ],
+          "timestamp": 0.0,
+          "detection_confidence": 0.5774,
+          "point_3d": [
+            -13.271,
+            -7.6488,
+            152.1145
+          ],
+          "reprojected_pixel": [
+            685.36,
+            358.51
+          ],
+          "reprojection_error_px": 0.0,
+          "depth_zc": 152.661,
+          "accepted": true,
+          "rejection_reason": null
+        }
+      ],
+      "rejected_observations": [],
+      "source_frames": [
+        "frame_00000.jpg"
+      ]
+    },
+    {
+      "object_id": "OBJ_T0020",
+      "track_id": "T0020",
+      "class": "car",
+      "class_name": "car",
+      "motion_state": "STATIC",
+      "coordinate_system": "LOCAL_ARBITRARY",
+      "position_3d": [
+        -18.4753,
+        0.2537,
+        148.0135
+      ],
+      "trajectory_3d": [
+        {
+          "timestamp": 9.25,
+          "frame_id": "frame_00007.jpg",
+          "x": -18.8707,
+          "y": 0.4284,
+          "z": 147.6107,
+          "reprojection_error_px": 8.03
+        },
+        {
+          "timestamp": 10.625,
+          "frame_id": "frame_00008.jpg",
+          "x": -18.0799,
+          "y": 0.079,
+          "z": 148.4162,
+          "reprojection_error_px": 8.01
+        }
+      ],
+      "association_status": "LOW_CONFIDENCE",
+      "association_confidence": 0.4824,
+      "reprojection_error": 8.02,
+      "mean_reprojection_error_px": 8.02,
+      "median_reprojection_error_px": 8.02,
+      "p90_reprojection_error_px": 8.03,
+      "evidence_count": 2,
+      "rejected_count": 0,
+      "association_method": "MESH_SURFACE_INTERSECTION",
+      "observations": [
+        {
+          "frame_id": "frame_00007.jpg",
+          "image_name": "frame_00007.jpg",
+          "camera_id": 1,
+          "bbox_2d": [
+            426.52,
+            484.07,
+            526.53,
+            532.14
+          ],
+          "pixel_center": [
+            476.52,
+            508.11
+          ],
+          "timestamp": 9.25,
+          "detection_confidence": 0.4788,
+          "point_3d": [
+            -18.4753,
+            0.2537,
+            148.0135
+          ],
+          "reprojected_pixel": [
+            483.94,
+            505.02
+          ],
+          "reprojection_error_px": 8.03,
+          "depth_zc": 147.772,
+          "accepted": true,
+          "rejection_reason": null
+        },
+        {
+          "frame_id": "frame_00008.jpg",
+          "image_name": "frame_00008.jpg",
+          "camera_id": 1,
+          "bbox_2d": [
+            421.88,
+            486.92,
+            506.77,
+            527.73
+          ],
+          "pixel_center": [
+            464.32,
+            507.33
+          ],
+          "timestamp": 10.625,
+          "detection_confidence": 0.3931,
+          "point_3d": [
+            -18.4753,
+            0.2537,
+            148.0135
+          ],
+          "reprojected_pixel": [
+            456.95,
+            510.47
+          ],
+          "reprojection_error_px": 8.01,
+          "depth_zc": 147.418,
+          "accepted": true,
+          "rejection_reason": null
+        }
+      ],
+      "rejected_observations": [],
+      "source_frames": [
+        "frame_00007.jpg",
+        "frame_00008.jpg"
+      ]
+    }
+  ]
+}

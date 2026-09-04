@@ -117,6 +117,8 @@ class Detection(Base):
     evidence_key: Mapped[str | None] = mapped_column(Text)
     object_position: Mapped[str | None] = mapped_column(PortableGeometry("POINT"))
     bbox: Mapped[list[float] | None] = mapped_column(JSON)
+    camera_image_id: Mapped[int | None] = mapped_column(Integer)
+    reprojection_error: Mapped[float | None] = mapped_column(Float)
     mission: Mapped[Mission] = relationship(back_populates="detections")
 
 
@@ -134,6 +136,14 @@ class Track(Base):
     detection_count: Mapped[int] = mapped_column(Integer, default=0)
     average_confidence: Mapped[float | None] = mapped_column(Float)
     trajectory_2d: Mapped[list[Any] | None] = mapped_column(JSON)
+    position_3d: Mapped[list[float] | None] = mapped_column(JSON)
+    coordinate_system: Mapped[str] = mapped_column(String(80), default="LOCAL_ARBITRARY", nullable=False)
+    association_status: Mapped[str] = mapped_column(String(50), default="INSUFFICIENT_EVIDENCE", nullable=False)
+    association_confidence: Mapped[float | None] = mapped_column(Float)
+    reprojection_error: Mapped[float | None] = mapped_column(Float)
+    motion_state: Mapped[str] = mapped_column(String(50), default="UNKNOWN", nullable=False)
+    trajectory_3d: Mapped[list[Any] | None] = mapped_column(JSON)
+    evidence_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
     mission: Mapped[Mission] = relationship(back_populates="tracks")
 

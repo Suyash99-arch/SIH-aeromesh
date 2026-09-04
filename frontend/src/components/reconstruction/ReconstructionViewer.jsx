@@ -85,6 +85,43 @@ function RealMesh({ url, mode }) {
   );
 }
 
+function SemanticObjects3D({ objects }) {
+  if (!objects || !Array.isArray(objects) || objects.length === 0) return null;
+  return (
+    <group>
+      {objects.map((obj, i) => {
+        if (!obj.position_3d || obj.association_status === "REJECTED") return null;
+        const [x, y, z] = obj.position_3d;
+        const isMoving = obj.motion_state === "MOVING";
+        const color = isMoving ? "#ffaa00" : "#00ffcc";
+        const scale = 0.05;
+        return (
+          <group key={obj.object_id || i} position={[x * scale, y * scale, z * scale]}>
+            <mesh>
+              <boxGeometry args={[0.8, 0.4, 1.2]} />
+              <meshStandardMaterial
+                color={color}
+                wireframe={true}
+                emissive={color}
+                emissiveIntensity={0.6}
+              />
+            </mesh>
+            <Text
+              position={[0, 0.6, 0]}
+              fontSize={0.25}
+              color={color}
+              anchorX="center"
+              anchorY="bottom"
+            >
+              {`${obj.class_name || obj.class || "object"} (${obj.motion_state || "STATIC"})`}
+            </Text>
+          </group>
+        );
+      })}
+    </group>
+  );
+}
+
 function Terrain({ mode }) {
   const geometry = useMemo(() => {
     const g = new THREE.PlaneGeometry(24, 18, 42, 32);
@@ -510,6 +547,7 @@ function Scene({ layers, mode, onFinding, mission }) {
           />
         ))}
       {layers.confidence && mission.measurements && <MeasurementOverlays mission={mission} />}
+      <SemanticObjects3D objects={mission?.objects_3d || mission?.semantic_scene?.objects} />
       <Stars radius={45} depth={30} count={900} factor={2} />
       <OrbitControls
         makeDefault

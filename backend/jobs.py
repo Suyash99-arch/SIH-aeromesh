@@ -12,7 +12,7 @@ from .models import ProcessingJob
 
 JOB_STAGES = (
     "QUEUED", "VALIDATING", "EXTRACTING_FRAMES", "DETECTING_OBJECTS",
-    "TRACKING", "RECONSTRUCTING", "GENERATING_MESH", "ANALYZING",
+    "TRACKING", "RECONSTRUCTING", "GENERATING_MESH", "FUSING_3D", "ANALYZING",
     "COMPLETED", "FAILED",
 )
 _local_jobs: dict[str, dict[str, Any]] = {}

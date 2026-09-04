@@ -1374,6 +1374,83 @@ async def get_mission_object_summary(mission_id: str):
     return {"success": True, "mission_id": mission_id, **payload["summary"]}
 
 
+@app.get("/api/missions/{mission_id}/semantic-scene")
+async def get_mission_semantic_scene(mission_id: str):
+    """Return the 3D semantic scene representation with spatial fusion results."""
+    mission = MissionData(mission_id)
+    if not mission.data:
+        raise HTTPException(status_code=404, detail="Mission not found")
+
+    scene = mission.get("semantic_scene")
+    if not scene:
+        objects_3d = mission.get("objects_3d") or []
+        scene = {
+            "coordinate_system": "LOCAL_ARBITRARY",
+            "scale_status": "RELATIVE_SCALE",
+            "georeferencing_status": "UNREFERENCED",
+            "total_objects": len(objects_3d),
+            "valid_objects": sum(1 for obj in objects_3d if obj.get("association_status") == "VALID"),
+            "moving_objects": sum(1 for obj in objects_3d if obj.get("motion_state") == "MOVING"),
+            "static_objects": sum(1 for obj in objects_3d if obj.get("motion_state") == "STATIC"),
+            "objects": objects_3d,
+        }
+    return {"success": True, "mission_id": mission_id, "semantic_scene": scene}
+
+
+@app.get("/api/missions/{mission_id}/objects-3d")
+async def get_mission_objects_3d(mission_id: str):
+    """Return the list of 3D objects associated with the reconstructed scene."""
+    mission = MissionData(mission_id)
+    if not mission.data:
+        raise HTTPException(status_code=404, detail="Mission not found")
+
+    objects_3d = mission.get("objects_3d") or []
+    return {
+        "success": True,
+        "mission_id": mission_id,
+        "coordinate_system": "LOCAL_ARBITRARY",
+        "scale_status": "RELATIVE_SCALE",
+        "georeferencing_status": "UNREFERENCED",
+        "total_objects": len(objects_3d),
+        "objects": objects_3d,
+    }
+
+
+@app.get("/api/missions/{mission_id}/objects/{object_id}/3d")
+async def get_mission_object_3d(mission_id: str, object_id: str):
+    """Return 3D spatial fusion details, trajectory, and reprojection evidence for a specific object."""
+    mission = MissionData(mission_id)
+    if not mission.data:
+        raise HTTPException(status_code=404, detail="Mission not found")
+
+    objects_3d = mission.get("objects_3d") or []
+    match = None
+    for obj in objects_3d:
+        if obj.get("object_id") == object_id or obj.get("track_id") == object_id:
+            match = obj
+            break
+
+    if not match:
+        raise HTTPException(status_code=404, detail=f"3D Object {object_id} not found in mission")
+
+    return {"success": True, "mission_id": mission_id, "object": match}
+
+
+@app.post("/api/missions/{mission_id}/fuse-3d")
+async def fuse_mission_objects_3d(mission_id: str, reprojection_threshold_px: float = 25.0):
+    """Trigger AI-to-3D spatial fusion for a mission."""
+    mission = MissionData(mission_id)
+    if not mission.data:
+        raise HTTPException(status_code=404, detail="Mission not found")
+
+    from backend.jobs import create_job
+    from backend.tasks import fuse_objects_3d
+
+    job = create_job(mission_id, parameters={"reprojection_threshold_px": reprojection_threshold_px})
+    result = fuse_objects_3d(job["id"], mission_id=mission_id, reprojection_threshold_px=reprojection_threshold_px)
+    return {"success": True, "job_id": job["id"], "mission_id": mission_id, "result": result}
+
+
 @app.get("/api/missions/{mission_id}/reconstruction/pointcloud")
 async def get_mission_pointcloud(mission_id: str):
     """Serve the generated PLY point cloud for a mission if it exists."""

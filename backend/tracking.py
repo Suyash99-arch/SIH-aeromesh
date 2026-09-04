@@ -18,6 +18,7 @@ class TrackRecord:
     detection_count: int = 0
     confidences: list[float] = field(default_factory=list)
     trajectory: list[list[float]] = field(default_factory=list)
+    observations: list[dict[str, Any]] = field(default_factory=list)
     missed_frames: int = 0
 
     @property
@@ -67,6 +68,12 @@ class ByteTrackAdapter:
                 candidate.detection_count += 1
                 candidate.confidences.append(detection.confidence)
                 candidate.trajectory.append([(detection.bbox[0] + detection.bbox[2]) / 2, (detection.bbox[1] + detection.bbox[3]) / 2])
+                candidate.observations.append({
+                    "frame_id": detection.frame_id,
+                    "bbox": [float(v) for v in detection.bbox],
+                    "confidence": float(detection.confidence),
+                    "timestamp": float(detection.timestamp),
+                })
                 candidate.missed_frames = 0
                 matched.add(id(candidate))
             survivors = []
@@ -86,10 +93,35 @@ class ByteTrackAdapter:
         for track in tracks:
             if id(track) in matched or track.class_name != detection.class_name or not track.trajectory:
                 continue
-            previous = track.trajectory[-1]
-            current = [(detection.bbox[0] + detection.bbox[2]) / 2, (detection.bbox[1] + detection.bbox[3]) / 2]
-            distance = abs(previous[0] - current[0]) + abs(previous[1] - current[1])
-            score = 1 / (1 + distance)
+            if track.observations:
+                prev_bbox = track.observations[-1]["bbox"]
+                det_bbox = detection.bbox
+                ix1 = max(prev_bbox[0], det_bbox[0])
+                iy1 = max(prev_bbox[1], det_bbox[1])
+                ix2 = min(prev_bbox[2], det_bbox[2])
+                iy2 = min(prev_bbox[3], det_bbox[3])
+                iw = max(0.0, ix2 - ix1)
+                ih = max(0.0, iy2 - iy1)
+                inter = iw * ih
+                a1 = max(0.0, prev_bbox[2] - prev_bbox[0]) * max(0.0, prev_bbox[3] - prev_bbox[1])
+                a2 = max(0.0, det_bbox[2] - det_bbox[0]) * max(0.0, det_bbox[3] - det_bbox[1])
+                union = a1 + a2 - inter
+                iou = inter / union if union > 0 else 0.0
+                score = iou
+                if score < self.iou_threshold:
+                    cx1 = (prev_bbox[0] + prev_bbox[2]) / 2.0
+                    cy1 = (prev_bbox[1] + prev_bbox[3]) / 2.0
+                    cx2 = (det_bbox[0] + det_bbox[2]) / 2.0
+                    cy2 = (det_bbox[1] + det_bbox[3]) / 2.0
+                    dist = ((cx1 - cx2)**2 + (cy1 - cy2)**2)**0.5
+                    diag = max(30.0, ((prev_bbox[2] - prev_bbox[0])**2 + (prev_bbox[3] - prev_bbox[1])**2)**0.5)
+                    if dist <= diag * 1.5:
+                        score = max(score, max(0.0, 1.0 - dist / (diag * 1.5)))
+            else:
+                previous = track.trajectory[-1]
+                current = [(detection.bbox[0] + detection.bbox[2]) / 2, (detection.bbox[1] + detection.bbox[3]) / 2]
+                distance = abs(previous[0] - current[0]) + abs(previous[1] - current[1])
+                score = 1 / (1 + distance)
             if score > best_score:
                 best_score = score
                 best = track
