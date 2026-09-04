@@ -98,7 +98,12 @@ function normalizeMission(rawMission = {}) {
       video: videoUrl || rawMission.assets?.video || "",
       pointCloud:
         rawMission.assets?.pointCloud ||
+        rawMission.reconstruction?.point_cloud_url ||
         rawMission.reconstruction?.pointCloud ||
+        "",
+      mesh:
+        rawMission.assets?.mesh ||
+        rawMission.reconstruction?.mesh_url ||
         "",
     },
   };

@@ -1,4 +1,4 @@
-﻿"""
+"""
 AeroMesh Single-Pass Reconstruction Backend
 Handles mission management, video processing, and 3D reconstruction
 """
@@ -33,7 +33,12 @@ except Exception:  # pragma: no cover
     load_dotenv = None
 
 try:
-    from backend.reconstruction import get_reconstruction_pointcloud_path, run_reconstruction_for_mission
+    from backend.reconstruction import (
+        get_reconstruction_pointcloud_path,
+        get_reconstruction_mesh_path,
+        get_reconstruction_metadata,
+        run_reconstruction_for_mission,
+    )
 except Exception:  # pragma: no cover
     def run_reconstruction_for_mission(*args, **kwargs):
         return {
@@ -45,6 +50,10 @@ except Exception:  # pragma: no cover
             "output_path": None,
         }
     def get_reconstruction_pointcloud_path(*args, **kwargs):
+        return None
+    def get_reconstruction_mesh_path(*args, **kwargs):
+        return None
+    def get_reconstruction_metadata(*args, **kwargs):
         return None
 
 try:
@@ -1309,7 +1318,8 @@ async def get_mission_reconstruction(mission_id: str):
     if not mission.data:
         raise HTTPException(status_code=404, detail="Mission not found")
 
-    reconstruction = mission.get("reconstruction") or {
+    meta = get_reconstruction_metadata(mission_id)
+    reconstruction = meta or mission.get("reconstruction") or {
         "status": "UNKNOWN",
         "point_count": 0,
         "success": False,
@@ -1382,12 +1392,43 @@ async def get_mission_pointcloud(mission_id: str):
     )
 
 
+@app.get("/api/missions/{mission_id}/reconstruction/mesh")
+async def get_mission_mesh(mission_id: str):
+    """Serve the generated PLY mesh for a mission if it exists."""
+    mission = MissionData(mission_id)
+    if not mission.data:
+        raise HTTPException(status_code=404, detail="Mission not found")
+
+    mesh_path = get_reconstruction_mesh_path(mission_id)
+    if not mesh_path or not mesh_path.exists():
+        raise HTTPException(status_code=404, detail="Reconstruction mesh not found")
+
+    return FileResponse(
+        path=str(mesh_path),
+        media_type="application/octet-stream",
+        filename=mesh_path.name,
+    )
+
+
 @app.post("/api/missions/{mission_id}/reconstruct")
 async def generate_reconstruction(mission_id: str):
     """Generate 3D reconstruction for a mission"""
     mission = MissionData(mission_id)
     if not mission.data:
         raise HTTPException(status_code=404, detail="Mission not found")
+
+    # If real video exists, trigger the authoritative photogrammetric pipeline
+    video_path_raw = mission.get("video_path")
+    if video_path_raw and Path(video_path_raw).exists():
+        recon_res = run_reconstruction_for_mission(mission_id, Path(video_path_raw))
+        mission.update({
+            "reconstruction": recon_res,
+            "status": recon_res.get("status", "COMPLETED"),
+        })
+        return {
+            "success": bool(recon_res.get("success")),
+            "reconstruction": recon_res,
+        }
     
     detections = mission.get("detections")
     if not detections:

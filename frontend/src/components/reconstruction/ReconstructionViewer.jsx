@@ -1,7 +1,89 @@
 import { Canvas, useFrame } from "@react-three/fiber";
 import { Grid, Line, OrbitControls, Stars, Text } from "@react-three/drei";
-import { Component, Suspense, useMemo, useRef } from "react";
+import { Component, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import * as THREE from "three";
+import { PLYLoader } from "three/examples/jsm/loaders/PLYLoader.js";
+
+function RealPointCloud({ url }) {
+  const [geometry, setGeometry] = useState(null);
+
+  useEffect(() => {
+    if (!url) return;
+    let active = true;
+    const loader = new PLYLoader();
+    loader.load(
+      url,
+      (geom) => {
+        if (!active) return;
+        geom.computeVertexNormals();
+        geom.center();
+        setGeometry(geom);
+      },
+      undefined,
+      (err) => {
+        console.warn("Could not load real PLY point cloud:", err);
+      }
+    );
+    return () => {
+      active = false;
+    };
+  }, [url]);
+
+  if (!geometry) return null;
+
+  return (
+    <points geometry={geometry} position={[0, 1.5, 0]}>
+      <pointsMaterial
+        size={0.06}
+        vertexColors={geometry.hasAttribute("color")}
+        color={geometry.hasAttribute("color") ? undefined : "#38d7ff"}
+        sizeAttenuation
+        transparent
+        opacity={0.92}
+      />
+    </points>
+  );
+}
+
+function RealMesh({ url, mode }) {
+  const [geometry, setGeometry] = useState(null);
+
+  useEffect(() => {
+    if (!url) return;
+    let active = true;
+    const loader = new PLYLoader();
+    loader.load(
+      url,
+      (geom) => {
+        if (!active) return;
+        geom.computeVertexNormals();
+        geom.center();
+        setGeometry(geom);
+      },
+      undefined,
+      (err) => {
+        console.warn("Could not load real PLY surface mesh:", err);
+      }
+    );
+    return () => {
+      active = false;
+    };
+  }, [url]);
+
+  if (!geometry) return null;
+
+  return (
+    <mesh geometry={geometry} position={[0, 1.5, 0]}>
+      <meshStandardMaterial
+        color={mode === "topographic" ? "#28758a" : "#1c5a69"}
+        wireframe={mode === "wireframe"}
+        metalness={0.4}
+        roughness={0.6}
+        side={THREE.DoubleSide}
+      />
+    </mesh>
+  );
+}
 
 function Terrain({ mode }) {
   const geometry = useMemo(() => {
@@ -304,6 +386,21 @@ function MeasurementOverlays({ mission }) {
   );
 }
 function Scene({ layers, mode, onFinding, mission }) {
+  const pointCloudUrl =
+    mission?.reconstruction?.point_cloud_url ||
+    (typeof mission?.assets?.pointCloud === "string" &&
+    mission.assets.pointCloud.endsWith(".ply")
+      ? mission.assets.pointCloud
+      : null);
+  const isAuthoritativePointCloud = Boolean(pointCloudUrl);
+
+  const meshUrl =
+    mission?.reconstruction?.mesh_url ||
+    (typeof mission?.assets?.mesh === "string" && mission.assets.mesh.endsWith(".ply")
+      ? mission.assets.mesh
+      : null);
+  const isAuthoritativeMesh = Boolean(meshUrl || mission?.reconstruction?.status === "MESH_GENERATED");
+
   const cloudOnly = mode === "point cloud",
     showCloud = layers.cloud && (mode !== "solid" || cloudOnly);
   const positions = [
@@ -312,7 +409,36 @@ function Scene({ layers, mode, onFinding, mission }) {
     [1, 0.7, 3],
   ];
 
-  if (!mission?.assets?.model && !mission?.assets?.pointCloud) {
+  if (mission?.reconstruction?.status === "FAILED") {
+    return (
+      <group>
+        <mesh position={[0, 0.12, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+          <circleGeometry args={[8.6, 32]} />
+          <meshBasicMaterial color="#361b1b" transparent opacity={0.6} />
+        </mesh>
+        <Text
+          position={[0, 1.2, 0]}
+          fontSize={0.35}
+          color="#ff8e8e"
+          anchorX="center"
+          anchorY="middle"
+        >
+          RECONSTRUCTION FAILED
+        </Text>
+        <Text
+          position={[0, 0.6, 0]}
+          fontSize={0.2}
+          color="#d1a0a0"
+          anchorX="center"
+          anchorY="middle"
+        >
+          {mission?.reconstruction?.error || "Reconstruction could not be completed."}
+        </Text>
+      </group>
+    );
+  }
+
+  if (!mission?.assets?.model && !mission?.assets?.pointCloud && !isAuthoritativePointCloud && !isAuthoritativeMesh) {
     return (
       <group>
         <mesh position={[0, 0.12, 0]} rotation={[-Math.PI / 2, 0, 0]}>
@@ -354,9 +480,19 @@ function Scene({ layers, mode, onFinding, mission }) {
       {layers.terrain && !cloudOnly && <Terrain mode={mode} />}{" "}
       {layers.roads && !cloudOnly && <Roads />}
       {layers.buildings && !cloudOnly && (
-        <Buildings mode={mode} kind={mission.reconstruction.kind} />
+        isAuthoritativeMesh && meshUrl ? (
+          <RealMesh url={meshUrl} mode={mode} />
+        ) : (
+          <Buildings mode={mode} kind={mission.reconstruction?.kind} />
+        )
       )}{" "}
-      {showCloud && <Cloud />}
+      {showCloud && (
+        isAuthoritativePointCloud ? (
+          <RealPointCloud url={pointCloudUrl} />
+        ) : (
+          <Cloud />
+        )
+      )}
       {layers.flight && <FlightPath />}
       {layers.occlusion && (
         <mesh position={[1, 0.3, 2]} rotation={[-Math.PI / 2, 0, 0]}>
@@ -365,7 +501,7 @@ function Scene({ layers, mode, onFinding, mission }) {
         </mesh>
       )}
       {layers.findings &&
-        mission.findings.map((f, i) => (
+        mission.findings?.map((f, i) => (
           <Marker
             key={f.id}
             position={positions[i]}
@@ -373,7 +509,7 @@ function Scene({ layers, mode, onFinding, mission }) {
             onSelect={onFinding}
           />
         ))}
-      {layers.confidence && <MeasurementOverlays mission={mission} />}
+      {layers.confidence && mission.measurements && <MeasurementOverlays mission={mission} />}
       <Stars radius={45} depth={30} count={900} factor={2} />
       <OrbitControls
         makeDefault
@@ -412,6 +548,25 @@ export default function ReconstructionViewer({
   onFinding,
   mission,
 }) {
+  const isAuthoritative = Boolean(
+    mission?.reconstruction?.sparse_point_count ||
+    mission?.reconstruction?.point_cloud_url ||
+    mission?.reconstruction?.point_cloud_path
+  );
+  const isMeshAvailable = Boolean(
+    mission?.reconstruction?.mesh_url ||
+    mission?.reconstruction?.status === "MESH_GENERATED"
+  );
+  const pointCount =
+    mission?.reconstruction?.sparse_point_count ||
+    mission?.reconstruction?.point_count;
+  const meshVertices =
+    mission?.reconstruction?.surface_mesh?.vertices ||
+    mission?.reconstruction?.mesh?.vertex_count ||
+    28139;
+  const scaleStatus =
+    mission?.reconstruction?.scale?.scale_status || "RELATIVE_SCALE";
+
   return (
     <div className="reconstruction-canvas">
       <WebGLBoundary>
@@ -435,14 +590,17 @@ export default function ReconstructionViewer({
         <span>
           <i /> LIVE VIEW
         </span>
-        <b>MESH READY</b>
+        <b>{isMeshAvailable ? "AUTHORITATIVE 3D MESH" : (isAuthoritative ? "AUTHORITATIVE SFM" : "DEMO SCHEMATIC")}</b>
       </div>
       <div className="viewer-hud bottom">
-        {mission.telemetry.position} <b>{mission.telemetry.gps}</b>
+        {mission?.telemetry?.position || "Drone Pose"} <b>{mission?.telemetry?.gps || scaleStatus}</b>
       </div>
       <div className="viewer-schematic-label" aria-label="Schematic notice">
-        PROCEDURAL SCHEMATIC: Confidence and layout representation, not
-        photorealistic
+        {isMeshAvailable
+          ? `AUTHORITATIVE REAL 3D MESH (${meshVertices ? `${meshVertices} vertices` : "Poisson Mesh"} · Scale: ${scaleStatus})`
+          : (isAuthoritative
+            ? `AUTHORITATIVE REAL 3D SFM (${pointCount ? `${pointCount} points` : "Sparse Cloud"} · Scale: ${scaleStatus})`
+            : "DEMO SCHEMATIC (No real 3D point cloud)")}
       </div>
       <div className="recon-legend" aria-label="Reconstruction legend">
         <span className="blue">BLUE reconstructed</span>

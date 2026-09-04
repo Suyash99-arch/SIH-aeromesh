@@ -1,0 +1,288 @@
+{
+  "success": true,
+  "status": "MESH_GENERATED",
+  "sparse_point_count": 12916,
+  "registered_cameras": 20,
+  "point_cloud_url": "/api/missions/phase5_drone_validation/reconstruction/pointcloud",
+  "mesh_url": "/api/missions/phase5_drone_validation/reconstruction/mesh",
+  "validation_phase": "PHASE_5_COLMAP_RECONSTRUCTION_AND_MESH",
+  "timestamp": "2026-09-04T11:52:14Z",
+  "mission_id": "phase5_drone_validation",
+  "video_source": "C:\\Users\\Kaustubh\\OneDrive\\Desktop\\SIH 2026\\WhatsApp Video 2026-09-01 at 11.27.02 (1).mp4",
+  "video_metadata": {
+    "available": true,
+    "resolution": {
+      "width": 3840,
+      "height": 2160
+    },
+    "fps": 24.0,
+    "total_frames": 725,
+    "duration_seconds": 30.21,
+    "intrinsics_status": "ESTIMATED",
+    "intrinsics_source": "ESTIMATED_BY_COLMAP",
+    "intrinsics_model": "PINHOLE_RADIAL",
+    "intrinsics_note": "Factory camera intrinsics not embedded; estimated automatically via COLMAP self-calibration."
+  },
+  "frame_selection": {
+    "selected_frames": 20,
+    "resolution": "1920x1080",
+    "frames_dir": "data/missions/phase5_drone_validation/reconstruction/frames"
+  },
+  "sparse_reconstruction": {
+    "status": "SPARSE_RECONSTRUCTED",
+    "engine": "pycolmap_authoritative",
+    "camera_model": "SIMPLE_PINHOLE",
+    "camera_parameters": {
+      "focal_length_px": 2429.349,
+      "principal_point_px": [
+        960.0,
+        540.0
+      ]
+    },
+    "registered_cameras": 20,
+    "total_images": 20,
+    "registration_ratio": 1.0,
+    "sparse_point_count": 12916,
+    "mean_reprojection_error_px": 0.9785,
+    "mean_track_length": 12.21,
+    "ply_path": "data\\missions\\phase5_drone_validation\\reconstruction\\point_cloud.ply",
+    "storage_key": "missions/phase5_drone_validation/reconstruction/point_cloud.ply",
+    "file_size_bytes": 193929
+  },
+  "dense_reconstruction": {
+    "status": "UNAVAILABLE",
+    "point_count": 0,
+    "undistorted_images": 20,
+    "image_undistortion_status": "COMPLETED",
+    "mvs_method": "patch_match_stereo",
+    "reason": "Dense stereo reconstruction requires CUDA or HIP, neither of which is available on your system.",
+    "truthfulness_note": "No synthetic dense points were fabricated. Sparse SfM preserved as authoritative geometry."
+  },
+  "surface_mesh": {
+    "status": "AVAILABLE",
+    "method": "pycolmap_poisson",
+    "vertices": 28139,
+    "faces": 56120,
+    "depth": 8,
+    "trim": 2.0,
+    "bounding_box": {
+      "min": [
+        -65.7521,
+        -54.2518,
+        116.297
+      ],
+      "max": [
+        107.474,
+        66.938,
+        176.7886
+      ],
+      "dimensions": [
+        173.2261,
+        121.1898,
+        60.4916
+      ]
+    },
+    "ply_path": "data\\missions\\phase5_drone_validation\\reconstruction\\mesh.ply",
+    "storage_key": "missions/phase5_drone_validation/reconstruction/mesh.ply",
+    "file_size_bytes": 1432817
+  },
+  "scale_and_georeferencing": {
+    "scale_status": "RELATIVE_SCALE",
+    "georeferencing_status": "UNREFERENCED",
+    "coordinate_system": "LOCAL_ARBITRARY",
+    "scale_method": "MONOCULAR_SFM_ESTIMATED",
+    "uncertainty_note": "Monocular video SfM is scale-ambiguous; units are arbitrary relative coordinates, not true meters."
+  },
+  "database_persistence": {
+    "registered": false,
+    "storage_provider": "local_filesystem_abstraction"
+  },
+  "camera_poses": [
+    {
+      "image_id": 5,
+      "image_name": "frame_00004.jpg",
+      "position": [
+        3.3303,
+        0.1438,
+        -1.1491
+      ]
+    },
+    {
+      "image_id": 20,
+      "image_name": "frame_00019.jpg",
+      "position": [
+        -6.3917,
+        -0.4406,
+        1.9063
+      ]
+    },
+    {
+      "image_id": 12,
+      "image_name": "frame_00011.jpg",
+      "position": [
+        -0.2749,
+        0.2086,
+        0.2029
+      ]
+    },
+    {
+      "image_id": 13,
+      "image_name": "frame_00012.jpg",
+      "position": [
+        -2.0543,
+        -0.2022,
+        0.8539
+      ]
+    },
+    {
+      "image_id": 19,
+      "image_name": "frame_00018.jpg",
+      "position": [
+        -5.9307,
+        -0.3777,
+        1.8802
+      ]
+    },
+    {
+      "image_id": 11,
+      "image_name": "frame_00010.jpg",
+      "position": [
+        1.4611,
+        0.2107,
+        -0.5952
+      ]
+    },
+    {
+      "image_id": 10,
+      "image_name": "frame_00009.jpg",
+      "position": [
+        2.4924,
+        0.1602,
+        -1.1787
+      ]
+    },
+    {
+      "image_id": 2,
+      "image_name": "frame_00003.jpg",
+      "position": [
+        3.95,
+        0.0467,
+        -1.5023
+      ]
+    },
+    {
+      "image_id": 8,
+      "image_name": "frame_00006.jpg",
+      "position": [
+        2.5202,
+        0.1993,
+        -1.1418
+      ]
+    },
+    {
+      "image_id": 17,
+      "image_name": "frame_00016.jpg",
+      "position": [
+        -4.534,
+        0.0571,
+        1.8389
+      ]
+    },
+    {
+      "image_id": 16,
+      "image_name": "frame_00015.jpg",
+      "position": [
+        -3.9723,
+        -0.156,
+        1.7179
+      ]
+    },
+    {
+      "image_id": 15,
+      "image_name": "frame_00014.jpg",
+      "position": [
+        -3.4618,
+        -0.2225,
+        1.6015
+      ]
+    },
+    {
+      "image_id": 14,
+      "image_name": "frame_00013.jpg",
+      "position": [
+        -2.1388,
+        -0.1259,
+        1.0909
+      ]
+    },
+    {
+      "image_id": 9,
+      "image_name": "frame_00008.jpg",
+      "position": [
+        2.0627,
+        0.1952,
+        -1.1351
+      ]
+    },
+    {
+      "image_id": 7,
+      "image_name": "frame_00007.jpg",
+      "position": [
+        2.2813,
+        0.3341,
+        -1.1468
+      ]
+    },
+    {
+      "image_id": 18,
+      "image_name": "frame_00017.jpg",
+      "position": [
+        -3.6654,
+        0.3027,
+        1.3372
+      ]
+    },
+    {
+      "image_id": 6,
+      "image_name": "frame_00005.jpg",
+      "position": [
+        2.7492,
+        0.1591,
+        -1.074
+      ]
+    },
+    {
+      "image_id": 3,
+      "image_name": "frame_00002.jpg",
+      "position": [
+        3.5331,
+        -0.1974,
+        -1.278
+      ]
+    },
+    {
+      "image_id": 1,
+      "image_name": "frame_00001.jpg",
+      "position": [
+        2.5805,
+        -0.3087,
+        -0.9331
+      ]
+    },
+    {
+      "image_id": 4,
+      "image_name": "frame_00000.jpg",
+      "position": [
+        3.0214,
+        -0.0929,
+        -0.8915
+      ]
+    }
+  ],
+  "truthfulness_attestation": {
+    "fabricated_geometry": false,
+    "metric_scale_claimed": false,
+    "unreferenced_scale_flagged": true,
+    "dense_failure_truthfully_reported": true
+  }
+}

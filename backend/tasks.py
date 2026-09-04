@@ -57,6 +57,37 @@ def _tracking_task(job_id: str, detections=None, *args, **kwargs):
     return result
 
 
+def _reconstruction_task(job_id: str, mission_id: str = "", video_path=None, max_frames: int = 40, *args, **kwargs):
+    update_job(job_id, status="RECONSTRUCTING", stage="RECONSTRUCTING", progress_percent=20, message="Extracting and filtering frames for 3D reconstruction")
+    from pathlib import Path
+    from .reconstruction import run_reconstruction_for_mission
+
+    def progress_cb(msg: str, pct: int):
+        stage = "GENERATING_MESH" if pct >= 85 else "RECONSTRUCTING"
+        update_job(job_id, status=stage, stage=stage, progress_percent=pct, message=msg)
+
+    try:
+        recon_result = run_reconstruction_for_mission(
+            mission_id=mission_id,
+            video_path=Path(video_path) if video_path else Path(""),
+            max_frames=max_frames,
+            progress_cb=progress_cb,
+        )
+    except Exception as exc:
+        update_job(job_id, status="FAILED", stage="FAILED", error_message=f"RECONSTRUCTION_FAILED: {exc}", message="Reconstruction failed")
+        return get_job_result(job_id)
+
+    if not recon_result.get("success"):
+        update_job(job_id, status="FAILED", stage="FAILED", error_message=recon_result.get("error", "Reconstruction failed"), message="Reconstruction failed")
+        return get_job_result(job_id)
+
+    status = "COMPLETED" if recon_result.get("sparse_point_count", 0) >= 100 else "PARTIAL"
+    update_job(job_id, status=status, stage=status, progress_percent=100, message=f"3D reconstruction complete ({recon_result.get('sparse_point_count', 0)} points)")
+    result = get_job_result(job_id) or {}
+    result["reconstruction"] = recon_result
+    return result
+
+
 def get_job_result(job_id):
     from .jobs import get_job
     return get_job(job_id)
@@ -73,10 +104,11 @@ extract_frames = _register("extract_frames")
 if celery_app is not None:
     detect_objects = celery_app.task(name="aeromesh.detect_objects")(_detection_task)
     track_objects = celery_app.task(name="aeromesh.track_objects")(_tracking_task)
+    reconstruct = celery_app.task(name="aeromesh.reconstruct")(_reconstruction_task)
 else:
     detect_objects = _detection_task
     track_objects = _tracking_task
-reconstruct = _register("reconstruct")
+    reconstruct = _reconstruction_task
 generate_mesh = _register("generate_mesh")
 analyze = _register("analyze")
 generate_report = _register("generate_report")
