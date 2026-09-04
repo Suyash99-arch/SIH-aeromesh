@@ -1,7 +1,7 @@
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import DateTime, Float, ForeignKey, Integer, JSON, String, Text
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, JSON, String, Text
 from sqlalchemy.ext.compiler import compiles
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import TypeDecorator
@@ -47,6 +47,7 @@ class Mission(Base):
     detections: Mapped[list["Detection"]] = relationship(back_populates="mission", cascade="all, delete-orphan")
     tracks: Mapped[list["Track"]] = relationship(back_populates="mission", cascade="all, delete-orphan")
     reconstruction_assets: Mapped[list["ReconstructionAsset"]] = relationship(back_populates="mission", cascade="all, delete-orphan")
+    calibrations: Mapped[list["Calibration"]] = relationship(back_populates="mission", cascade="all, delete-orphan")
     measurements: Mapped[list["Measurement"]] = relationship(back_populates="mission", cascade="all, delete-orphan")
     reports: Mapped[list["Report"]] = relationship(back_populates="mission", cascade="all, delete-orphan")
     findings: Mapped[list["Finding"]] = relationship(back_populates="mission", cascade="all, delete-orphan")
@@ -159,6 +160,26 @@ class ReconstructionAsset(Base):
     mission: Mapped[Mission] = relationship(back_populates="reconstruction_assets")
 
 
+class Calibration(Base):
+    __tablename__ = "calibrations"
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    calibration_id: Mapped[str] = mapped_column(String(80), unique=True, index=True, nullable=False)
+    mission_id: Mapped[str] = mapped_column(ForeignKey("missions.id", ondelete="CASCADE"), index=True)
+    method: Mapped[str] = mapped_column(String(80), nullable=False)
+    scale_factor: Mapped[float] = mapped_column(Float, nullable=False)
+    unit: Mapped[str] = mapped_column(String(20), default="m", nullable=False)
+    reference_points: Mapped[list[Any]] = mapped_column(JSON, default=list, nullable=False)
+    known_value: Mapped[float | None] = mapped_column(Float)
+    reconstructed_value: Mapped[float | None] = mapped_column(Float)
+    source_evidence: Mapped[str | None] = mapped_column(Text)
+    confidence: Mapped[float] = mapped_column(Float, default=1.0, nullable=False)
+    coordinate_system: Mapped[str] = mapped_column(String(50), default="LOCAL_ARBITRARY", nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    uncertainty: Mapped[float | None] = mapped_column(Float)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    mission: Mapped[Mission] = relationship(back_populates="calibrations")
+
+
 class Measurement(Base):
     __tablename__ = "measurements"
     id: Mapped[int] = mapped_column(Integer, primary_key=True)
@@ -167,6 +188,13 @@ class Measurement(Base):
     value: Mapped[float | None] = mapped_column(Float)
     confidence: Mapped[float | None] = mapped_column(Float)
     geometry: Mapped[str | None] = mapped_column(PortableGeometry("GEOMETRY"))
+    measurement_status: Mapped[str] = mapped_column(String(50), default="RELATIVE", nullable=False)
+    unit: Mapped[str] = mapped_column(String(50), default="relative_units", nullable=False)
+    scale_status: Mapped[str] = mapped_column(String(50), default="RELATIVE_SCALE", nullable=False)
+    metric_available: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    calibration_id: Mapped[str | None] = mapped_column(String(80))
+    uncertainty: Mapped[float | None] = mapped_column(Float)
+    source_coordinates: Mapped[dict[str, Any] | list[Any] | None] = mapped_column(JSON, default=None)
     metadata_json: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)
     mission: Mapped[Mission] = relationship(back_populates="measurements")
 

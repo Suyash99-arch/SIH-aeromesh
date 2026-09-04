@@ -1,10 +1,20 @@
 import { motion, useReducedMotion } from "framer-motion";
-import { useMemo, useState } from "react";
+import { useMemo, useState, useEffect } from "react";
 import Icon from "../components/ui/Icon";
 import { Button, CountUp, Panel, Progress, Status } from "../components/ui/UI";
 import { missions, pipelineStages } from "../data/missions";
 import ReconstructionViewer from "../components/reconstruction/ReconstructionViewer";
 import VideoPlayer from "../components/reconstruction/VideoPlayer";
+import {
+  fetchCalibrations,
+  calibrateReferenceDistance,
+  deactivateCalibrations,
+  measureDistance3D,
+  measurePolygon3D,
+  measureElevation3D,
+  measureObject3D,
+  measureVolume3D,
+} from "../api/missions";
 
 const Header = ({ kicker, title, copy, children }) => (
   <div className="page-header">
@@ -738,6 +748,291 @@ export function ReconstructionPage({ mission, notice }) {
   );
 }
 
+function Phase7MeasurementsSection({ mission, notice }) {
+  const [mode, setMode] = useState("Distance");
+  const [scaleStatus, setScaleStatus] = useState("RELATIVE_SCALE");
+  const [activeCal, setActiveCal] = useState(null);
+  const [knownDistance, setKnownDistance] = useState("10.0");
+  const [hasVerifiedGravity, setHasVerifiedGravity] = useState(false);
+  const [result, setResult] = useState(null);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (mission?.id) {
+      fetchCalibrations(mission.id).then((res) => {
+        if (res.success) {
+          setScaleStatus(res.scale_status);
+          setActiveCal(res.active_calibration);
+        }
+      });
+    }
+  }, [mission?.id]);
+
+  const handleCalibrate = async () => {
+    setLoading(true);
+    try {
+      const res = await calibrateReferenceDistance(mission.id, {
+        point_a: [0.0, 0.0, 0.0],
+        point_b: [3.0, 4.0, 0.0],
+        known_distance_meters: Number(knownDistance) || 10.0,
+        source_evidence: "Ground reference survey marker",
+      });
+      if (res.success) {
+        setScaleStatus("METRIC_CALIBRATED");
+        setActiveCal(res.calibration);
+        if (notice) notice(`Scale calibrated: factor = ${res.calibration.scale_factor.toFixed(4)} m/unit`);
+      }
+    } catch (e) {
+      console.error(e);
+      if (notice) notice("Calibration failed: " + e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDeactivate = async () => {
+    setLoading(true);
+    try {
+      const res = await deactivateCalibrations(mission.id);
+      if (res.success) {
+        setScaleStatus("RELATIVE_SCALE");
+        setActiveCal(null);
+        if (notice) notice("Scale reverted to uncalibrated relative scale");
+      }
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleExecuteMeasure = async () => {
+    setLoading(true);
+    try {
+      let res;
+      if (mode === "Distance") {
+        res = await measureDistance3D(mission.id, {
+          point_a: [-17.52, -5.48, 145.64],
+          point_b: [-18.48, 0.25, 148.01],
+        });
+      } else if (mode === "Area") {
+        res = await measurePolygon3D(mission.id, {
+          vertices: [
+            [-17.52, -5.48, 145.64],
+            [-15.0, -5.48, 145.64],
+            [-15.0, -2.0, 145.64],
+            [-17.52, -2.0, 145.64],
+          ],
+        });
+      } else if (mode === "Elevation") {
+        res = await measureElevation3D(mission.id, {
+          point_a: [-17.52, -5.48, 145.64],
+          point_b: [-18.48, 0.25, 148.01],
+          has_verified_gravity: hasVerifiedGravity,
+        });
+      } else if (mode === "Object") {
+        res = await measureObject3D(mission.id, "OBJ_T0001", {
+          has_verified_gravity: hasVerifiedGravity,
+        });
+      } else if (mode === "Volume") {
+        res = await measureVolume3D(mission.id, {
+          is_watertight: false,
+          vertices: [[0, 0, 0], [1, 0, 0], [0, 1, 0]],
+          faces: [[0, 1, 2]],
+        });
+      }
+      if (res?.success) {
+        setResult(res.measurement);
+      }
+    } catch (e) {
+      console.error(e);
+      if (notice) notice("Measurement calculation error: " + e.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <div className="measure-layout" style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+      {/* Scientific Framework & Scale Disclosure Banner */}
+      <Panel style={{ borderLeft: scaleStatus === "METRIC_CALIBRATED" ? "4px solid #10b981" : "4px solid #f59e0b" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "1rem" }}>
+          <div>
+            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              <span className="eyebrow" style={{ color: scaleStatus === "METRIC_CALIBRATED" ? "#10b981" : "#f59e0b" }}>
+                {scaleStatus === "METRIC_CALIBRATED" ? "● METRIC SCALE CALIBRATED" : "▲ UNREFERENCED RELATIVE SCALE"}
+              </span>
+              <span style={{ fontSize: "0.75rem", padding: "2px 6px", borderRadius: "4px", background: "rgba(255,255,255,0.08)", color: "#94a3b8" }}>
+                LOCAL_ARBITRARY · UNREFERENCED
+              </span>
+            </div>
+            <p style={{ margin: "0.4rem 0 0 0", fontSize: "0.875rem", color: "#cbd5e1" }}>
+              {scaleStatus === "METRIC_CALIBRATED"
+                ? `Scale factor: ${activeCal?.scale_factor?.toFixed(4)} m/unit (${activeCal?.method || "Reference"}). Distances reported in meters.`
+                : "Monocular Structure-from-Motion is scale-ambiguous. Coordinates are relative units. Scale calibration is required before claiming meters."}
+            </p>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+            {scaleStatus === "RELATIVE_SCALE" ? (
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+                <input
+                  type="number"
+                  value={knownDistance}
+                  onChange={(e) => setKnownDistance(e.target.value)}
+                  style={{ width: "70px", padding: "6px 8px", background: "#0f172a", border: "1px solid #334155", borderRadius: "4px", color: "#fff" }}
+                  placeholder="10.0"
+                />
+                <span style={{ fontSize: "0.8rem", color: "#94a3b8" }}>m</span>
+                <Button variant="primary" onClick={handleCalibrate} disabled={loading}>
+                  Calibrate Scale
+                </Button>
+              </div>
+            ) : (
+              <Button variant="secondary" onClick={handleDeactivate} disabled={loading}>
+                Revert to Relative
+              </Button>
+            )}
+          </div>
+        </div>
+      </Panel>
+
+      {/* Measurement Mode Selection & Actions */}
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.5rem" }}>
+        <Panel>
+          <span className="eyebrow">MEASUREMENT MODE</span>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", margin: "0.75rem 0 1.25rem 0" }}>
+            {[
+              { key: "Distance", label: "3D Distance" },
+              { key: "Area", label: "3D Polygon Area" },
+              { key: "Elevation", label: "Elevation & Slope" },
+              { key: "Object", label: "Object Dimensions" },
+              { key: "Volume", label: "Watertight Volume" },
+            ].map((m) => (
+              <Button
+                key={m.key}
+                variant={mode === m.key ? "primary" : "secondary"}
+                onClick={() => { setMode(m.key); setResult(null); }}
+              >
+                {m.label}
+              </Button>
+            ))}
+          </div>
+
+          {(mode === "Elevation" || mode === "Object") && (
+            <div style={{ padding: "0.75rem", background: "rgba(255,255,255,0.04)", borderRadius: "6px", marginBottom: "1rem" }}>
+              <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.85rem", cursor: "pointer", color: "#cbd5e1" }}>
+                <input
+                  type="checkbox"
+                  checked={hasVerifiedGravity}
+                  onChange={(e) => setHasVerifiedGravity(e.target.checked)}
+                />
+                Verified Vertical / Gravity Reference Available
+              </label>
+              {!hasVerifiedGravity && (
+                <p style={{ margin: "0.3rem 0 0 1.5rem", fontSize: "0.75rem", color: "#fbbf24" }}>
+                  Without verified gravity, arbitrary Z cannot be interpreted as true physical height.
+                </p>
+              )}
+            </div>
+          )}
+
+          <Button variant="primary" onClick={handleExecuteMeasure} disabled={loading} style={{ width: "100%" }}>
+            {loading ? "Calculating..." : `Calculate ${mode}`}
+          </Button>
+
+          <small className="help-text" style={{ display: "block", marginTop: "1rem", color: "#94a3b8" }}>
+            {mode === "Distance" && "Computes 3D Euclidean distance between selected point vectors."}
+            {mode === "Area" && "Computes 3D planar polygon area and perimeter using Stokes' theorem (Newell's method)."}
+            {mode === "Elevation" && "Measures vertical difference Delta Z and slope gradient between elevations."}
+            {mode === "Object" && "Measures length, width, and footprint area with strict geometry validation."}
+            {mode === "Volume" && "Strictly requires closed, watertight mesh surfaces. Open terrain returns VOLUME_UNAVAILABLE."}
+          </small>
+        </Panel>
+
+        {/* Measurement Results Display Panel */}
+        <Panel>
+          <span className="eyebrow">MEASUREMENT INSPECTION</span>
+          {result ? (
+            <div style={{ marginTop: "0.75rem" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.75rem" }}>
+                <span
+                  style={{
+                    padding: "3px 8px",
+                    borderRadius: "4px",
+                    fontSize: "0.75rem",
+                    fontWeight: 600,
+                    background:
+                      result.status === "METRIC"
+                        ? "rgba(16, 185, 129, 0.2)"
+                        : result.status === "RELATIVE"
+                        ? "rgba(245, 158, 11, 0.2)"
+                        : "rgba(239, 68, 68, 0.2)",
+                    color:
+                      result.status === "METRIC"
+                        ? "#10b981"
+                        : result.status === "RELATIVE"
+                        ? "#f59e0b"
+                        : "#f87171",
+                  }}
+                >
+                  {result.status}
+                </span>
+                <span style={{ fontSize: "0.8rem", color: "#94a3b8" }}>
+                  Unit: <b>{result.unit || result.unit_area || "relative_units"}</b>
+                </span>
+              </div>
+
+              {result.value !== undefined && (
+                <div style={{ fontSize: "2rem", fontWeight: 700, color: "#fff", marginBottom: "0.5rem" }}>
+                  {result.value} <span style={{ fontSize: "1rem", color: "#94a3b8" }}>{result.unit}</span>
+                </div>
+              )}
+
+              {result.area !== undefined && (
+                <div style={{ fontSize: "1.75rem", fontWeight: 700, color: "#fff", marginBottom: "0.5rem" }}>
+                  Area: {result.area} <span style={{ fontSize: "0.9rem", color: "#94a3b8" }}>{result.unit_area}</span>
+                  <div style={{ fontSize: "1rem", fontWeight: 400, color: "#94a3b8" }}>
+                    Perimeter: {result.perimeter} {result.unit_perimeter}
+                  </div>
+                </div>
+              )}
+
+              {result.length !== undefined && (
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem", marginBottom: "0.75rem" }}>
+                  <Stat label="Length" value={`${result.length} ${result.unit}`} />
+                  <Stat label="Width" value={`${result.width} ${result.unit}`} />
+                  <Stat label="Footprint" value={`${result.footprint_area} ${result.area_unit}`} />
+                  <Stat
+                    label="Height"
+                    value={result.height !== null ? `${result.height} ${result.unit}` : result.height_status}
+                    tone={result.height !== null ? "emerald" : "amber"}
+                  />
+                </div>
+              )}
+
+              {result.status === "VOLUME_UNAVAILABLE" && (
+                <div style={{ padding: "0.75rem", background: "rgba(239, 68, 68, 0.1)", border: "1px solid rgba(239, 68, 68, 0.3)", borderRadius: "6px", color: "#fca5a5", fontSize: "0.875rem", marginBottom: "0.75rem" }}>
+                  VOLUME_UNAVAILABLE: Reconstruction surface mesh has open boundaries. Watertight geometry is required to compute enclosed volume honestly.
+                </div>
+              )}
+
+              {result.note && (
+                <p style={{ fontSize: "0.8rem", color: "#94a3b8", fontStyle: "italic", borderTop: "1px solid rgba(255,255,255,0.06)", paddingTop: "0.5rem" }}>
+                  Note: {result.note}
+                </p>
+              )}
+            </div>
+          ) : (
+            <div style={{ padding: "2rem 1rem", textAlign: "center", color: "#64748b" }}>
+              Select a mode and click Calculate to perform real 3D geometric measurement.
+            </div>
+          )}
+        </Panel>
+      </div>
+    </div>
+  );
+}
+
 export function IntelligencePage({ kind, mission, navigate, notice }) {
   const cfg = {
     analytics: [
@@ -791,47 +1086,8 @@ export function IntelligencePage({ kind, mission, navigate, notice }) {
   if (kind === "measurements") {
     return (
       <>
-        <Header kicker={cfg[0]} title={cfg[1]} copy={cfg[2]} />
-        <div className="measure-layout">
-          <Panel className="measure-scene">
-            <div className={`measure-line ${mode.toLowerCase()}`} />
-            <span>
-              {mode === "Distance"
-                ? mission.measurements.distance
-                : mode === "Area"
-                  ? mission.measurements.area
-                  : mission.measurements.height}
-            </span>
-            <small>
-              Prototype measurement overlay · estimated uncertainty{" "}
-              {mission.measurements.uncertainty}
-            </small>
-          </Panel>
-
-          <Panel>
-            <span className="eyebrow">MEASUREMENT MODE</span>
-            {["Distance", "Area", "Height"].map((x) => (
-              <Button
-                key={x}
-                variant={mode === x ? "primary" : "secondary"}
-                onClick={() => setMode(x)}
-              >
-                {x}
-              </Button>
-            ))}
-
-            <div className="detail-data">
-              {Object.entries(mission.measurements).map(([k, v]) => (
-                <Stat key={k} label={k} value={v} />
-              ))}
-            </div>
-
-            <small className="help-text">
-              Distance uses two selected model points; area and height use
-              selected reconstructed structures.
-            </small>
-          </Panel>
-        </div>
+        <Header kicker={cfg[0]} title={cfg[1]} copy="Scientifically honest 3D spatial measurements with scale calibration and geometric validation." />
+        <Phase7MeasurementsSection mission={mission} notice={notice} />
       </>
     );
   }

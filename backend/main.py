@@ -26,6 +26,24 @@ from backend.repository import MissionRepository
 from backend.jobs import JOB_STAGES, create_job, get_job, update_job
 from backend.storage import get_storage, mission_object_key
 from backend.tasks import enqueue_processing_job
+from pydantic import BaseModel, Field
+from backend.scale_calibration import (
+    ScaleCalibrationService,
+    CalibrationRecord,
+    CalibrationMethod,
+    ScaleStatus,
+)
+from backend.measurement_engine import (
+    GeometricMeasurementEngine,
+    MeasurementStatus,
+    DistanceMeasurement,
+    PolygonMeasurement,
+    ElevationMeasurement,
+    ObjectDimensionsMeasurement,
+    VolumeMeasurement,
+)
+
+scale_calibration_service = ScaleCalibrationService()
 
 try:
     from dotenv import load_dotenv
@@ -1644,12 +1662,185 @@ def _generate_findings(result: dict) -> list:
     return findings
 
 # ============================================================
-# MEASUREMENTS
+# PHASE 7: SCALE CALIBRATION & GEOMETRIC MEASUREMENTS
 # ============================================================
+
+class ReferenceDistanceCalibrationRequest(BaseModel):
+    point_a: list[float]
+    point_b: list[float]
+    known_distance_meters: float
+    source_evidence: str = "Known physical distance"
+    confidence: float = 0.95
+    uncertainty_meters: float | None = None
+    created_by: str = "operator"
+
+
+class KnownObjectSizeCalibrationRequest(BaseModel):
+    object_id: str
+    reconstructed_length: float
+    known_length_meters: float
+    source_evidence: str = "Known object dimension"
+    confidence: float = 0.85
+    uncertainty_meters: float | None = None
+    created_by: str = "operator"
+
+
+class DistanceMeasurementRequest(BaseModel):
+    point_a: list[float]
+    point_b: list[float]
+    calibration_id: str | None = None
+    store: bool = True
+
+
+class PolygonMeasurementRequest(BaseModel):
+    vertices: list[list[float]]
+    calibration_id: str | None = None
+    store: bool = True
+
+
+class ElevationMeasurementRequest(BaseModel):
+    point_a: list[float]
+    point_b: list[float]
+    has_verified_gravity: bool = False
+    calibration_id: str | None = None
+    store: bool = True
+
+
+class ObjectMeasurementRequest(BaseModel):
+    has_verified_gravity: bool = False
+    calibration_id: str | None = None
+    store: bool = True
+
+
+class VolumeMeasurementRequest(BaseModel):
+    is_watertight: bool = False
+    vertices: list[list[float]] | None = None
+    faces: list[list[int]] | None = None
+    calibration_id: str | None = None
+    store: bool = True
+
+
+@app.get("/api/missions/{mission_id}/calibrations")
+async def get_mission_calibrations(mission_id: str):
+    """List scale calibrations and current active calibration."""
+    mission = MissionData(mission_id)
+    if not mission.data:
+        raise HTTPException(status_code=404, detail="Mission not found")
+
+    active_cal = scale_calibration_service.get_active_calibration(mission_id)
+    all_cals = scale_calibration_service.list_calibrations(mission_id)
+
+    return {
+        "success": True,
+        "mission_id": mission_id,
+        "scale_status": ScaleStatus.METRIC_CALIBRATED.value if active_cal else ScaleStatus.RELATIVE_SCALE.value,
+        "coordinate_system": "LOCAL_ARBITRARY",
+        "georeferencing_status": "UNREFERENCED",
+        "active_calibration": active_cal.to_dict() if active_cal else None,
+        "calibrations": [c.to_dict() for c in all_cals],
+    }
+
+
+@app.post("/api/missions/{mission_id}/calibrations/reference-distance")
+async def calibrate_by_reference_distance(mission_id: str, req: ReferenceDistanceCalibrationRequest):
+    """Calibrate photogrammetric scale using two known 3D points and a known physical distance."""
+    mission = MissionData(mission_id)
+    if not mission.data:
+        raise HTTPException(status_code=404, detail="Mission not found")
+
+    try:
+        record = scale_calibration_service.calibrate_by_reference_distance(
+            mission_id=mission_id,
+            point_a=req.point_a,
+            point_b=req.point_b,
+            known_distance_meters=req.known_distance_meters,
+            source_evidence=req.source_evidence,
+            confidence=req.confidence,
+            created_by=req.created_by,
+            uncertainty_meters=req.uncertainty_meters,
+        )
+        cals = mission.get("calibrations") or []
+        cals.append(record.to_dict())
+        mission.update({"calibrations": cals, "active_calibration": record.to_dict()})
+
+        return {"success": True, "calibration": record.to_dict()}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/missions/{mission_id}/calibrations/object-size")
+async def calibrate_by_object_size(mission_id: str, req: KnownObjectSizeCalibrationRequest):
+    """Calibrate photogrammetric scale using a known physical object dimension."""
+    mission = MissionData(mission_id)
+    if not mission.data:
+        raise HTTPException(status_code=404, detail="Mission not found")
+
+    try:
+        record = scale_calibration_service.calibrate_by_known_object_size(
+            mission_id=mission_id,
+            object_id=req.object_id,
+            reconstructed_length=req.reconstructed_length,
+            known_length_meters=req.known_length_meters,
+            source_evidence=req.source_evidence,
+            confidence=req.confidence,
+            created_by=req.created_by,
+            uncertainty_meters=req.uncertainty_meters,
+        )
+        cals = mission.get("calibrations") or []
+        cals.append(record.to_dict())
+        mission.update({"calibrations": cals, "active_calibration": record.to_dict()})
+
+        return {"success": True, "calibration": record.to_dict()}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/missions/{mission_id}/calibrations/{calibration_id}/activate")
+async def activate_calibration(mission_id: str, calibration_id: str):
+    """Activate a specific calibration record."""
+    mission = MissionData(mission_id)
+    if not mission.data:
+        raise HTTPException(status_code=404, detail="Mission not found")
+
+    record = scale_calibration_service.activate_calibration(mission_id, calibration_id)
+    if not record:
+        raise HTTPException(status_code=404, detail=f"Calibration {calibration_id} not found")
+
+    mission.update({"active_calibration": record.to_dict()})
+    return {"success": True, "calibration": record.to_dict()}
+
+
+@app.post("/api/missions/{mission_id}/calibrations/deactivate")
+async def deactivate_calibrations(mission_id: str):
+    """Deactivate all calibrations, returning scene to uncalibrated relative scale."""
+    mission = MissionData(mission_id)
+    if not mission.data:
+        raise HTTPException(status_code=404, detail="Mission not found")
+
+    scale_calibration_service.deactivate_all(mission_id)
+    mission.update({"active_calibration": None})
+    return {"success": True, "scale_status": ScaleStatus.RELATIVE_SCALE.value}
+
+
+@app.delete("/api/missions/{mission_id}/calibrations/{calibration_id}")
+async def delete_calibration(mission_id: str, calibration_id: str):
+    """Delete a calibration record."""
+    mission = MissionData(mission_id)
+    if not mission.data:
+        raise HTTPException(status_code=404, detail="Mission not found")
+
+    deleted = scale_calibration_service.delete_calibration(mission_id, calibration_id)
+    if not deleted:
+        raise HTTPException(status_code=404, detail=f"Calibration {calibration_id} not found")
+
+    active = scale_calibration_service.get_active_calibration(mission_id)
+    mission.update({"active_calibration": active.to_dict() if active else None})
+    return {"success": True, "deleted": calibration_id}
+
 
 @app.get("/api/missions/{mission_id}/measurements")
 async def get_measurements(mission_id: str):
-    """Get measurements for a mission"""
+    """Get measurements for a mission with scale and calibration status transparency."""
     mission = MissionData(mission_id)
     if not mission.data:
         raise HTTPException(status_code=404, detail="Mission not found")
@@ -1659,16 +1850,26 @@ async def get_measurements(mission_id: str):
         "height": "0 m",
         "width": "0 m",
         "length": "0 m",
-        "area": "0 m┬▓",
+        "area": "0 m²",
         "confidence": "0%",
         "uncertainty": "N/A",
         "source": "RECONSTRUCTION"
     }
-    
+
+    active_cal = scale_calibration_service.get_active_calibration(mission_id)
+    items = mission.get("measurement_items") or []
+
     return {
         "success": True,
-        "measurements": measurements
+        "measurements": measurements,
+        "scale_status": ScaleStatus.METRIC_CALIBRATED.value if active_cal else ScaleStatus.RELATIVE_SCALE.value,
+        "metric_available": bool(active_cal is not None),
+        "coordinate_system": "LOCAL_ARBITRARY",
+        "georeferencing_status": "UNREFERENCED",
+        "active_calibration": active_cal.to_dict() if active_cal else None,
+        "items": items,
     }
+
 
 @app.post("/api/missions/{mission_id}/measurements")
 async def create_measurement(
@@ -1677,7 +1878,7 @@ async def create_measurement(
     value: float = Query(...),
     confidence: float = Query(85.0)
 ):
-    """Create a measurement for a mission"""
+    """Create a measurement for a mission (legacy compatibility)."""
     mission = MissionData(mission_id)
     if not mission.data:
         raise HTTPException(status_code=404, detail="Mission not found")
@@ -1694,6 +1895,164 @@ async def create_measurement(
             "confidence": confidence
         }
     }
+
+
+@app.post("/api/missions/{mission_id}/measurements/distance")
+async def measure_distance_3d(mission_id: str, req: DistanceMeasurementRequest):
+    """Compute 3D Euclidean distance between two points."""
+    mission = MissionData(mission_id)
+    if not mission.data:
+        raise HTTPException(status_code=404, detail="Mission not found")
+
+    cal = None
+    if req.calibration_id:
+        for c in scale_calibration_service.list_calibrations(mission_id):
+            if c.calibration_id == req.calibration_id:
+                cal = c
+                break
+    else:
+        cal = scale_calibration_service.get_active_calibration(mission_id)
+
+    res = GeometricMeasurementEngine.distance_3d(req.point_a, req.point_b, calibration=cal)
+    res_dict = res.to_dict()
+
+    if req.store:
+        items = mission.get("measurement_items") or []
+        items.append({"type": "distance", **res_dict})
+        meas = mission.get("measurements") or {}
+        meas["distance"] = f"{res.value} {res.unit}"
+        mission.update({"measurement_items": items, "measurements": meas})
+
+    return {"success": True, "measurement": res_dict}
+
+
+@app.post("/api/missions/{mission_id}/measurements/polygon")
+async def measure_polygon(mission_id: str, req: PolygonMeasurementRequest):
+    """Compute 3D planar polygon area and perimeter using Stokes' theorem / Newell's method."""
+    mission = MissionData(mission_id)
+    if not mission.data:
+        raise HTTPException(status_code=404, detail="Mission not found")
+
+    cal = scale_calibration_service.get_active_calibration(mission_id)
+    try:
+        res = GeometricMeasurementEngine.measure_polygon(req.vertices, calibration=cal)
+        res_dict = res.to_dict()
+
+        if req.store:
+            items = mission.get("measurement_items") or []
+            items.append({"type": "polygon", **res_dict})
+            meas = mission.get("measurements") or {}
+            meas["area"] = f"{res.area} {res.unit_area}"
+            mission.update({"measurement_items": items, "measurements": meas})
+
+        return {"success": True, "measurement": res_dict}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/api/missions/{mission_id}/measurements/elevation")
+async def measure_elevation(mission_id: str, req: ElevationMeasurementRequest):
+    """Compute vertical difference and slope angle between two points."""
+    mission = MissionData(mission_id)
+    if not mission.data:
+        raise HTTPException(status_code=404, detail="Mission not found")
+
+    cal = scale_calibration_service.get_active_calibration(mission_id)
+    res = GeometricMeasurementEngine.measure_elevation(
+        req.point_a,
+        req.point_b,
+        calibration=cal,
+        has_verified_gravity=req.has_verified_gravity,
+    )
+    res_dict = res.to_dict()
+
+    if req.store:
+        items = mission.get("measurement_items") or []
+        items.append({"type": "elevation", **res_dict})
+        meas = mission.get("measurements") or {}
+        meas["height"] = f"{res.vertical_difference} {res.unit}"
+        mission.update({"measurement_items": items, "measurements": meas})
+
+    return {"success": True, "measurement": res_dict}
+
+
+@app.post("/api/missions/{mission_id}/measurements/object/{object_id}")
+async def measure_object_dimensions(mission_id: str, object_id: str, req: ObjectMeasurementRequest = None):
+    """Measure physical dimensions of a 3D fused object with INSUFFICIENT_GEOMETRY guards."""
+    mission = MissionData(mission_id)
+    if not mission.data:
+        raise HTTPException(status_code=404, detail="Mission not found")
+
+    req = req or ObjectMeasurementRequest()
+    cal = scale_calibration_service.get_active_calibration(mission_id)
+
+    # Locate object in mission
+    objects_3d = mission.get("objects_3d") or []
+    target_obj = None
+    for obj in objects_3d:
+        if obj.get("object_id") == object_id or obj.get("track_id") == object_id:
+            target_obj = obj
+            break
+
+    pts = []
+    cls_name = "object"
+    if target_obj:
+        cls_name = target_obj.get("class_name", "object")
+        traj = target_obj.get("trajectory_3d") or []
+        for t in traj:
+            if isinstance(t, dict) and "x" in t and "y" in t and "z" in t:
+                pts.append([t["x"], t["y"], t["z"]])
+        if not pts and target_obj.get("position_3d"):
+            pts.append(target_obj["position_3d"])
+
+    res = GeometricMeasurementEngine.measure_object_dimensions(
+        object_id=object_id,
+        class_name=cls_name,
+        points_3d=pts,
+        calibration=cal,
+        has_verified_gravity=req.has_verified_gravity,
+    )
+    res_dict = res.to_dict()
+
+    if req.store:
+        items = mission.get("measurement_items") or []
+        items.append({"type": "object_dimensions", **res_dict})
+        meas = mission.get("measurements") or {}
+        if res.length is not None:
+            meas["length"] = f"{res.length} {res.unit}"
+        if res.width is not None:
+            meas["width"] = f"{res.width} {res.unit}"
+        if res.height is not None:
+            meas["height"] = f"{res.height} {res.unit}"
+        if res.footprint_area is not None:
+            meas["area"] = f"{res.footprint_area} {res.area_unit}"
+        mission.update({"measurement_items": items, "measurements": meas})
+
+    return {"success": True, "measurement": res_dict}
+
+
+@app.post("/api/missions/{mission_id}/measurements/volume")
+async def measure_volume(mission_id: str, req: VolumeMeasurementRequest):
+    """Compute 3D volume, requiring verified closed/watertight geometry."""
+    mission = MissionData(mission_id)
+    if not mission.data:
+        raise HTTPException(status_code=404, detail="Mission not found")
+
+    cal = scale_calibration_service.get_active_calibration(mission_id)
+    res = GeometricMeasurementEngine.measure_volume(
+        vertices=req.vertices,
+        faces=req.faces,
+        is_watertight=req.is_watertight,
+        calibration=cal,
+    )
+    res_dict = res.to_dict()
+
+    if req.store:
+        items = mission.get("measurement_items") or []
+        items.append({"type": "volume", **res_dict})
+        mission.update({"measurement_items": items})
+
+    return {"success": True, "measurement": res_dict}
 
 # ============================================================
 # REPORT

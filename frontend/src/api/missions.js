@@ -434,3 +434,109 @@ export function clearCache() {
 export function getCachedMissions() {
   return Array.from(missionCache.values());
 }
+
+export async function fetchCalibrations(missionId) {
+  try {
+    const response = await fetch(`${API_BASE}/missions/${missionId}/calibrations`);
+    return await response.json();
+  } catch (error) {
+    console.error("fetchCalibrations error:", error);
+    return { success: false, scale_status: "RELATIVE_SCALE", calibrations: [] };
+  }
+}
+
+export async function calibrateReferenceDistance(missionId, payload) {
+  try {
+    const response = await fetch(`${API_BASE}/missions/${missionId}/calibrations/reference-distance`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    return await response.json();
+  } catch (error) {
+    console.error("calibrateReferenceDistance error:", error);
+    throw error;
+  }
+}
+
+export async function deactivateCalibrations(missionId) {
+  try {
+    const response = await fetch(`${API_BASE}/missions/${missionId}/calibrations/deactivate`, {
+      method: "POST",
+    });
+    return await response.json();
+  } catch (error) {
+    console.error("deactivateCalibrations error:", error);
+    throw error;
+  }
+}
+
+export async function measureDistance3D(missionId, payload) {
+  try {
+    const response = await fetch(`${API_BASE}/missions/${missionId}/measurements/distance`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    return await response.json();
+  } catch (error) {
+    console.error("measureDistance3D error:", error);
+    throw error;
+  }
+}
+
+export async function measurePolygon3D(missionId, payload) {
+  try {
+    const response = await fetch(`${API_BASE}/missions/${missionId}/measurements/polygon`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    return await response.json();
+  } catch (error) {
+    console.error("measurePolygon3D error:", error);
+    throw error;
+  }
+}
+
+export async function measureElevation3D(missionId, payload) {
+  try {
+    const response = await fetch(`${API_BASE}/missions/${missionId}/measurements/elevation`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    return await response.json();
+  } catch (error) {
+    console.error("measureElevation3D error:", error);
+    throw error;
+  }
+}
+
+export async function measureObject3D(missionId, objectId, payload = {}) {
+  try {
+    const response = await fetch(`${API_BASE}/missions/${missionId}/measurements/object/${objectId}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    return await response.json();
+  } catch (error) {
+    console.error("measureObject3D error:", error);
+    throw error;
+  }
+}
+
+export async function measureVolume3D(missionId, payload = {}) {
+  try {
+    const response = await fetch(`${API_BASE}/missions/${missionId}/measurements/volume`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    return await response.json();
+  } catch (error) {
+    console.error("measureVolume3D error:", error);
+    throw error;
+  }
+}

@@ -1,0 +1,358 @@
+{
+  "validation_phase": "Phase 7 \u2014 Metric Calibration + Geometric Measurement Engine",
+  "timestamp": "2026-09-04T14:50:00Z",
+  "scene_framework": {
+    "coordinate_system": "LOCAL_ARBITRARY",
+    "scale_status": "RELATIVE_SCALE",
+    "georeferencing_status": "UNREFERENCED",
+    "truthfulness_statement": "The AeroMesh reconstruction is strictly LOCAL_ARBITRARY, RELATIVE_SCALE, and UNREFERENCED. Reconstruction coordinates are arbitrary units and are never converted to meters unless an explicit scale calibration is supplied. Real-world accuracy is not claimed without ground control."
+  },
+  "scale_calibration": {
+    "service": "ScaleCalibrationService",
+    "supported_methods": [
+      "KNOWN_REFERENCE_DISTANCE",
+      "KNOWN_OBJECT_SIZE",
+      "GCP",
+      "GPS_RTK"
+    ],
+    "active_calibration": {
+      "calibration_id": "CAL_phase5_drone_validation_1788531696",
+      "mission_id": "phase5_drone_validation",
+      "method": "KNOWN_REFERENCE_DISTANCE",
+      "scale_factor": 2.3903641711151686,
+      "unit": "m",
+      "reference_points": [
+        [
+          -17.521,
+          -5.4751,
+          145.6369
+        ],
+        [
+          -18.4753,
+          0.2537,
+          148.0135
+        ]
+      ],
+      "known_value": 15.0,
+      "reconstructed_value": 6.275194458341509,
+      "source_evidence": "Ground reference baseline between vehicle parking positions",
+      "confidence": 0.95,
+      "coordinate_system": "LOCAL_ARBITRARY",
+      "created_by": "operator",
+      "created_at": "2026-09-04T14:21:36.141372+00:00",
+      "is_active": true,
+      "uncertainty": 0.01
+    }
+  },
+  "measurements": {
+    "point_to_point_distance": {
+      "uncalibrated_relative": {
+        "value": 6.2752,
+        "unit": "relative_units",
+        "status": "RELATIVE",
+        "scale_status": "RELATIVE_SCALE",
+        "metric_available": false,
+        "confidence": 0.9,
+        "point_a": [
+          -17.521,
+          -5.4751,
+          145.6369
+        ],
+        "point_b": [
+          -18.4753,
+          0.2537,
+          148.0135
+        ],
+        "reconstructed_distance": 6.2752,
+        "calibration_method": "NONE",
+        "calibration_id": null,
+        "uncertainty": null,
+        "note": "Uncalibrated relative distance in local arbitrary coordinate units. Do not interpret as meters."
+      },
+      "calibrated_metric": {
+        "value": 15.0,
+        "unit": "m",
+        "status": "METRIC",
+        "scale_status": "METRIC_CALIBRATED",
+        "metric_available": true,
+        "confidence": 0.95,
+        "point_a": [
+          -17.521,
+          -5.4751,
+          145.6369
+        ],
+        "point_b": [
+          -18.4753,
+          0.2537,
+          148.0135
+        ],
+        "reconstructed_distance": 6.2752,
+        "calibration_method": "KNOWN_REFERENCE_DISTANCE",
+        "calibration_id": "CAL_phase5_drone_validation_1788531696",
+        "uncertainty": 0.15,
+        "note": "Calibrated via KNOWN_REFERENCE_DISTANCE (scale_factor=2.390364)."
+      }
+    },
+    "polygon_surface_area": {
+      "method": "Stokes' Theorem / Newell's 3D Planar Area",
+      "uncalibrated_relative": {
+        "area": 8.7607,
+        "perimeter": 11.9922,
+        "unit_area": "relative_units^2",
+        "unit_perimeter": "relative_units",
+        "status": "RELATIVE",
+        "scale_status": "RELATIVE_SCALE",
+        "metric_available": false,
+        "confidence": 0.85,
+        "vertex_count": 4,
+        "vertices_3d": [
+          [
+            -17.521,
+            -5.4751,
+            145.6369
+          ],
+          [
+            -15.0,
+            -5.4751,
+            145.6369
+          ],
+          [
+            -15.0,
+            -2.0,
+            145.6369
+          ],
+          [
+            -17.521,
+            -2.0,
+            145.6369
+          ]
+        ],
+        "reconstructed_area": 8.7607,
+        "reconstructed_perimeter": 11.9922,
+        "calibration_method": "NONE",
+        "calibration_id": null,
+        "uncertainty": null,
+        "normal_vector": [
+          0.0,
+          0.0,
+          1.0
+        ],
+        "note": "Uncalibrated relative 3D polygon area in arbitrary coordinate units. Do not interpret as square meters."
+      },
+      "calibrated_metric": {
+        "area": 50.0574,
+        "perimeter": 28.6657,
+        "unit_area": "sq_m",
+        "unit_perimeter": "m",
+        "status": "METRIC",
+        "scale_status": "METRIC_CALIBRATED",
+        "metric_available": true,
+        "confidence": 0.95,
+        "vertex_count": 4,
+        "vertices_3d": [
+          [
+            -17.521,
+            -5.4751,
+            145.6369
+          ],
+          [
+            -15.0,
+            -5.4751,
+            145.6369
+          ],
+          [
+            -15.0,
+            -2.0,
+            145.6369
+          ],
+          [
+            -17.521,
+            -2.0,
+            145.6369
+          ]
+        ],
+        "reconstructed_area": 8.7607,
+        "reconstructed_perimeter": 11.9922,
+        "calibration_method": "KNOWN_REFERENCE_DISTANCE",
+        "calibration_id": "CAL_phase5_drone_validation_1788531696",
+        "uncertainty": 0.5006,
+        "normal_vector": [
+          0.0,
+          0.0,
+          1.0
+        ],
+        "note": "Calibrated 3D polygon measurement via KNOWN_REFERENCE_DISTANCE."
+      }
+    },
+    "elevation_difference": {
+      "unverified_gravity": {
+        "vertical_difference": 5.6809,
+        "horizontal_distance": 13.8826,
+        "direct_distance": 15.0,
+        "slope_angle_degrees": 22.25,
+        "unit": "m",
+        "status": "UNCERTAIN",
+        "scale_status": "METRIC_CALIBRATED",
+        "metric_available": true,
+        "confidence": 0.5,
+        "gravity_verified": false,
+        "point_a": [
+          -17.521,
+          -5.4751,
+          145.6369
+        ],
+        "point_b": [
+          -18.4753,
+          0.2537,
+          148.0135
+        ],
+        "calibration_method": "KNOWN_REFERENCE_DISTANCE",
+        "calibration_id": "CAL_phase5_drone_validation_1788531696",
+        "uncertainty": 0.0568,
+        "note": "Coordinate system is LOCAL_ARBITRARY without verified gravity/vertical reference. Delta Z represents coordinate difference along arbitrary camera frame axis, NOT true physical elevation."
+      },
+      "verified_gravity": {
+        "vertical_difference": 5.6809,
+        "horizontal_distance": 13.8826,
+        "direct_distance": 15.0,
+        "slope_angle_degrees": 22.25,
+        "unit": "m",
+        "status": "METRIC",
+        "scale_status": "METRIC_CALIBRATED",
+        "metric_available": true,
+        "confidence": 0.9,
+        "gravity_verified": true,
+        "point_a": [
+          -17.521,
+          -5.4751,
+          145.6369
+        ],
+        "point_b": [
+          -18.4753,
+          0.2537,
+          148.0135
+        ],
+        "calibration_method": "KNOWN_REFERENCE_DISTANCE",
+        "calibration_id": "CAL_phase5_drone_validation_1788531696",
+        "uncertainty": 0.0568,
+        "note": "Verified vertical elevation difference."
+      }
+    },
+    "object_dimensions": {
+      "OBJ_T0001_multi_view": {
+        "unverified_gravity": {
+          "object_id": "OBJ_T0001",
+          "class_name": "car",
+          "length": 0.8127,
+          "width": 0.7816,
+          "height": null,
+          "footprint_area": 0.6353,
+          "unit": "m",
+          "area_unit": "sq_m",
+          "status": "ESTIMATED",
+          "scale_status": "METRIC_CALIBRATED",
+          "metric_available": true,
+          "confidence": 0.807,
+          "height_status": "HEIGHT_UNAVAILABLE",
+          "height_note": "Arbitrary Z-range cannot be interpreted as physical height without a verified gravity reference.",
+          "calibration_method": "KNOWN_REFERENCE_DISTANCE",
+          "calibration_id": "CAL_phase5_drone_validation_1788531696",
+          "reconstructed_dimensions": {
+            "length": 0.34,
+            "width": 0.327,
+            "height": null,
+            "footprint_area": 0.1112
+          },
+          "uncertainty": 0.0081,
+          "note": "Metric object dimensions estimated via 3D point cluster and KNOWN_REFERENCE_DISTANCE."
+        },
+        "verified_gravity": {
+          "object_id": "OBJ_T0001",
+          "class_name": "car",
+          "length": 0.8127,
+          "width": 0.7816,
+          "height": 1.2277,
+          "footprint_area": 0.6353,
+          "unit": "m",
+          "area_unit": "sq_m",
+          "status": "ESTIMATED",
+          "scale_status": "METRIC_CALIBRATED",
+          "metric_available": true,
+          "confidence": 0.807,
+          "height_status": "AVAILABLE",
+          "height_note": "Height measured along verified vertical axis.",
+          "calibration_method": "KNOWN_REFERENCE_DISTANCE",
+          "calibration_id": "CAL_phase5_drone_validation_1788531696",
+          "reconstructed_dimensions": {
+            "length": 0.34,
+            "width": 0.327,
+            "height": 0.5136,
+            "footprint_area": 0.1112
+          },
+          "uncertainty": 0.0081,
+          "note": "Metric object dimensions estimated via 3D point cluster and KNOWN_REFERENCE_DISTANCE."
+        }
+      },
+      "OBJ_T0002_single_view": {
+        "object_id": "OBJ_T0002",
+        "class_name": "car",
+        "length": null,
+        "width": null,
+        "height": null,
+        "footprint_area": null,
+        "unit": "relative_units",
+        "area_unit": "relative_units^2",
+        "status": "INSUFFICIENT_GEOMETRY",
+        "scale_status": "RELATIVE_SCALE",
+        "metric_available": false,
+        "confidence": 0.0,
+        "height_status": "INSUFFICIENT_GEOMETRY",
+        "height_note": "Insufficient 3D point coverage (< 2 supporting points) to measure object dimensions.",
+        "calibration_method": "NONE",
+        "calibration_id": null,
+        "reconstructed_dimensions": {},
+        "uncertainty": null,
+        "note": "Physical object dimensions cannot be derived from a 2D bounding box alone without spatial geometry."
+      }
+    },
+    "volume_evaluation": {
+      "open_surface_mesh": {
+        "volume": null,
+        "unit": "cu_m",
+        "status": "VOLUME_UNAVAILABLE",
+        "scale_status": "METRIC_CALIBRATED",
+        "metric_available": true,
+        "confidence": 0.0,
+        "is_watertight": false,
+        "reconstructed_volume": null,
+        "calibration_method": "KNOWN_REFERENCE_DISTANCE",
+        "calibration_id": "CAL_phase5_drone_validation_1788531696",
+        "uncertainty": null,
+        "triangle_count": 0,
+        "note": "Volume calculation requires a verified closed/watertight mesh surface. Current surface mesh has open boundaries."
+      },
+      "closed_watertight_geometry": {
+        "volume": 36.4218,
+        "unit": "cu_m",
+        "status": "METRIC",
+        "scale_status": "METRIC_CALIBRATED",
+        "metric_available": true,
+        "confidence": 0.95,
+        "is_watertight": true,
+        "reconstructed_volume": 2.6667,
+        "calibration_method": "KNOWN_REFERENCE_DISTANCE",
+        "calibration_id": "CAL_phase5_drone_validation_1788531696",
+        "uncertainty": 0.3642,
+        "triangle_count": 4,
+        "note": "Enclosed volume computed on watertight mesh via KNOWN_REFERENCE_DISTANCE."
+      }
+    }
+  },
+  "measurement_integrity_audit": {
+    "relative_units_preserved_when_uncalibrated": true,
+    "arbitrary_z_refused_without_verified_gravity": true,
+    "open_surface_volume_reported_unavailable": true,
+    "insufficient_geometry_guarded": true,
+    "zero_fabricated_metric_coordinates": true
+  }
+}
