@@ -1,4 +1,4 @@
-﻿"""
+"""
 AeroMesh Single-Pass Reconstruction Backend
 Handles mission management, video processing, and 3D reconstruction
 """
@@ -18,9 +18,14 @@ import cv2
 import numpy as np
 from fastapi import FastAPI, File, UploadFile, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 import uvicorn
+from backend.database import check_database, get_configured_engine, init_database, session_scope
+from backend.repository import MissionRepository
+from backend.jobs import JOB_STAGES, create_job, get_job, update_job
+from backend.storage import get_storage, mission_object_key
+from backend.tasks import enqueue_processing_job
 
 try:
     from dotenv import load_dotenv
@@ -28,7 +33,12 @@ except Exception:  # pragma: no cover
     load_dotenv = None
 
 try:
-    from backend.reconstruction import get_reconstruction_pointcloud_path, run_reconstruction_for_mission
+    from backend.reconstruction import (
+        get_reconstruction_pointcloud_path,
+        get_reconstruction_mesh_path,
+        get_reconstruction_metadata,
+        run_reconstruction_for_mission,
+    )
 except Exception:  # pragma: no cover
     def run_reconstruction_for_mission(*args, **kwargs):
         return {
@@ -40,6 +50,10 @@ except Exception:  # pragma: no cover
             "output_path": None,
         }
     def get_reconstruction_pointcloud_path(*args, **kwargs):
+        return None
+    def get_reconstruction_mesh_path(*args, **kwargs):
+        return None
+    def get_reconstruction_metadata(*args, **kwargs):
         return None
 
 try:
@@ -78,6 +92,14 @@ if load_dotenv:
 
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 MISSIONS_DIR.mkdir(parents=True, exist_ok=True)
+
+configured_engine = get_configured_engine()
+if configured_engine is not None:
+    try:
+        init_database(configured_engine)
+        logger.info("Database storage enabled")
+    except Exception as exc:
+        logger.warning("Database unavailable; JSON storage fallback remains active: %s", exc)
 
 # ============================================================
 # FASTAPI APP
@@ -150,7 +172,8 @@ def _load_detection_model(use_aeromesh: bool = True):
     """
     from ultralytics import YOLO
     
-    aeromesh_path = BASE_DIR / "backend" / "models" / "aeromesh_yolo.pt"
+    configured_path = os.getenv("YOLO_MODEL_PATH", "").strip()
+    aeromesh_path = Path(configured_path) if configured_path else BASE_DIR / "backend" / "models" / "aeromesh_yolo.pt"
     fallback_path = BASE_DIR / "yolo11n.pt"
     
     if use_aeromesh and aeromesh_path.exists():
@@ -172,7 +195,7 @@ def _load_detection_model(use_aeromesh: bool = True):
             logger.error("Failed to load fallback model yolo11n.pt: %s", exc)
             raise
     
-    raise FileNotFoundError(f"No detection model found at {aeromesh_path} or {fallback_path}")
+    raise FileNotFoundError(f"MODEL_NOT_FOUND: No detection model found at {aeromesh_path} or {fallback_path}. Set YOLO_MODEL_PATH to an authorized local model file.")
 
 
 def _get_confidence_threshold(class_name: str, is_aeromesh: bool = True) -> float:
@@ -216,19 +239,41 @@ def _remap_visdrone_class(class_name: str) -> str:
 
 
 class MissionData:
-    """In-memory mission tracking"""
+    """Mission service facade with database-first and JSON fallback storage."""
     def __init__(self, mission_id: str):
         self.mission_id = mission_id
         self.data = {}
         self.load()
     
     def load(self):
+        database_engine = get_configured_engine()
+        if database_engine is not None:
+            try:
+                with session_scope(database_engine) as session:
+                    database_payload = MissionRepository(session).get(self.mission_id)
+                if database_payload is not None:
+                    self.data = database_payload
+                    return
+            except Exception as exc:
+                logger.warning("Database read unavailable; using JSON fallback: %s", exc)
         mission_file = MISSIONS_DIR / f"{self.mission_id}.json"
         if mission_file.exists():
             with open(mission_file) as f:
                 self.data = json.load(f)
     
     def save(self):
+        database_engine = get_configured_engine()
+        if database_engine is not None:
+            try:
+                with session_scope(database_engine) as session:
+                    repository = MissionRepository(session)
+                    if repository.get(self.mission_id) is None:
+                        repository.create(self.data)
+                    else:
+                        repository.update(self.mission_id, self.data)
+                return
+            except Exception as exc:
+                logger.warning("Database write unavailable; using JSON fallback: %s", exc)
         mission_file = MISSIONS_DIR / f"{self.mission_id}.json"
         with open(mission_file, 'w') as f:
             json.dump(self.data, f, indent=2)
@@ -522,12 +567,15 @@ async def root():
 
 @app.get("/health")
 async def health():
+    database_engine = get_configured_engine()
+    database_configured = database_engine is not None
+    database_ready = check_database(database_engine) if database_configured else False
     return {
         "status": "healthy",
         "backend": "ready",
         "processing_engine": "ready",
         "reconstruction_engine": "ready",
-        "database": "ready"
+        "database": "ready" if database_ready else ("configured_unavailable" if database_configured else "json_fallback"),
     }
 
 
@@ -610,6 +658,13 @@ async def get_mission(mission_id: str):
 @app.get("/api/missions")
 async def list_missions():
     """List all missions"""
+    database_engine = get_configured_engine()
+    if database_engine is not None and check_database(database_engine):
+        with session_scope(database_engine) as session:
+            return {
+                "success": True,
+                "missions": MissionRepository(session).list(),
+            }
     missions = []
     for mission_file in MISSIONS_DIR.glob("*.json"):
         with open(mission_file) as f:
@@ -641,16 +696,18 @@ async def upload_video(
     if Path(file.filename).suffix.lower() not in allowed:
         raise HTTPException(status_code=400, detail=f"Unsupported format: {Path(file.filename).suffix}")
     
-    # Create mission directory
-    mission_dir = MISSIONS_DIR / mission_id
-    mission_dir.mkdir(parents=True, exist_ok=True)
-    
-    # Save video
-    video_path = mission_dir / f"video{Path(file.filename).suffix.lower()}"
-    with video_path.open("wb") as buffer:
-        shutil.copyfileobj(file.file, buffer)
-    
-    # Get video info
+    storage = get_storage(DATA_DIR / "objects")
+    storage_key = mission_object_key(mission_id, file.filename)
+    storage_metadata = storage.upload(
+        storage_key,
+        file.file,
+        file.filename,
+        file.content_type,
+    )
+
+    # Get video info from a temporary local representation only when the local
+    # fallback is active; processing resolves the storage object on demand.
+    video_path = DATA_DIR / "objects" / storage_key
     cap = cv2.VideoCapture(str(video_path))
     fps = cap.get(cv2.CAP_PROP_FPS) or 30
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
@@ -660,8 +717,12 @@ async def upload_video(
     
     video_info = {
         "filename": file.filename,
-        "url": f"{str(request.base_url).rstrip('/')}/media/missions/{mission_id}/{video_path.name}",
-        "size_mb": round(video_path.stat().st_size / (1024 * 1024), 2),
+        "url": f"{str(request.base_url).rstrip('/')}/api/storage/{storage_key}",
+        "storage_key": storage_metadata.key,
+        "content_type": storage_metadata.content_type,
+        "size_bytes": storage_metadata.size,
+        "sha256": storage_metadata.checksum,
+        "size_mb": round(storage_metadata.size / (1024 * 1024), 2),
         "fps": round(fps, 2),
         "total_frames": total_frames,
         "duration_seconds": round(total_frames / fps, 2) if fps > 0 else 0,
@@ -673,12 +734,69 @@ async def upload_video(
         "status": "video_uploaded",
         "video": video_info
     })
+    database_engine = get_configured_engine()
+    if database_engine is not None and check_database(database_engine):
+        with session_scope(database_engine) as session:
+            MissionRepository(session).record_video(mission_id, video_info)
     
     return {
         "success": True,
         "video": video_info,
         "next_step": "configure_processing"
     }
+
+
+@app.get("/api/storage/{storage_key:path}")
+async def download_storage_object(storage_key: str):
+    """Download an object through the configured local or S3 storage adapter."""
+    storage = get_storage(DATA_DIR / "objects")
+    if not storage.exists(storage_key):
+        raise HTTPException(status_code=404, detail="Storage object not found")
+    content_type = "application/octet-stream"
+    if hasattr(storage, "download"):
+        body = storage.download(storage_key)
+        return Response(content=body, media_type=content_type)
+
+
+@app.post("/api/jobs")
+async def create_processing_job(
+    mission_id: str = Query(...),
+    frame_sampling: int = Query(2),
+    inference_resolution: int = Query(640),
+    detection_confidence: float = Query(0.35),
+    reconstruction_quality: str = Query("medium"),
+):
+    mission = MissionData(mission_id)
+    if not mission.data:
+        raise HTTPException(status_code=404, detail="Mission not found")
+    job = create_job(mission_id, {
+        "frame_sampling": frame_sampling,
+        "inference_resolution": inference_resolution,
+        "detection_confidence": detection_confidence,
+        "reconstruction_quality": reconstruction_quality,
+    })
+    mission.update({"processing_job_id": job["id"]})
+    enqueue_processing_job(job["id"])
+    job = get_job(job["id"]) or job
+    return {"success": True, "job": job}
+
+
+@app.get("/api/jobs/{job_id}")
+async def get_processing_job(job_id: str):
+    job = get_job(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Processing job not found")
+    return {"success": True, "job": job, "stages": list(JOB_STAGES)}
+
+
+@app.get("/api/missions/{mission_id}/processing-status")
+async def get_processing_status(mission_id: str):
+    mission = MissionData(mission_id)
+    if not mission.data:
+        raise HTTPException(status_code=404, detail="Mission not found")
+    job_id = mission.get("processing_job_id")
+    job = get_job(str(job_id)) if job_id else None
+    return {"success": True, "mission_id": mission_id, "job": job, "stages": list(JOB_STAGES)}
 
 # ============================================================
 # PROCESSING
@@ -701,12 +819,31 @@ async def process_video(
     if not video_info:
         raise HTTPException(status_code=400, detail="No video uploaded")
 
+    job = create_job(mission_id, {
+        "frame_sampling": frame_sampling,
+        "inference_resolution": inference_resolution,
+        "detection_confidence": detection_confidence,
+        "reconstruction_quality": reconstruction_quality,
+    })
+    mission.update({"processing_job_id": job["id"]})
+    update_job(job["id"], status="VALIDATING", stage="VALIDATING", progress_percent=5, message="Validating uploaded video")
+
     mission_dir = MISSIONS_DIR / mission_id
-    video_path = next(mission_dir.glob("video.*"), None)
+    storage_key = video_info.get("storage_key")
+    storage = get_storage(DATA_DIR / "objects")
+    storage_root = getattr(storage, "root", None)
+    stored_path = storage_root / storage_key if storage_key and storage_root else None
+    if storage_key and (stored_path is None or not stored_path.exists()):
+        materialized_path = DATA_DIR / "processing" / mission_id / Path(video_info.get("filename", "video.mp4")).name
+        materialized_path.parent.mkdir(parents=True, exist_ok=True)
+        materialized_path.write_bytes(storage.download(storage_key))
+        stored_path = materialized_path
+    video_path = stored_path if stored_path and stored_path.exists() else next(mission_dir.glob("video.*"), None)
     if not video_path or not video_path.exists():
         raise HTTPException(status_code=400, detail="Video file not found")
 
     try:
+        update_job(job["id"], status="EXTRACTING_FRAMES", stage="EXTRACTING_FRAMES", progress_percent=15, message="Analyzing video frames")
         real_summary = summarize_uploaded_video(video_path)
         result = _basic_process(video_path, frame_sampling, detection_confidence)
         result["video"] = {**video_info, **result.get("video", {}), **real_summary}
@@ -723,7 +860,9 @@ async def process_video(
         except Exception as exc:
             logger.warning("Detection model inference unavailable: %s", exc)
             result["processing"]["status"] = "PARTIAL"
-            result["processing"]["warning"] = "Detection model available but inference failed; object counts remain unconfirmed."
+            result["processing"]["error_code"] = "MODEL_NOT_FOUND" if "MODEL_NOT_FOUND" in str(exc) or isinstance(exc, FileNotFoundError) else "DETECTION_FAILED"
+            result["processing"]["warning"] = f"{result['processing']['error_code']}: object counts remain unconfirmed."
+            result["detector"] = {"available": False, "error_code": result["processing"]["error_code"], "error": str(exc)}
 
         scene_analysis = result.get("scene_analysis") or build_scene_analysis(result.get("detections"), result.get("tracks"))
 
@@ -838,8 +977,18 @@ async def process_video(
         if damage_result.get("findings"):
             findings.extend(damage_result["findings"])
         mission.update({"findings": findings})
+        database_engine = get_configured_engine()
+        if database_engine is not None and check_database(database_engine):
+            with session_scope(database_engine) as session:
+                MissionRepository(session).replace_detection_results(
+                    mission_id,
+                    (result.get("detections") or {}).get("observations", []),
+                    result.get("tracks", []),
+                )
+        update_job(job["id"], status="COMPLETED", stage="COMPLETED", progress_percent=100, message="Processing completed")
         return {
             "success": True,
+            "job_id": job["id"],
             "processing": result.get("processing"),
             "detections": result.get("detections"),
             "scene_analysis": scene_analysis,
@@ -850,6 +999,7 @@ async def process_video(
         }
 
     except Exception as e:
+        update_job(job["id"], status="FAILED", stage="FAILED", error_message=str(e), message="Processing failed")
         logger.error(f"Processing failed: {e}")
         raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}")
 
@@ -987,6 +1137,50 @@ def _run_yolo_detection(video_path: Path, model, sample_fps: int, confidence: fl
     Returns:
         Detection results dict with tracks, detections, scene_analysis, etc.
     """
+    from backend.detection import DetectionRecord
+    from backend.tracking import UltralyticsTracker
+
+    records = UltralyticsTracker(model).track_video(
+        video_path,
+        sample_fps=sample_fps,
+        confidence=confidence,
+        iou=float(os.getenv("YOLO_IOU", "0.7")),
+    )
+    filtered = []
+    for record in records:
+        if is_aeromesh and record.confidence < _get_confidence_threshold(record.class_name, True):
+            continue
+        class_name = _remap_visdrone_class(record.class_name) if is_aeromesh else record.class_name
+        filtered.append(DetectionRecord(record.frame_id, class_name, record.confidence, record.bbox, record.timestamp, record.track_id))
+    tracks_by_id = {}
+    observations = []
+    for index, record in enumerate(filtered):
+        track_id = record.track_id or f"T{index + 1:04d}"
+        track = tracks_by_id.setdefault(track_id, {"trackId": track_id, "class": record.class_name, "firstSeen": int(record.frame_id), "lastSeen": int(record.frame_id), "hits": 0, "confidences": [], "trajectory": []})
+        track["lastSeen"] = int(record.frame_id)
+        track["hits"] += 1
+        track["confidences"].append(record.confidence)
+        track["trajectory"].append([(record.bbox[0] + record.bbox[2]) / 2, (record.bbox[1] + record.bbox[3]) / 2])
+        observations.append({"frame": int(record.frame_id), "trackId": track_id, "class": record.class_name, "confidence": record.confidence, "boundingBox": record.bbox, "timestamp": record.timestamp})
+    all_tracks = []
+    for track in tracks_by_id.values():
+        track["averageConfidence"] = round(sum(track["confidences"]) / len(track["confidences"]), 3)
+        del track["confidences"]
+        all_tracks.append(track)
+    scene_analysis = build_scene_analysis({"observations": observations}, all_tracks)
+    by_class = {}
+    for track in all_tracks:
+        by_class[track["class"]] = by_class.get(track["class"], 0) + 1
+    return {
+        "video": {"filename": video_path.name},
+        "detector": get_detector_metadata(is_aeromesh=is_aeromesh),
+        "processing": {"status": "COMPLETE", "sampleFps": sample_fps, "framesAnalyzed": len({item["frame"] for item in observations}), "inferenceFps": 0, "warning": "" if all_tracks else "No detections met the configured confidence threshold."},
+        "detections": {"uniqueTracks": len(all_tracks), "byGroup": {}, "byClass": by_class, "observations": observations, "scene_analysis": scene_analysis},
+        "tracks": all_tracks,
+        "frameQuality": {"estimated": True, "average": {}, "samples": []},
+        "scene_analysis": scene_analysis,
+    }
+
     capture = cv2.VideoCapture(str(video_path))
     if not capture.isOpened():
         raise ValueError("OpenCV could not decode the uploaded video")
@@ -1124,7 +1318,8 @@ async def get_mission_reconstruction(mission_id: str):
     if not mission.data:
         raise HTTPException(status_code=404, detail="Mission not found")
 
-    reconstruction = mission.get("reconstruction") or {
+    meta = get_reconstruction_metadata(mission_id)
+    reconstruction = meta or mission.get("reconstruction") or {
         "status": "UNKNOWN",
         "point_count": 0,
         "success": False,
@@ -1134,6 +1329,49 @@ async def get_mission_reconstruction(mission_id: str):
         "error": "No reconstruction was generated yet.",
     }
     return {"success": bool(reconstruction.get("success")), "reconstruction": reconstruction}
+
+
+@app.get("/api/model-status")
+async def get_model_status():
+    from backend.model_registry import ModelRegistry
+    return {"success": True, "model": ModelRegistry().metadata()}
+
+
+def _object_payload(mission_id: str) -> dict:
+    mission = MissionData(mission_id)
+    if not mission.data:
+        raise HTTPException(status_code=404, detail="Mission not found")
+    detections = mission.get("detections") or {}
+    tracks = mission.get("tracks") or []
+    observations = detections.get("observations") if isinstance(detections, dict) else []
+    return {"mission_id": mission_id, "detections": observations or [], "tracks": tracks, "summary": {
+        "total_unique_objects": len(tracks),
+        "counts_by_class": detections.get("byClass", {}) if isinstance(detections, dict) else {},
+    }}
+
+
+@app.get("/api/missions/{mission_id}/detections")
+async def get_mission_detections(mission_id: str):
+    payload = _object_payload(mission_id)
+    return {"success": True, "mission_id": mission_id, "detections": payload["detections"]}
+
+
+@app.get("/api/missions/{mission_id}/tracks")
+async def get_mission_tracks(mission_id: str):
+    payload = _object_payload(mission_id)
+    return {"success": True, "mission_id": mission_id, "tracks": payload["tracks"]}
+
+
+@app.get("/api/missions/{mission_id}/objects")
+async def get_mission_objects(mission_id: str):
+    payload = _object_payload(mission_id)
+    return {"success": True, "mission_id": mission_id, "objects": payload["tracks"], "summary": payload["summary"]}
+
+
+@app.get("/api/missions/{mission_id}/object-summary")
+async def get_mission_object_summary(mission_id: str):
+    payload = _object_payload(mission_id)
+    return {"success": True, "mission_id": mission_id, **payload["summary"]}
 
 
 @app.get("/api/missions/{mission_id}/reconstruction/pointcloud")
@@ -1154,12 +1392,43 @@ async def get_mission_pointcloud(mission_id: str):
     )
 
 
+@app.get("/api/missions/{mission_id}/reconstruction/mesh")
+async def get_mission_mesh(mission_id: str):
+    """Serve the generated PLY mesh for a mission if it exists."""
+    mission = MissionData(mission_id)
+    if not mission.data:
+        raise HTTPException(status_code=404, detail="Mission not found")
+
+    mesh_path = get_reconstruction_mesh_path(mission_id)
+    if not mesh_path or not mesh_path.exists():
+        raise HTTPException(status_code=404, detail="Reconstruction mesh not found")
+
+    return FileResponse(
+        path=str(mesh_path),
+        media_type="application/octet-stream",
+        filename=mesh_path.name,
+    )
+
+
 @app.post("/api/missions/{mission_id}/reconstruct")
 async def generate_reconstruction(mission_id: str):
     """Generate 3D reconstruction for a mission"""
     mission = MissionData(mission_id)
     if not mission.data:
         raise HTTPException(status_code=404, detail="Mission not found")
+
+    # If real video exists, trigger the authoritative photogrammetric pipeline
+    video_path_raw = mission.get("video_path")
+    if video_path_raw and Path(video_path_raw).exists():
+        recon_res = run_reconstruction_for_mission(mission_id, Path(video_path_raw))
+        mission.update({
+            "reconstruction": recon_res,
+            "status": recon_res.get("status", "COMPLETED"),
+        })
+        return {
+            "success": bool(recon_res.get("success")),
+            "reconstruction": recon_res,
+        }
     
     detections = mission.get("detections")
     if not detections:

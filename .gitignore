@@ -4,6 +4,7 @@ node_modules/
 
 # Python environments
 .venv/
+.venv312/
 .venv311/
 venv/
 env/
@@ -17,6 +18,7 @@ dist/
 build/
 .vite/
 .cache/
+frontend/test-results/
 
 # Environment / secrets
 .env

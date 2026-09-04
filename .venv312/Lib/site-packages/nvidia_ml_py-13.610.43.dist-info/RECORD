@@ -1,0 +1,9 @@
+__pycache__/example.cpython-312.pyc,,
+__pycache__/pynvml.cpython-312.pyc,,
+example.py,sha256=ewe9l8r9oxcsgfsAn00pOaG0XMYIEzxtddKtV_0TUwg,7962
+nvidia_ml_py-13.610.43.dist-info/INSTALLER,sha256=zuuue4knoyJ-UwPPXg8fezS7VCrXJQrAP7zeNuwvFQg,4
+nvidia_ml_py-13.610.43.dist-info/METADATA,sha256=S2gbZI4wKADIORlDVQQZPfhHy3Ip_stODWRxqmhH8GM,9715
+nvidia_ml_py-13.610.43.dist-info/RECORD,,
+nvidia_ml_py-13.610.43.dist-info/WHEEL,sha256=aeYiig01lYGDzBgS8HxWXOg3uV61G9ijOsup-k9o1sk,91
+nvidia_ml_py-13.610.43.dist-info/top_level.txt,sha256=wLINSA1WKnhsGgKsb_nuj51ZCQrXaN5qhioTL56g98A,15
+pynvml.py,sha256=0yM8eM0_F72peFA0brow-ojx1rKVzukPp-wcbL8pHls,293031

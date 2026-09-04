@@ -1,0 +1,423 @@
+{
+  "validation_phase": "Phase 4.5D - Real YOLO11n Validation",
+  "timestamp": "2026-09-04 10:19:53Z",
+  "model": {
+    "name": "yolo11n",
+    "version": "yolo11n-official",
+    "path": "D:\\SIH\\SIH-aeromesh\\backend\\models\\yolo11n.pt",
+    "sha256": "0ebbc80d4a7680d14987a577cd21342b65ecfd94632bd9a8da63ae6417644ee1",
+    "classes_count": 80,
+    "confidence_threshold": 0.35,
+    "iou_threshold": 0.7
+  },
+  "tracker": {
+    "type": "bytetrack",
+    "library": "Ultralytics persistent ByteTrack"
+  },
+  "video": {
+    "filename": "WhatsApp Video 2026-09-01 at 11.27.02 (1).mp4",
+    "source_path": "C:\\Users\\Kaustubh\\OneDrive\\Desktop\\SIH 2026\\WhatsApp Video 2026-09-01 at 11.27.02 (1).mp4",
+    "resolution": {
+      "width": 3840,
+      "height": 2160
+    },
+    "native_fps": 24.0,
+    "total_frames": 725,
+    "duration_seconds": 30.21
+  },
+  "sampling": {
+    "target_sample_fps": 2.0,
+    "frame_interval": 12,
+    "inference_resolution": 1280
+  },
+  "execution": {
+    "frames_processed": 61,
+    "total_processing_time_seconds": 30.84,
+    "effective_fps": 1.98
+  },
+  "detection_metrics": {
+    "total_detections": 399,
+    "detections_by_class": {
+      "car": 383,
+      "truck": 1,
+      "train": 15
+    },
+    "confidence_stats": {
+      "min": 0.3507,
+      "max": 0.7073,
+      "mean": 0.4953
+    }
+  },
+  "tracking_metrics": {
+    "unique_tracks": 23,
+    "tracks_by_class": {
+      "car": 21,
+      "truck": 1,
+      "train": 1
+    },
+    "tracks": [
+      {
+        "track_id": "T0002",
+        "class": "car",
+        "first_frame": 0,
+        "last_frame": 660,
+        "first_timestamp": 0.0,
+        "last_timestamp": 27.5,
+        "duration_seconds": 27.5,
+        "detection_count": 56,
+        "average_confidence": 0.5544,
+        "trajectory_points": 56
+      },
+      {
+        "track_id": "T0006",
+        "class": "car",
+        "first_frame": 0,
+        "last_frame": 672,
+        "first_timestamp": 0.0,
+        "last_timestamp": 28.0,
+        "duration_seconds": 28.0,
+        "detection_count": 55,
+        "average_confidence": 0.4858,
+        "trajectory_points": 55
+      },
+      {
+        "track_id": "T0003",
+        "class": "car",
+        "first_frame": 0,
+        "last_frame": 624,
+        "first_timestamp": 0.0,
+        "last_timestamp": 26.0,
+        "duration_seconds": 26.0,
+        "detection_count": 53,
+        "average_confidence": 0.5632,
+        "trajectory_points": 53
+      },
+      {
+        "track_id": "T0008",
+        "class": "car",
+        "first_frame": 0,
+        "last_frame": 696,
+        "first_timestamp": 0.0,
+        "last_timestamp": 29.0,
+        "duration_seconds": 29.0,
+        "detection_count": 50,
+        "average_confidence": 0.4787,
+        "trajectory_points": 50
+      },
+      {
+        "track_id": "T0004",
+        "class": "car",
+        "first_frame": 0,
+        "last_frame": 540,
+        "first_timestamp": 0.0,
+        "last_timestamp": 22.5,
+        "duration_seconds": 22.5,
+        "detection_count": 45,
+        "average_confidence": 0.5058,
+        "trajectory_points": 45
+      },
+      {
+        "track_id": "T0005",
+        "class": "car",
+        "first_frame": 0,
+        "last_frame": 564,
+        "first_timestamp": 0.0,
+        "last_timestamp": 23.5,
+        "duration_seconds": 23.5,
+        "detection_count": 41,
+        "average_confidence": 0.4355,
+        "trajectory_points": 41
+      },
+      {
+        "track_id": "T0001",
+        "class": "car",
+        "first_frame": 0,
+        "last_frame": 264,
+        "first_timestamp": 0.0,
+        "last_timestamp": 11.0,
+        "duration_seconds": 11.0,
+        "detection_count": 22,
+        "average_confidence": 0.4519,
+        "trajectory_points": 22
+      },
+      {
+        "track_id": "T0233",
+        "class": "train",
+        "first_frame": 540,
+        "last_frame": 720,
+        "first_timestamp": 22.5,
+        "last_timestamp": 30.0,
+        "duration_seconds": 7.5,
+        "detection_count": 15,
+        "average_confidence": 0.4612,
+        "trajectory_points": 15
+      },
+      {
+        "track_id": "T0030",
+        "class": "car",
+        "first_frame": 84,
+        "last_frame": 300,
+        "first_timestamp": 3.5,
+        "last_timestamp": 12.5,
+        "duration_seconds": 9.0,
+        "detection_count": 13,
+        "average_confidence": 0.4365,
+        "trajectory_points": 13
+      },
+      {
+        "track_id": "T0121",
+        "class": "car",
+        "first_frame": 300,
+        "last_frame": 456,
+        "first_timestamp": 12.5,
+        "last_timestamp": 19.0,
+        "duration_seconds": 6.5,
+        "detection_count": 13,
+        "average_confidence": 0.487,
+        "trajectory_points": 13
+      },
+      {
+        "track_id": "T0230",
+        "class": "car",
+        "first_frame": 540,
+        "last_frame": 660,
+        "first_timestamp": 22.5,
+        "last_timestamp": 27.5,
+        "duration_seconds": 5.0,
+        "detection_count": 11,
+        "average_confidence": 0.4579,
+        "trajectory_points": 11
+      },
+      {
+        "track_id": "T0063",
+        "class": "car",
+        "first_frame": 168,
+        "last_frame": 276,
+        "first_timestamp": 7.0,
+        "last_timestamp": 11.5,
+        "duration_seconds": 4.5,
+        "detection_count": 8,
+        "average_confidence": 0.3918,
+        "trajectory_points": 8
+      },
+      {
+        "track_id": "T0009",
+        "class": "car",
+        "first_frame": 0,
+        "last_frame": 24,
+        "first_timestamp": 0.0,
+        "last_timestamp": 1.0,
+        "duration_seconds": 1.0,
+        "detection_count": 3,
+        "average_confidence": 0.4291,
+        "trajectory_points": 3
+      },
+      {
+        "track_id": "T0215",
+        "class": "car",
+        "first_frame": 504,
+        "last_frame": 528,
+        "first_timestamp": 21.0,
+        "last_timestamp": 22.0,
+        "duration_seconds": 1.0,
+        "detection_count": 3,
+        "average_confidence": 0.6412,
+        "trajectory_points": 3
+      },
+      {
+        "track_id": "T0021",
+        "class": "car",
+        "first_frame": 60,
+        "last_frame": 72,
+        "first_timestamp": 2.5,
+        "last_timestamp": 3.0,
+        "duration_seconds": 0.5,
+        "detection_count": 2,
+        "average_confidence": 0.392,
+        "trajectory_points": 2
+      },
+      {
+        "track_id": "T0096",
+        "class": "car",
+        "first_frame": 240,
+        "last_frame": 252,
+        "first_timestamp": 10.0,
+        "last_timestamp": 10.5,
+        "duration_seconds": 0.5,
+        "detection_count": 2,
+        "average_confidence": 0.4179,
+        "trajectory_points": 2
+      },
+      {
+        "track_id": "T0007",
+        "class": "car",
+        "first_frame": 0,
+        "last_frame": 0,
+        "first_timestamp": 0.0,
+        "last_timestamp": 0.0,
+        "duration_seconds": 0.0,
+        "detection_count": 1,
+        "average_confidence": 0.3977,
+        "trajectory_points": 1
+      },
+      {
+        "track_id": "T0048",
+        "class": "car",
+        "first_frame": 120,
+        "last_frame": 120,
+        "first_timestamp": 5.0,
+        "last_timestamp": 5.0,
+        "duration_seconds": 0.0,
+        "detection_count": 1,
+        "average_confidence": 0.4022,
+        "trajectory_points": 1
+      },
+      {
+        "track_id": "T0091",
+        "class": "truck",
+        "first_frame": 240,
+        "last_frame": 240,
+        "first_timestamp": 10.0,
+        "last_timestamp": 10.0,
+        "duration_seconds": 0.0,
+        "detection_count": 1,
+        "average_confidence": 0.494,
+        "trajectory_points": 1
+      },
+      {
+        "track_id": "T0221",
+        "class": "car",
+        "first_frame": 516,
+        "last_frame": 516,
+        "first_timestamp": 21.5,
+        "last_timestamp": 21.5,
+        "duration_seconds": 0.0,
+        "detection_count": 1,
+        "average_confidence": 0.5001,
+        "trajectory_points": 1
+      },
+      {
+        "track_id": "T0269",
+        "class": "car",
+        "first_frame": 612,
+        "last_frame": 612,
+        "first_timestamp": 25.5,
+        "last_timestamp": 25.5,
+        "duration_seconds": 0.0,
+        "detection_count": 1,
+        "average_confidence": 0.6006,
+        "trajectory_points": 1
+      },
+      {
+        "track_id": "T0274",
+        "class": "car",
+        "first_frame": 624,
+        "last_frame": 624,
+        "first_timestamp": 26.0,
+        "last_timestamp": 26.0,
+        "duration_seconds": 0.0,
+        "detection_count": 1,
+        "average_confidence": 0.5834,
+        "trajectory_points": 1
+      },
+      {
+        "track_id": "T0278",
+        "class": "car",
+        "first_frame": 648,
+        "last_frame": 648,
+        "first_timestamp": 27.0,
+        "last_timestamp": 27.0,
+        "duration_seconds": 0.0,
+        "detection_count": 1,
+        "average_confidence": 0.6047,
+        "trajectory_points": 1
+      }
+    ]
+  },
+  "evidence_files": [
+    {
+      "filename": "evidence_frame_00000.jpg",
+      "frame": 0,
+      "timestamp": 0.0,
+      "detections_count": 9
+    },
+    {
+      "filename": "evidence_frame_00012.jpg",
+      "frame": 12,
+      "timestamp": 0.5,
+      "detections_count": 8
+    },
+    {
+      "filename": "evidence_frame_00024.jpg",
+      "frame": 24,
+      "timestamp": 1.0,
+      "detections_count": 6
+    },
+    {
+      "filename": "evidence_frame_00036.jpg",
+      "frame": 36,
+      "timestamp": 1.5,
+      "detections_count": 6
+    },
+    {
+      "filename": "evidence_frame_00048.jpg",
+      "frame": 48,
+      "timestamp": 2.0,
+      "detections_count": 7
+    },
+    {
+      "filename": "evidence_frame_00060.jpg",
+      "frame": 60,
+      "timestamp": 2.5,
+      "detections_count": 8
+    },
+    {
+      "filename": "evidence_frame_00072.jpg",
+      "frame": 72,
+      "timestamp": 3.0,
+      "detections_count": 8
+    },
+    {
+      "filename": "evidence_frame_00084.jpg",
+      "frame": 84,
+      "timestamp": 3.5,
+      "detections_count": 8
+    },
+    {
+      "filename": "evidence_frame_00120.jpg",
+      "frame": 120,
+      "timestamp": 5.0,
+      "detections_count": 9
+    },
+    {
+      "filename": "evidence_frame_00240.jpg",
+      "frame": 240,
+      "timestamp": 10.0,
+      "detections_count": 10
+    },
+    {
+      "filename": "evidence_frame_00360.jpg",
+      "frame": 360,
+      "timestamp": 15.0,
+      "detections_count": 6
+    },
+    {
+      "filename": "evidence_frame_00480.jpg",
+      "frame": 480,
+      "timestamp": 20.0,
+      "detections_count": 4
+    },
+    {
+      "filename": "evidence_frame_00600.jpg",
+      "frame": 600,
+      "timestamp": 25.0,
+      "detections_count": 6
+    },
+    {
+      "filename": "evidence_frame_00720.jpg",
+      "frame": 720,
+      "timestamp": 30.0,
+      "detections_count": 1
+    }
+  ]
+}
