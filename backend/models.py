@@ -28,6 +28,18 @@ def compile_postgis_geometry(element, compiler, **kwargs):
     return f"geometry({element.geometry_type},{element.srid})"
 
 
+class User(Base):
+    __tablename__ = "users"
+
+    id: Mapped[str] = mapped_column(String(64), primary_key=True)
+    email: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
+    hashed_password: Mapped[str] = mapped_column(String(255), nullable=False)
+    full_name: Mapped[str | None] = mapped_column(String(255))
+    role: Mapped[str] = mapped_column(String(50), default="OPERATOR", nullable=False)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+
+
 class Mission(Base):
     __tablename__ = "missions"
 
@@ -37,6 +49,7 @@ class Mission(Base):
     location: Mapped[str | None] = mapped_column(String(500))
     reference_location: Mapped[str | None] = mapped_column(PortableGeometry("POINT"))
     operator: Mapped[str | None] = mapped_column(String(255))
+    created_by: Mapped[str | None] = mapped_column(String(120), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     status: Mapped[str] = mapped_column(String(80), default="created", nullable=False)
     payload: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)

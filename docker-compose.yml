@@ -1,0 +1,116 @@
+# ==============================================================================
+# AeroMesh Production Docker Compose Stack
+# Orchestrates PostgreSQL/PostGIS, Redis, FastAPI Backend, Celery Worker, and Nginx SPA
+# ==============================================================================
+
+version: "3.8"
+
+services:
+  # 1. Relational Database with Spatial Engine
+  db:
+    image: postgis/postgis:16-3.4-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-aeromesh}
+      POSTGRES_USER: ${POSTGRES_USER:-aeromesh}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-aeromesh_production_pass_2026}
+    volumes:
+      - postgis_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-aeromesh} -d $${POSTGRES_DB:-aeromesh}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - aeromesh_net
+
+  # 2. In-Memory Broker & Result Store
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - aeromesh_net
+
+  # 3. FastAPI REST & Spatial Processing Backend
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-aeromesh}:${POSTGRES_PASSWORD:-aeromesh_production_pass_2026}@db:5432/${POSTGRES_DB:-aeromesh}
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      SECRET_KEY: ${SECRET_KEY:-aeromesh-production-secret-key-change-in-env-2026}
+      JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
+      JWT_EXPIRATION_MINUTES: ${JWT_EXPIRATION_MINUTES:-1440}
+      AEROMESH_AUTH_OPTIONAL: ${AEROMESH_AUTH_OPTIONAL:-1}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:80,http://localhost:5173}
+      OBJECT_STORAGE_ROOT: /app/data/objects
+    volumes:
+      - aeromesh_data:/app/data
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - aeromesh_net
+
+  # 4. Celery Asynchronous Job Worker
+  celery_worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: ["celery", "-A", "backend.tasks.celery_app", "worker", "--loglevel=info", "-c", "2"]
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-aeromesh}:${POSTGRES_PASSWORD:-aeromesh_production_pass_2026}@db:5432/${POSTGRES_DB:-aeromesh}
+      REDIS_URL: redis://redis:6379/0
+      CELERY_BROKER_URL: redis://redis:6379/0
+      CELERY_RESULT_BACKEND: redis://redis:6379/0
+      OBJECT_STORAGE_ROOT: /app/data/objects
+    volumes:
+      - aeromesh_data:/app/data
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    networks:
+      - aeromesh_net
+
+  # 5. Production Nginx SPA & Reverse Proxy
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - aeromesh_net
+
+volumes:
+  postgis_data:
+    driver: local
+  aeromesh_data:
+    driver: local
+
+networks:
+  aeromesh_net:
+    driver: bridge

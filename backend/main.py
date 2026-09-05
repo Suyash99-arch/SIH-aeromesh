@@ -17,7 +17,7 @@ from typing import Any, Dict, Optional
 
 import cv2
 import numpy as np
-from fastapi import FastAPI, File, UploadFile, HTTPException, Query, Request
+from fastapi import Depends, FastAPI, File, HTTPException, Query, Request, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -28,6 +28,23 @@ from backend.jobs import JOB_STAGES, create_job, get_job, update_job
 from backend.storage import get_storage, mission_object_key
 from backend.tasks import enqueue_processing_job
 from pydantic import BaseModel, Field
+from backend.security import (
+    DEMO_USERS,
+    ROLE_ADMIN,
+    ROLE_ANALYST,
+    ROLE_OPERATOR,
+    SecurityHeadersMiddleware,
+    UserRecord,
+    check_mission_access,
+    create_access_token,
+    get_current_user,
+    get_current_user_optional,
+    rate_limit_dependency,
+    require_roles,
+    sanitize_filename,
+    validate_uploaded_file,
+    verify_password,
+)
 from backend.scale_calibration import (
     ScaleCalibrationService,
     CalibrationRecord,
@@ -130,13 +147,50 @@ app = FastAPI(
     version="1.0.0",
 )
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origin_regex=r"https?://(localhost|127\.0\.0\.1):(517[3-9]|4173)",
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+# 1. HTTP Security Headers
+app.add_middleware(SecurityHeadersMiddleware)
+
+# 2. CORS Handling (Production Configurable + Localhost Fallback)
+cors_origins_env = os.getenv("CORS_ALLOWED_ORIGINS", "").strip()
+if cors_origins_env:
+    allowed_origins = [o.strip() for o in cors_origins_env.split(",") if o.strip()]
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=allowed_origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+else:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origin_regex=r"https?://(localhost|127\.0\.0\.1):(517[3-9]|4173)",
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+
+@app.exception_handler(Exception)
+async def production_exception_handler(request: Request, exc: Exception):
+    """Sanitized production error response that preserves diagnostics in logs without leaking stack traces."""
+    if isinstance(exc, HTTPException):
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"error": "HTTP_EXCEPTION", "detail": exc.detail},
+            headers=getattr(exc, "headers", None) or {},
+        )
+
+    request_id = str(uuid.uuid4())
+    logger.error("Unhandled server exception [request_id=%s] on %s %s: %s", request_id, request.method, request.url.path, exc, exc_info=True)
+    return JSONResponse(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        content={
+            "error": "INTERNAL_ERROR",
+            "message": "An unexpected internal server error occurred.",
+            "request_id": request_id,
+        },
+    )
 
 app.mount("/media", StaticFiles(directory=str(DATA_DIR)), name="mission-media")
 
@@ -598,6 +652,157 @@ async def health():
     }
 
 
+@app.get("/ready")
+async def readiness():
+    """Readiness probe checking database, storage, and Redis connectivity."""
+    checks: Dict[str, Any] = {}
+    is_ready = True
+
+    # 1. Database
+    database_engine = get_configured_engine()
+    if database_engine is not None:
+        try:
+            db_ok = check_database(database_engine)
+            checks["database"] = {"status": "ready" if db_ok else "unavailable", "mode": "configured_database"}
+            if not db_ok:
+                is_ready = False
+        except Exception as exc:
+            checks["database"] = {"status": "error", "error": str(exc)}
+            is_ready = False
+    else:
+        checks["database"] = {"status": "ready", "mode": "json_fallback"}
+
+    # 2. Storage
+    try:
+        storage = get_storage(DATA_DIR / "objects")
+        probe_key = ".readiness_probe.tmp"
+        storage.upload(probe_key, io.BytesIO(b"ready"), probe_key)
+        storage.delete(probe_key)
+        checks["storage"] = {"status": "ready", "backend": type(storage).__name__}
+    except Exception as exc:
+        checks["storage"] = {"status": "error", "error": str(exc)}
+        is_ready = False
+
+    # 3. Redis / Worker Broker
+    redis_url = os.getenv("REDIS_URL", "").strip()
+    if redis_url:
+        try:
+            import redis
+            r = redis.Redis.from_url(redis_url, socket_timeout=2)
+            r.ping()
+            checks["redis"] = {"status": "ready"}
+        except Exception as exc:
+            checks["redis"] = {"status": "unavailable", "error": str(exc)}
+            if os.getenv("CELERY_REQUIRED", "0") == "1":
+                is_ready = False
+    else:
+        checks["redis"] = {"status": "not_configured", "mode": "synchronous_local_fallback"}
+
+    status_code = status.HTTP_200_OK if is_ready else status.HTTP_503_SERVICE_UNAVAILABLE
+    return JSONResponse(
+        status_code=status_code,
+        content={
+            "status": "ready" if is_ready else "degraded",
+            "timestamp": datetime.utcnow().isoformat(),
+            "checks": checks,
+        },
+    )
+
+
+class LoginRequest(BaseModel):
+    email: str
+    password: str
+
+
+@app.post("/api/auth/login", dependencies=[Depends(rate_limit_dependency)])
+async def login(credentials: LoginRequest):
+    """Authenticate user with email and password, issuing a signed JWT Bearer token."""
+    email = credentials.email.strip().lower()
+    password = credentials.password
+    user: Optional[UserRecord] = None
+
+    # Check database users if configured
+    database_engine = get_configured_engine()
+    if database_engine is not None and check_database(database_engine):
+        try:
+            with session_scope(database_engine) as session:
+                from backend.models import User as UserModel
+                db_user = session.query(UserModel).filter(UserModel.email == email).first()
+                if db_user and db_user.is_active:
+                    if verify_password(password, db_user.hashed_password):
+                        user = UserRecord(
+                            id=db_user.id,
+                            email=db_user.email,
+                            full_name=db_user.full_name or email.split("@")[0].title(),
+                            role=db_user.role,
+                            hashed_password=db_user.hashed_password,
+                            is_active=db_user.is_active,
+                        )
+        except Exception as exc:
+            logger.warning("Database user lookup failed, falling back to demo users: %s", exc)
+
+    # Fallback to seeded demo accounts
+    if user is None:
+        demo_user = DEMO_USERS.get(email)
+        if demo_user and verify_password(password, demo_user.hashed_password):
+            user = demo_user
+
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid email or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
+    token = create_access_token({
+        "sub": user.email,
+        "user_id": user.id,
+        "role": user.role,
+        "name": user.full_name,
+    })
+
+    return {
+        "success": True,
+        "access_token": token,
+        "token_type": "bearer",
+        "user": user.to_dict(),
+    }
+
+
+@app.get("/api/auth/me")
+async def get_current_user_profile(user: UserRecord = Depends(get_current_user)):
+    """Retrieve current authenticated user profile and assigned role."""
+    return {
+        "success": True,
+        "user": user.to_dict(),
+    }
+
+
+@app.get("/api/auth/demo-users")
+async def get_demo_users():
+    """Expose available demo credentials for 1-click evaluation by judges."""
+    return {
+        "success": True,
+        "users": [
+            {
+                "email": u.email,
+                "full_name": u.full_name,
+                "role": u.role,
+                "description": (
+                    "Full administrator access, role management, and system administration"
+                    if u.role == ROLE_ADMIN
+                    else (
+                        "Mission inspection, 3D/GIS analysis, measurements, and executive reporting"
+                        if u.role == ROLE_ANALYST
+                        else "Drone flight video upload, pipeline execution, and mission operations"
+                    )
+                ),
+            }
+            for u in DEMO_USERS.values()
+        ],
+    }
+
+
 @app.get("/api/missions/{mission_id}/status")
 async def get_mission_status(mission_id: str):
     mission = MissionData(mission_id)
@@ -697,30 +902,49 @@ async def list_missions():
 # VIDEO UPLOAD
 # ============================================================
 
-@app.post("/api/missions/{mission_id}/upload")
+@app.post("/api/missions/{mission_id}/upload", dependencies=[Depends(rate_limit_dependency)])
 async def upload_video(
     mission_id: str,
     request: Request,
     file: UploadFile = File(...),
+    current_user: Optional[UserRecord] = Depends(get_current_user_optional),
 ):
-    """Upload video to a mission"""
+    """Upload video to a mission with RBAC and path traversal hardening."""
     mission = MissionData(mission_id)
     if not mission.data:
         raise HTTPException(status_code=404, detail="Mission not found")
-    
+
+    # Mission-level access check
+    check_mission_access(mission_id, current_user, mission.data.get("created_by") or mission.data.get("operator"))
+
+    # Role check: only OPERATOR and ADMIN can upload video
+    if current_user and current_user.role not in (ROLE_ADMIN, ROLE_OPERATOR):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only operators and administrators can upload flight videos")
+
     if not file.filename:
         raise HTTPException(status_code=400, detail="No file selected")
-    
+
+    # Reject path traversal patterns in client-provided filename
+    if ".." in file.filename or "/" in file.filename or "\\" in file.filename:
+        raise HTTPException(status_code=400, detail="Dangerous path traversal characters detected in filename")
+
+    safe_name = sanitize_filename(file.filename)
     allowed = {".mp4", ".mov", ".avi", ".mkv", ".webm"}
-    if Path(file.filename).suffix.lower() not in allowed:
-        raise HTTPException(status_code=400, detail=f"Unsupported format: {Path(file.filename).suffix}")
-    
+    if Path(safe_name).suffix.lower() not in allowed:
+        raise HTTPException(status_code=400, detail=f"Unsupported format: {Path(safe_name).suffix}")
+
+    # Read content to validate size and magic bytes
+    content = await file.read()
+    valid, error_reason = validate_uploaded_file(safe_name, content)
+    if not valid:
+        raise HTTPException(status_code=400, detail=error_reason)
+
     storage = get_storage(DATA_DIR / "objects")
-    storage_key = mission_object_key(mission_id, file.filename)
+    storage_key = mission_object_key(mission_id, safe_name)
     storage_metadata = storage.upload(
         storage_key,
-        file.file,
-        file.filename,
+        io.BytesIO(content),
+        safe_name,
         file.content_type,
     )
 
@@ -733,9 +957,9 @@ async def upload_video(
     width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH) or 1920)
     height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT) or 1080)
     cap.release()
-    
+
     video_info = {
-        "filename": file.filename,
+        "filename": safe_name,
         "url": f"{str(request.base_url).rstrip('/')}/api/storage/{storage_key}",
         "storage_key": storage_metadata.key,
         "content_type": storage_metadata.content_type,
@@ -748,7 +972,7 @@ async def upload_video(
         "resolution": {"width": width, "height": height},
         "codec": "detected"
     }
-    
+
     mission.update({
         "status": "video_uploaded",
         "video": video_info
@@ -757,7 +981,7 @@ async def upload_video(
     if database_engine is not None and check_database(database_engine):
         with session_scope(database_engine) as session:
             MissionRepository(session).record_video(mission_id, video_info)
-    
+
     return {
         "success": True,
         "video": video_info,
@@ -767,14 +991,20 @@ async def upload_video(
 
 @app.get("/api/storage/{storage_key:path}")
 async def download_storage_object(storage_key: str):
-    """Download an object through the configured local or S3 storage adapter."""
+    """Download an object through the configured local or S3 storage adapter with path traversal guards."""
+    if ".." in storage_key or "\\..\\" in storage_key or "/../" in f"/{storage_key}/":
+        raise HTTPException(status_code=400, detail="Invalid storage path")
+
     storage = get_storage(DATA_DIR / "objects")
-    if not storage.exists(storage_key):
-        raise HTTPException(status_code=404, detail="Storage object not found")
-    content_type = "application/octet-stream"
-    if hasattr(storage, "download"):
-        body = storage.download(storage_key)
-        return Response(content=body, media_type=content_type)
+    try:
+        if not storage.exists(storage_key):
+            raise HTTPException(status_code=404, detail="Storage object not found")
+        content_type = "application/octet-stream"
+        if hasattr(storage, "download"):
+            body = storage.download(storage_key)
+            return Response(content=body, media_type=content_type)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
 
 @app.post("/api/jobs")
@@ -2193,11 +2423,16 @@ from backend.reporting import (
 
 
 @app.get("/api/missions/{mission_id}/report")
-async def generate_report(mission_id: str):
-    """Generate or retrieve complete structured mission report."""
+async def generate_report(
+    mission_id: str,
+    current_user: Optional[UserRecord] = Depends(get_current_user_optional),
+):
+    """Generate or retrieve complete structured mission report with authorization check."""
     mission = MissionData(mission_id)
     if not mission.data:
         raise HTTPException(status_code=404, detail="Mission not found")
+
+    check_mission_access(mission_id, current_user, mission.data.get("created_by") or mission.data.get("operator"))
 
     report = build_mission_report(mission_id, mission)
 
@@ -2213,12 +2448,17 @@ async def generate_report(mission_id: str):
     }
 
 
-@app.get("/api/missions/{mission_id}/report/pdf")
-async def export_mission_pdf(mission_id: str):
-    """Download executive-ready PDF mission decision report."""
+@app.get("/api/missions/{mission_id}/report/pdf", dependencies=[Depends(rate_limit_dependency)])
+async def export_mission_pdf(
+    mission_id: str,
+    current_user: Optional[UserRecord] = Depends(get_current_user_optional),
+):
+    """Download executive-ready PDF mission decision report with authorization check."""
     mission = MissionData(mission_id)
     if not mission.data:
         raise HTTPException(status_code=404, detail="Mission not found")
+
+    check_mission_access(mission_id, current_user, mission.data.get("created_by") or mission.data.get("operator"))
 
     report = build_mission_report(mission_id, mission)
     pdf_buffer = io.BytesIO()
@@ -2240,11 +2480,16 @@ async def export_mission_pdf(mission_id: str):
 
 
 @app.get("/api/missions/{mission_id}/export/csv")
-async def export_mission_csv(mission_id: str):
-    """Download mission semantic objects and spatial data as CSV."""
+async def export_mission_csv(
+    mission_id: str,
+    current_user: Optional[UserRecord] = Depends(get_current_user_optional),
+):
+    """Download mission semantic objects and spatial data as CSV with authorization check."""
     mission = MissionData(mission_id)
     if not mission.data:
         raise HTTPException(status_code=404, detail="Mission not found")
+
+    check_mission_access(mission_id, current_user, mission.data.get("created_by") or mission.data.get("operator"))
 
     report = build_mission_report(mission_id, mission)
     csv_str = generate_mission_csv(report)
@@ -2258,11 +2503,16 @@ async def export_mission_csv(mission_id: str):
 
 
 @app.get("/api/missions/{mission_id}/export/json")
-async def export_mission_json(mission_id: str):
-    """Download full complete mission metadata and results as JSON."""
+async def export_mission_json(
+    mission_id: str,
+    current_user: Optional[UserRecord] = Depends(get_current_user_optional),
+):
+    """Download full complete mission metadata and results as JSON with authorization check."""
     mission = MissionData(mission_id)
     if not mission.data:
         raise HTTPException(status_code=404, detail="Mission not found")
+
+    check_mission_access(mission_id, current_user, mission.data.get("created_by") or mission.data.get("operator"))
 
     report = build_mission_report(mission_id, mission)
     json_data = generate_mission_json(report)
@@ -2277,14 +2527,19 @@ async def export_mission_json(mission_id: str):
 
 
 @app.get("/api/missions/{mission_id}/export/geojson")
-async def export_mission_geojson(mission_id: str):
+async def export_mission_geojson(
+    mission_id: str,
+    current_user: Optional[UserRecord] = Depends(get_current_user_optional),
+):
     """
-    Export GeoJSON only if genuinely georeferenced.
+    Export GeoJSON only if genuinely georeferenced, protected with authorization check.
     For unreferenced missions, returns unavailable status with scientific explanation.
     """
     mission = MissionData(mission_id)
     if not mission.data:
         raise HTTPException(status_code=404, detail="Mission not found")
+
+    check_mission_access(mission_id, current_user, mission.data.get("created_by") or mission.data.get("operator"))
 
     report = build_mission_report(mission_id, mission)
     geojson_data = generate_mission_geojson(report)
@@ -2302,12 +2557,17 @@ async def export_mission_geojson(mission_id: str):
     )
 
 
-@app.get("/api/missions/{mission_id}/export/package")
-async def export_mission_evidence_package(mission_id: str):
-    """Download comprehensive evidence package (.zip) including PDF, CSV, JSON, and visual overlays."""
+@app.get("/api/missions/{mission_id}/export/package", dependencies=[Depends(rate_limit_dependency)])
+async def export_mission_evidence_package(
+    mission_id: str,
+    current_user: Optional[UserRecord] = Depends(get_current_user_optional),
+):
+    """Download comprehensive evidence package (.zip) protected with authorization check and rate limiting."""
     mission = MissionData(mission_id)
     if not mission.data:
         raise HTTPException(status_code=404, detail="Mission not found")
+
+    check_mission_access(mission_id, current_user, mission.data.get("created_by") or mission.data.get("operator"))
 
     report = build_mission_report(mission_id, mission)
     try:

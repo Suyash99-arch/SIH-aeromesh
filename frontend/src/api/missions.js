@@ -631,3 +631,105 @@ export async function fetchReconstruction(missionId) {
   }
 }
 
+// ============================================================
+// AUTHENTICATION & SECURITY HELPERS (PHASE 10)
+// ============================================================
+
+export function getAuthToken() {
+  return localStorage.getItem("aeromesh_auth_token");
+}
+
+export function setAuthToken(token) {
+  if (token) {
+    localStorage.setItem("aeromesh_auth_token", token);
+  } else {
+    localStorage.removeItem("aeromesh_auth_token");
+  }
+}
+
+export function clearAuthToken() {
+  localStorage.removeItem("aeromesh_auth_token");
+  localStorage.removeItem("aeromesh_current_user");
+}
+
+export function getStoredUser() {
+  try {
+    const item = localStorage.getItem("aeromesh_current_user");
+    return item ? JSON.parse(item) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function setStoredUser(user) {
+  if (user) {
+    localStorage.setItem("aeromesh_current_user", JSON.stringify(user));
+  } else {
+    localStorage.removeItem("aeromesh_current_user");
+  }
+}
+
+export function getAuthHeaders(customHeaders = {}) {
+  const headers = { ...customHeaders };
+  const token = getAuthToken();
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+  return headers;
+}
+
+export async function loginUser(email, password) {
+  try {
+    const response = await fetch(`${API_BASE}/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
+    const data = await response.json();
+    if (response.ok && data.access_token) {
+      setAuthToken(data.access_token);
+      setStoredUser(data.user);
+      return { success: true, user: data.user, token: data.access_token };
+    }
+    return { success: false, error: data.detail || "Authentication failed" };
+  } catch (error) {
+    console.error("loginUser error:", error);
+    return { success: false, error: error.message };
+  }
+}
+
+export async function fetchCurrentUser() {
+  const token = getAuthToken();
+  if (!token) return null;
+  try {
+    const response = await fetch(`${API_BASE}/auth/me`, {
+      headers: getAuthHeaders(),
+    });
+    if (!response.ok) {
+      clearAuthToken();
+      return null;
+    }
+    const data = await response.json();
+    if (data.user) {
+      setStoredUser(data.user);
+      return data.user;
+    }
+    return null;
+  } catch (error) {
+    console.error("fetchCurrentUser error:", error);
+    return null;
+  }
+}
+
+export async function fetchDemoUsers() {
+  try {
+    const response = await fetch(`${API_BASE}/auth/demo-users`);
+    const data = await response.json();
+    return data.users || [];
+  } catch (error) {
+    console.error("fetchDemoUsers error:", error);
+    return [];
+  }
+}
+
+

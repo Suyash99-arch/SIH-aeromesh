@@ -11,8 +11,10 @@ except ImportError:  # pragma: no cover
 
 celery_app = Celery("aeromesh", broker=None, backend=None) if Celery else None
 if celery_app is not None:
-    celery_app.conf.broker_url = __import__("os").getenv("REDIS_URL", "redis://localhost:6379/0")
-    celery_app.conf.result_backend = celery_app.conf.broker_url
+    broker_url = __import__("os").getenv("CELERY_BROKER_URL") or __import__("os").getenv("REDIS_URL", "redis://localhost:6379/0")
+    result_backend = __import__("os").getenv("CELERY_RESULT_BACKEND") or broker_url
+    celery_app.conf.broker_url = broker_url
+    celery_app.conf.result_backend = result_backend
 
 
 def _placeholder(job_id: str):

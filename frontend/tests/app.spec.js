@@ -158,4 +158,35 @@ test.describe("AeroMesh Mission & Analysis Workflows", () => {
     await page.locator(".report-tab-btn", { hasText: "3D Fusion" }).click();
     await expect(page.getByText(/AI-to-3D Multi-View Spatial Fusion/i).first()).toBeVisible();
   });
+
+  // 19-21: Phase 10 Security & Authentication UI tests
+  test("19-21. validates Phase 10 Security UI, Topbar role badge, AuthModal, and 1-click role switcher", async ({ page }) => {
+    await page.goto("/");
+    await page.getByRole("button", { name: "Dashboard" }).click();
+    await expect(page.locator(".topbar")).toBeVisible();
+
+    // Topbar displays role badge
+    const operatorBtn = page.locator(".topbar button.operator");
+    await expect(operatorBtn).toBeVisible();
+    await expect(operatorBtn).toContainText(/ADMIN|OPERATOR|ANALYST/i);
+
+    // Open Auth Modal
+    await operatorBtn.click();
+    const modal = page.locator(".auth-modal-content");
+    await expect(modal).toBeVisible();
+    await expect(modal.getByText(/AeroMesh Security & Access Control/i)).toBeVisible();
+    await expect(modal.getByText(/1-Click Demo Evaluation Profiles/i)).toBeVisible();
+
+    // Switch to ANALYST
+    await modal.getByRole("button", { name: /ANALYST/i }).click();
+    await expect(modal).not.toBeVisible();
+    await expect(operatorBtn).toContainText("ANALYST");
+
+    // Switch to OPERATOR
+    await operatorBtn.click();
+    await expect(modal).toBeVisible();
+    await modal.getByRole("button", { name: /OPERATOR/i }).click();
+    await expect(modal).not.toBeVisible();
+    await expect(operatorBtn).toContainText("OPERATOR");
+  });
 });
