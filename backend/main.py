@@ -2449,7 +2449,7 @@ async def generate_report(
 
 
 @app.get("/api/missions/{mission_id}/report/pdf", dependencies=[Depends(rate_limit_dependency)])
-async def export_mission_pdf(
+def export_mission_pdf(
     mission_id: str,
     current_user: Optional[UserRecord] = Depends(get_current_user_optional),
 ):
@@ -2460,21 +2460,35 @@ async def export_mission_pdf(
 
     check_mission_access(mission_id, current_user, mission.data.get("created_by") or mission.data.get("operator"))
 
-    report = build_mission_report(mission_id, mission)
+    request_id = str(uuid.uuid4())
     pdf_buffer = io.BytesIO()
     try:
+        report = build_mission_report(mission_id, mission)
         generate_mission_pdf(report, pdf_buffer)
+        pdf_bytes = pdf_buffer.getvalue()
+    except HTTPException:
+        raise
     except Exception as exc:
-        logger.error("PDF generation failed: %s", exc)
-        raise HTTPException(status_code=500, detail=f"PDF generation error: {exc}")
+        logger.exception("PDF generation failed for mission %s [req_id=%s]: %s", mission_id, request_id, exc)
+        return JSONResponse(
+            status_code=500,
+            content={
+                "error": "REPORT_GENERATION_FAILED",
+                "message": "Unable to generate the PDF report.",
+                "request_id": request_id,
+            },
+        )
+    finally:
+        pdf_buffer.close()
 
-    pdf_bytes = pdf_buffer.getvalue()
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
         headers={
             "Content-Disposition": f'attachment; filename="aeromesh_{mission_id}_report.pdf"',
             "Content-Length": str(len(pdf_bytes)),
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+            "Pragma": "no-cache",
         },
     )
 

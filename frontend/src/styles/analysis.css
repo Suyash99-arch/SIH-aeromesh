@@ -889,6 +889,19 @@
   border: 1px solid rgba(255, 255, 255, 0.06);
 }
 
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 /* Report Preview Tabs & Accordions */
 .report-preview-tabs {
   display: flex;

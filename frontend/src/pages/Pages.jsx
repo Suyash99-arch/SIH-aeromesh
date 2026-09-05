@@ -17,6 +17,7 @@ import {
   measureVolume3D,
   generateReport,
   getReportPdfUrl,
+  downloadReportPdf,
   getExportCsvUrl,
   getExportJsonUrl,
   getExportGeoJsonUrl,
@@ -1157,6 +1158,8 @@ function Reports({ mission, notice }) {
   const [activeTab, setActiveTab] = useState("mission");
   const [openModal, setOpenModal] = useState(false);
   const [geoJsonStatus, setGeoJsonStatus] = useState({ available: false, reason: "Checking georeferencing status…" });
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [pdfError, setPdfError] = useState(null);
 
   const missionId = mission?.id || "phase5_drone_validation";
 
@@ -1267,6 +1270,24 @@ function Reports({ mission, notice }) {
     }
   };
 
+  const handlePdfDownload = async (e) => {
+    e.preventDefault();
+    if (downloadingPdf) return;
+    setDownloadingPdf(true);
+    setPdfError(null);
+    try {
+      await downloadReportPdf(missionId);
+      notice("Executive PDF report downloaded successfully");
+    } catch (err) {
+      console.error("PDF download error:", err);
+      const msg = err.message || "Failed to download PDF report";
+      setPdfError(msg);
+      notice(msg);
+    } finally {
+      setDownloadingPdf(false);
+    }
+  };
+
   const repMission = report?.mission || {};
   const repVideo = report?.video || {};
   const repDet = report?.detection || {};
@@ -1364,11 +1385,19 @@ function Reports({ mission, notice }) {
             <a
               href={getReportPdfUrl(missionId)}
               download={`aeromesh_${missionId}_report.pdf`}
-              className="export-download-btn export-download-btn--primary"
+              className={`export-download-btn export-download-btn--primary ${downloadingPdf ? "export-download-btn--disabled" : ""}`}
+              onClick={handlePdfDownload}
+              aria-disabled={downloadingPdf}
+              style={{ pointerEvents: downloadingPdf ? "none" : "auto" }}
             >
-              <Icon name="Download" size={14} />
-              Download PDF
+              <Icon name={downloadingPdf ? "RefreshCw" : "Download"} size={14} className={downloadingPdf ? "spin" : ""} />
+              {downloadingPdf ? "Downloading PDF…" : "Download PDF"}
             </a>
+            {pdfError && (
+              <p style={{ color: "#ef4444", fontSize: "11.5px", marginTop: "6px" }}>
+                {pdfError}
+              </p>
+            )}
           </div>
 
           {/* CSV Card */}
@@ -1698,11 +1727,13 @@ function Reports({ mission, notice }) {
               <a
                 href={getReportPdfUrl(missionId)}
                 download={`aeromesh_${missionId}_report.pdf`}
-                className="export-download-btn export-download-btn--primary"
-                style={{ width: "auto" }}
+                className={`export-download-btn export-download-btn--primary ${downloadingPdf ? "export-download-btn--disabled" : ""}`}
+                style={{ width: "auto", pointerEvents: downloadingPdf ? "none" : "auto" }}
+                onClick={handlePdfDownload}
+                aria-disabled={downloadingPdf}
               >
-                <Icon name="FileText" size={14} />
-                Download PDF Report
+                <Icon name={downloadingPdf ? "RefreshCw" : "FileText"} size={14} className={downloadingPdf ? "spin" : ""} />
+                {downloadingPdf ? "Downloading…" : "Download PDF Report"}
               </a>
               <a
                 href={getExportPackageUrl(missionId)}

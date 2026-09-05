@@ -73,7 +73,7 @@ const fallbackMission = {
 export const BACKEND_URL = API_BASE.replace(/\/api$/, "");
 
 export function resolveAssetUrl(url) {
-  if (!url) return "";
+  if (!url || typeof url !== "string") return "";
   if (
     url.startsWith("http://") ||
     url.startsWith("https://") ||
@@ -449,6 +449,50 @@ export async function generateReport(missionId) {
 
 export function getReportPdfUrl(missionId) {
   return `${API_BASE}/missions/${missionId}/report/pdf`;
+}
+
+export async function downloadReportPdf(missionId) {
+  try {
+    const url = `${API_BASE}/missions/${missionId}/report/pdf`;
+    const headers = getAuthHeaders();
+    const response = await fetch(url, {
+      method: "GET",
+      headers,
+    });
+
+    if (!response.ok) {
+      let errorDetail = `HTTP ${response.status}`;
+      try {
+        const errJson = await response.json();
+        if (errJson.detail) {
+          errorDetail = typeof errJson.detail === "string" ? errJson.detail : JSON.stringify(errJson.detail);
+        }
+      } catch {
+        // Not JSON
+      }
+      throw new Error(`PDF download failed (${errorDetail})`);
+    }
+
+    const blob = await response.blob();
+    const blobUrl = window.URL.createObjectURL(blob);
+    const filename = `aeromesh_${missionId}_report.pdf`;
+
+    const link = document.createElement("a");
+    link.href = blobUrl;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    setTimeout(() => {
+      window.URL.revokeObjectURL(blobUrl);
+    }, 1000);
+
+    return { success: true, filename };
+  } catch (error) {
+    console.error("downloadReportPdf error:", error);
+    throw error;
+  }
 }
 
 export function getExportCsvUrl(missionId) {

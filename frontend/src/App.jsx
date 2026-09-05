@@ -21,9 +21,15 @@ import {
   SettingsPage,
 } from "./pages/Pages";
 
-const DEFAULT_MISSION_ID = getSeedMission("north-ridge")
-  ? "north-ridge"
-  : "sector-04";
+const getInitialMissionId = () => {
+  if (typeof window !== "undefined") {
+    const param = new URLSearchParams(window.location.search).get("mission");
+    if (param) return param;
+  }
+  return getSeedMission("north-ridge") ? "north-ridge" : "sector-04";
+};
+
+const DEFAULT_MISSION_ID = getInitialMissionId();
 
 export default function App() {
   const [showHomepage, setShowHomepage] = useState(true);
