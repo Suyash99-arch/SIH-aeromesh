@@ -1409,6 +1409,7 @@ def _run_yolo_detection(
     is_aeromesh: bool = True,
     scene_profile: str | None = None,
     allowed_classes: set[str] | list[str] | None = None,
+    enable_stitching: bool = True,
 ) -> dict:
     """
     Run real YOLO inference and reduce false positives using temporal persistence.
@@ -1432,6 +1433,7 @@ def _run_yolo_detection(
         is_aeromesh: Whether using aeromesh (VisDrone fine-tuned) model vs. YOLO11n
         scene_profile: Optional profile (e.g. 'road', 'terrestrial_road', 'all')
         allowed_classes: Optional explicit set of classes to keep
+        enable_stitching: Whether to apply camera-motion-aware conservative tracklet stitching (default: True)
     
     Returns:
         Detection results dict with tracks, detections, scene_analysis, etc.
@@ -1448,6 +1450,8 @@ def _run_yolo_detection(
         iou=float(os.getenv("YOLO_IOU", "0.7")),
         classes=resolved_classes,
         scene_profile=scene_profile,
+        enable_motion_compensation=True,
+        enable_stitching=enable_stitching,
     )
     filtered = []
     for record in records:

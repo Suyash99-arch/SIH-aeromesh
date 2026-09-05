@@ -161,3 +161,82 @@ def test_phase4_authoritative_artifact_is_not_mutated():
     assert data["detection_metrics"]["detections_by_class"]["train"] == 15
     assert data["detection_metrics"]["detections_by_class"]["truck"] == 1
     assert data["tracking_metrics"]["unique_tracks"] == 23
+
+
+def test_phase_b_authoritative_artifact_is_not_mutated():
+    from pathlib import Path
+    import json
+
+    artifact_path = Path("data/validation/accuracy_remediation/phase_b_sampling_benchmark.json")
+    assert artifact_path.exists(), "Phase B benchmark artifact must exist"
+
+    with artifact_path.open("r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    assert data["benchmark_phase"] == "Phase B — Temporal Sampling & Scene-Specific Class Tuning"
+    assert data["runs"]["run_2fps_default"]["detection_metrics"]["total_detections"] == 143
+    assert data["runs"]["run_5fps_default"]["detection_metrics"]["total_detections"] == 414
+    assert data["runs"]["run_5fps_road_profile"]["detection_metrics"]["total_detections"] == 413
+
+
+def test_camera_motion_estimator_synthetic():
+    import numpy as np
+    from backend.tracking import CameraMotionEstimator
+
+    estimator = CameraMotionEstimator(target_width=320, min_inliers=4)
+    # Generate image with distinct texture
+    np.random.seed(42)
+    img1 = np.full((180, 320, 3), 128, dtype=np.uint8)
+    for _ in range(30):
+        x = np.random.randint(20, 300)
+        y = np.random.randint(20, 160)
+        img1[y:y+10, x:x+10] = np.random.randint(0, 255, size=(10, 10, 3), dtype=np.uint8)
+
+    m1 = estimator.estimate(img1)
+    assert m1.success is True
+
+    # Shift image by (5, -3) pixels
+    M = np.float32([[1, 0, 5], [0, 1, -3]])
+    import cv2
+    img2 = cv2.warpAffine(img1, M, (320, 180))
+
+    m2 = estimator.estimate(img2)
+    assert m2.success is True
+    assert abs(m2.dx - 5.0) < 1.5
+    assert abs(m2.dy - (-3.0)) < 1.5
+
+
+def test_stitch_tracklets_prevents_merging_coexisting_frames():
+    from backend.detection import DetectionRecord
+    from backend.tracking import stitch_tracklets
+
+    # Two tracks that exist in the same frame (frame 1) - distinct objects
+    recs = [
+        DetectionRecord("0", "car", 0.8, [100.0, 100.0, 150.0, 150.0], 0.0, "T1"),
+        DetectionRecord("1", "car", 0.8, [105.0, 105.0, 155.0, 155.0], 0.5, "T1"),
+        DetectionRecord("1", "car", 0.8, [110.0, 110.0, 160.0, 160.0], 0.5, "T2"),  # overlaps frame 1!
+        DetectionRecord("2", "car", 0.8, [115.0, 115.0, 165.0, 165.0], 1.0, "T2"),
+    ]
+
+    stitched, num_merged = stitch_tracklets(recs, max_gap_seconds=2.0)
+    assert num_merged == 0
+    assert len({r.track_id for r in stitched}) == 2
+
+
+def test_stitch_tracklets_stitches_broken_gap():
+    from backend.detection import DetectionRecord
+    from backend.tracking import stitch_tracklets
+
+    # Track T1 (frames 0-1) and T2 (frames 3-4) with gap in frame 2
+    recs = [
+        DetectionRecord("0", "car", 0.8, [100.0, 100.0, 150.0, 150.0], 0.0, "T1"),
+        DetectionRecord("1", "car", 0.8, [110.0, 100.0, 160.0, 150.0], 0.5, "T1"),
+        DetectionRecord("3", "car", 0.8, [130.0, 100.0, 180.0, 150.0], 1.5, "T2"),
+        DetectionRecord("4", "car", 0.8, [140.0, 100.0, 190.0, 150.0], 2.0, "T2"),
+    ]
+
+    stitched, num_merged = stitch_tracklets(recs, max_gap_seconds=2.0, max_spatial_distance=100.0)
+    assert num_merged == 1
+    assert len({r.track_id for r in stitched}) == 1
+    # All records unified under the same track ID
+    assert stitched[0].track_id == stitched[2].track_id
