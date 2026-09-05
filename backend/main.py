@@ -3,6 +3,7 @@ AeroMesh Single-Pass Reconstruction Backend
 Handles mission management, video processing, and 3D reconstruction
 """
 
+import io
 import json
 import logging
 import os
@@ -2177,47 +2178,152 @@ async def measure_volume(mission_id: str, req: VolumeMeasurementRequest):
     return {"success": True, "measurement": res_dict}
 
 # ============================================================
-# REPORT
+# REPORT & EXPORTS (PHASE 9)
 # ============================================================
+
+from backend.reporting import (
+    build_mission_report,
+    generate_mission_pdf,
+    generate_mission_csv,
+    generate_mission_json,
+    generate_mission_geojson,
+    build_evidence_package,
+    save_report_artifacts,
+)
+
 
 @app.get("/api/missions/{mission_id}/report")
 async def generate_report(mission_id: str):
-    """Generate mission report"""
+    """Generate or retrieve complete structured mission report."""
     mission = MissionData(mission_id)
     if not mission.data:
         raise HTTPException(status_code=404, detail="Mission not found")
-    
-    report = {
-        "missionId": mission_id,
-        "missionName": mission.get("name"),
-        "type": mission.get("type"),
-        "generatedAt": datetime.utcnow().isoformat(),
-        "status": mission.get("status"),
-        "sections": {
-            "summary": {
-                "operationalStatus": mission.get("status"),
-                "location": mission.get("location"),
-                "operator": mission.get("operator")
-            },
-            "video": mission.get("video"),
-            "processing": mission.get("processing"),
-            "detections": mission.get("detections"),
-            "frameQuality": mission.get("frameQuality"),
-            "reconstruction": mission.get("reconstruction"),
-            "measurements": mission.get("measurements"),
-            "findings": mission.get("findings", []),
-            "limitations": [
-                "Unobserved surfaces are represented as unknown/occluded rather than fabricated geometry",
-                "Object detection based on COCO-pretrained YOLO11n, not aerial-specific",
-                "3D reconstruction confidence depends on frame quality and camera motion estimation"
-            ]
-        }
-    }
-    
+
+    report = build_mission_report(mission_id, mission)
+
+    try:
+        storage = get_storage(DATA_DIR / "objects")
+        save_report_artifacts(mission_id, report, storage)
+    except Exception as exc:
+        logger.debug("Background artifact persistence skipped: %s", exc)
+
     return {
         "success": True,
-        "report": report
+        "report": report,
     }
+
+
+@app.get("/api/missions/{mission_id}/report/pdf")
+async def export_mission_pdf(mission_id: str):
+    """Download executive-ready PDF mission decision report."""
+    mission = MissionData(mission_id)
+    if not mission.data:
+        raise HTTPException(status_code=404, detail="Mission not found")
+
+    report = build_mission_report(mission_id, mission)
+    pdf_buffer = io.BytesIO()
+    try:
+        generate_mission_pdf(report, pdf_buffer)
+    except Exception as exc:
+        logger.error("PDF generation failed: %s", exc)
+        raise HTTPException(status_code=500, detail=f"PDF generation error: {exc}")
+
+    pdf_bytes = pdf_buffer.getvalue()
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="aeromesh_{mission_id}_report.pdf"',
+            "Content-Length": str(len(pdf_bytes)),
+        },
+    )
+
+
+@app.get("/api/missions/{mission_id}/export/csv")
+async def export_mission_csv(mission_id: str):
+    """Download mission semantic objects and spatial data as CSV."""
+    mission = MissionData(mission_id)
+    if not mission.data:
+        raise HTTPException(status_code=404, detail="Mission not found")
+
+    report = build_mission_report(mission_id, mission)
+    csv_str = generate_mission_csv(report)
+    return Response(
+        content=csv_str,
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": f'attachment; filename="aeromesh_{mission_id}_objects.csv"',
+        },
+    )
+
+
+@app.get("/api/missions/{mission_id}/export/json")
+async def export_mission_json(mission_id: str):
+    """Download full complete mission metadata and results as JSON."""
+    mission = MissionData(mission_id)
+    if not mission.data:
+        raise HTTPException(status_code=404, detail="Mission not found")
+
+    report = build_mission_report(mission_id, mission)
+    json_data = generate_mission_json(report)
+    json_bytes = json.dumps(json_data, indent=2).encode("utf-8")
+    return Response(
+        content=json_bytes,
+        media_type="application/json",
+        headers={
+            "Content-Disposition": f'attachment; filename="aeromesh_{mission_id}_export.json"',
+        },
+    )
+
+
+@app.get("/api/missions/{mission_id}/export/geojson")
+async def export_mission_geojson(mission_id: str):
+    """
+    Export GeoJSON only if genuinely georeferenced.
+    For unreferenced missions, returns unavailable status with scientific explanation.
+    """
+    mission = MissionData(mission_id)
+    if not mission.data:
+        raise HTTPException(status_code=404, detail="Mission not found")
+
+    report = build_mission_report(mission_id, mission)
+    geojson_data = generate_mission_geojson(report)
+
+    if not geojson_data.get("available"):
+        return JSONResponse(status_code=200, content=geojson_data)
+
+    geojson_bytes = json.dumps(geojson_data, indent=2).encode("utf-8")
+    return Response(
+        content=geojson_bytes,
+        media_type="application/geo+json",
+        headers={
+            "Content-Disposition": f'attachment; filename="aeromesh_{mission_id}.geojson"',
+        },
+    )
+
+
+@app.get("/api/missions/{mission_id}/export/package")
+async def export_mission_evidence_package(mission_id: str):
+    """Download comprehensive evidence package (.zip) including PDF, CSV, JSON, and visual overlays."""
+    mission = MissionData(mission_id)
+    if not mission.data:
+        raise HTTPException(status_code=404, detail="Mission not found")
+
+    report = build_mission_report(mission_id, mission)
+    try:
+        zip_bytes = build_evidence_package(mission_id, report)
+    except Exception as exc:
+        logger.error("Evidence package packaging failed: %s", exc)
+        raise HTTPException(status_code=500, detail=f"Package creation error: {exc}")
+
+    return Response(
+        content=zip_bytes,
+        media_type="application/zip",
+        headers={
+            "Content-Disposition": f'attachment; filename="aeromesh_{mission_id}_evidence_package.zip"',
+            "Content-Length": str(len(zip_bytes)),
+        },
+    )
 
 # ============================================================
 # RUN

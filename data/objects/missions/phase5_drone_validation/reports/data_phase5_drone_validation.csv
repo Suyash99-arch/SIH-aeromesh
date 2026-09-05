@@ -1,0 +1,4 @@
+mission_id,object_id,track_id,class,motion_state,association_status,association_confidence,pos_x_local,pos_y_local,pos_z_local,coordinate_system,scale_status,reprojection_error_px,observations_count,metric_length_m,metric_width_m,metric_height_m
+phase5_drone_validation,OBJ_T0001,T0001,car,STATIC,VALID,0.8131,-17.5210,-5.4751,145.6369,LOCAL_ARBITRARY,RELATIVE_SCALE,1.9500,20,4.54,2.15,1.67
+phase5_drone_validation,OBJ_T0002,T0002,car,STATIC,INSUFFICIENT_EVIDENCE,0.5991,-13.2710,-7.6488,152.1145,LOCAL_ARBITRARY,RELATIVE_SCALE,0.0000,1,,,
+phase5_drone_validation,OBJ_T0020,T0020,car,STATIC,LOW_CONFIDENCE,0.4824,-18.4753,0.2537,148.0135,LOCAL_ARBITRARY,RELATIVE_SCALE,8.0200,2,,,

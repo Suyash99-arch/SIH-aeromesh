@@ -17,3 +17,4 @@ GeoAlchemy2>=0.14,<1.0
 boto3>=1.34,<2.0
 celery>=5.3,<6.0
 redis>=5.0,<6.0
+reportlab>=5.0.0

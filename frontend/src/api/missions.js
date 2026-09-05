@@ -447,6 +447,36 @@ export async function generateReport(missionId) {
   }
 }
 
+export function getReportPdfUrl(missionId) {
+  return `${API_BASE}/missions/${missionId}/report/pdf`;
+}
+
+export function getExportCsvUrl(missionId) {
+  return `${API_BASE}/missions/${missionId}/export/csv`;
+}
+
+export function getExportJsonUrl(missionId) {
+  return `${API_BASE}/missions/${missionId}/export/json`;
+}
+
+export function getExportGeoJsonUrl(missionId) {
+  return `${API_BASE}/missions/${missionId}/export/geojson`;
+}
+
+export function getExportPackageUrl(missionId) {
+  return `${API_BASE}/missions/${missionId}/export/package`;
+}
+
+export async function fetchGeoJsonStatus(missionId) {
+  try {
+    const response = await fetch(`${API_BASE}/missions/${missionId}/export/geojson`);
+    return await response.json();
+  } catch (error) {
+    console.error("GeoJSON status error:", error);
+    return { available: false, reason: "GeoJSON query failed" };
+  }
+}
+
 export function clearCache() {
   missionCache.clear();
 }

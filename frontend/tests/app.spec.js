@@ -100,4 +100,62 @@ test.describe("AeroMesh Mission & Analysis Workflows", () => {
     await expect(page.getByText(/Photogrammetric Scale Calibration/i)).toBeVisible();
     await expect(page.getByText(/Known Distance/i)).toBeVisible();
   });
+
+  // 12-18: Phase 9 Professional Reports & Exports Workspace tests
+  test("12-18. validates Phase 9 Reports & Exports workspace, report summary, PDF, CSV, JSON, GeoJSON refusal, and Evidence Package controls", async ({ page }) => {
+    await page.goto("/");
+
+    // Enter Dashboard
+    await page.getByRole("button", { name: "Dashboard" }).click();
+    await expect(page.locator(".sidebar")).toBeVisible();
+
+    // Navigate to Reports
+    await page.getByRole("button", { name: "Reports" }).click();
+
+    // 1. Reports page loads
+    await expect(page.getByRole("heading", { name: /Mission Reports & Exports/i })).toBeVisible();
+
+    // 2. Real report summary appears
+    await expect(page.locator(".reports-header-card")).toBeVisible();
+    await expect(page.locator(".reports-disclosure-box")).toBeVisible();
+    await expect(page.getByText(/LOCAL_ARBITRARY/).first()).toBeVisible();
+    await expect(page.getByText(/RELATIVE_SCALE/).first()).toBeVisible();
+    await expect(page.getByText(/Report Summary Preview/i)).toBeVisible();
+
+    // 3. PDF export control appears
+    const pdfBtn = page.getByRole("link", { name: /Download PDF/i });
+    await expect(pdfBtn).toBeVisible();
+    await expect(pdfBtn).toHaveAttribute("href", /.*\/report\/pdf$/);
+
+    // 4. CSV export control appears
+    const csvBtn = page.getByRole("link", { name: /Download CSV/i });
+    await expect(csvBtn).toBeVisible();
+    await expect(csvBtn).toHaveAttribute("href", /.*\/export\/csv$/);
+
+    // 5. JSON export control appears
+    const jsonBtn = page.getByRole("link", { name: /Download JSON/i });
+    await expect(jsonBtn).toBeVisible();
+    await expect(jsonBtn).toHaveAttribute("href", /.*\/export\/json$/);
+
+    // 6. GeoJSON unavailable state appears for unreferenced mission
+    await expect(page.getByText(/Unavailable — mission is not georeferenced/i)).toBeVisible();
+    const geoBtn = page.getByRole("button", { name: /Download GeoJSON \(Unavailable\)/i });
+    await expect(geoBtn).toBeVisible();
+    await expect(geoBtn).toBeDisabled();
+
+    // 7. Evidence package control appears
+    const pkgBtn = page.getByRole("link", { name: /Download Evidence Package/i });
+    await expect(pkgBtn).toBeVisible();
+    await expect(pkgBtn).toHaveAttribute("href", /.*\/export\/package$/);
+
+    // Test preview tab switching
+    await page.locator(".report-tab-btn", { hasText: "Detection" }).click();
+    await expect(page.getByText(/yolo11n/i).first()).toBeVisible();
+
+    await page.locator(".report-tab-btn", { hasText: "Reconstruction" }).click();
+    await expect(page.getByText(/Registered Cameras/i).first()).toBeVisible();
+
+    await page.locator(".report-tab-btn", { hasText: "3D Fusion" }).click();
+    await expect(page.getByText(/AI-to-3D Multi-View Spatial Fusion/i).first()).toBeVisible();
+  });
 });

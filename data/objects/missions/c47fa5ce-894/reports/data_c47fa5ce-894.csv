@@ -1,0 +1,2 @@
+mission_id,object_id,track_id,class,motion_state,association_status,association_confidence,pos_x_local,pos_y_local,pos_z_local,coordinate_system,scale_status,reprojection_error_px,observations_count,metric_length_m,metric_width_m,metric_height_m
+c47fa5ce-894,NONE,NONE,none,UNKNOWN,NO_OBJECTS,0.0,0.0,0.0,0.0,LOCAL_ARBITRARY,RELATIVE_SCALE,0.0,0,,,
