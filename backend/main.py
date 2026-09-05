@@ -246,29 +246,58 @@ def _load_detection_model(use_aeromesh: bool = True):
     from ultralytics import YOLO
     
     configured_path = os.getenv("YOLO_MODEL_PATH", "").strip()
-    aeromesh_path = Path(configured_path) if configured_path else BASE_DIR / "backend" / "models" / "aeromesh_yolo.pt"
-    fallback_path = BASE_DIR / "yolo11n.pt"
+    backend_models_dir = Path(__file__).resolve().parent / "models"
     
-    if use_aeromesh and aeromesh_path.exists():
-        try:
-            model = YOLO(str(aeromesh_path))
-            logger.info("Loaded aeromesh_yolo.pt (VisDrone fine-tuned model)")
-            return model, "aeromesh_yolo", True
-        except Exception as exc:
-            logger.warning("Failed to load aeromesh_yolo.pt, falling back to yolo11n.pt: %s", exc)
-    elif use_aeromesh and not aeromesh_path.exists():
-        logger.warning("aeromesh_yolo.pt not found at %s; falling back to yolo11n.pt", aeromesh_path)
-    
-    if fallback_path.exists():
-        try:
-            model = YOLO(str(fallback_path))
-            logger.info("Loaded yolo11n.pt (COCO-pretrained fallback)")
-            return model, "yolo11n", False
-        except Exception as exc:
-            logger.error("Failed to load fallback model yolo11n.pt: %s", exc)
-            raise
-    
-    raise FileNotFoundError(f"MODEL_NOT_FOUND: No detection model found at {aeromesh_path} or {fallback_path}. Set YOLO_MODEL_PATH to an authorized local model file.")
+    if configured_path:
+        cfg_p = Path(configured_path)
+        if not cfg_p.is_file():
+            cfg_p = (BASE_DIR / configured_path).resolve()
+        if cfg_p.is_file():
+            try:
+                model = YOLO(str(cfg_p))
+                logger.info("Loaded custom configured YOLO model from %s", cfg_p)
+                return model, cfg_p.stem, False
+            except Exception as exc:
+                logger.warning("Failed to load custom configured model at %s: %s", cfg_p, exc)
+
+    aeromesh_candidates = [
+        backend_models_dir / "aeromesh_yolo.pt",
+        BASE_DIR / "backend" / "models" / "aeromesh_yolo.pt",
+    ]
+    if use_aeromesh:
+        for aero_cand in aeromesh_candidates:
+            if aero_cand.is_file():
+                try:
+                    model = YOLO(str(aero_cand))
+                    logger.info("Loaded aeromesh_yolo.pt from %s (VisDrone fine-tuned model)", aero_cand)
+                    return model, "aeromesh_yolo", True
+                except Exception as exc:
+                    logger.warning("Failed to load aeromesh_yolo.pt at %s, falling back to yolo11n.pt: %s", aero_cand, exc)
+                    break
+        logger.info("aeromesh_yolo.pt not found in %s; using canonical yolo11n.pt", backend_models_dir)
+
+    # Canonical model path: backend/models/yolo11n.pt
+    canonical_candidates = [
+        backend_models_dir / "yolo11n.pt",
+        BASE_DIR / "backend" / "models" / "yolo11n.pt",
+        Path("backend/models/yolo11n.pt").resolve(),
+        BASE_DIR / "yolo11n.pt",
+    ]
+    for candidate in canonical_candidates:
+        if candidate.is_file():
+            try:
+                model = YOLO(str(candidate))
+                logger.info("Loaded yolo11n.pt from %s (canonical model)", candidate)
+                return model, "yolo11n", False
+            except Exception as exc:
+                logger.error("Failed to load canonical model yolo11n.pt at %s: %s", candidate, exc)
+                raise
+
+    searched = [str(c) for c in canonical_candidates]
+    raise FileNotFoundError(
+        f"MODEL_NOT_FOUND: Canonical model yolo11n.pt not found. Searched: {searched}. "
+        "Ensure backend/models/yolo11n.pt exists or set YOLO_MODEL_PATH to an authorized local model file."
+    )
 
 
 def _get_confidence_threshold(class_name: str, is_aeromesh: bool = True) -> float:

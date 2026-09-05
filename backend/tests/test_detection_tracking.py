@@ -81,3 +81,25 @@ def test_tracker_configuration_is_explicit(monkeypatch):
     monkeypatch.setenv("TRACKER_TYPE", "unsupported")
     with pytest.raises(ValueError, match="TRACKING_FAILED"):
         ByteTrackAdapter.configured_tracker()
+
+
+def test_canonical_model_resolution_finds_yolo11n(monkeypatch, tmp_path):
+    from backend.main import _load_detection_model
+
+    # Ensure environment does not force a custom model path
+    monkeypatch.delenv("YOLO_MODEL_PATH", raising=False)
+
+    # 1. Resolves canonical model from normal workspace root
+    model, name, is_aeromesh = _load_detection_model(use_aeromesh=True)
+    assert name == "yolo11n"
+    assert is_aeromesh is False
+    assert hasattr(model, "names")
+    assert len(model.names) == 80
+    assert "car" in model.names.values()
+
+    # 2. Resolves canonical model robustly even when cwd is changed outside repo root
+    monkeypatch.chdir(tmp_path)
+    model_from_tmp, name2, is_aeromesh2 = _load_detection_model(use_aeromesh=True)
+    assert name2 == "yolo11n"
+    assert is_aeromesh2 is False
+    assert len(model_from_tmp.names) == 80
