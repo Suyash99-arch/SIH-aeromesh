@@ -70,6 +70,24 @@ const fallbackMission = {
   recommendations: ["Upload a drone video to start automatic analysis."],
 };
 
+export const BACKEND_URL = API_BASE.replace(/\/api$/, "");
+
+export function resolveAssetUrl(url) {
+  if (!url) return "";
+  if (
+    url.startsWith("http://") ||
+    url.startsWith("https://") ||
+    url.startsWith("blob:") ||
+    url.startsWith("data:")
+  ) {
+    return url;
+  }
+  if (url.startsWith("/")) {
+    return `${BACKEND_URL}${url}`;
+  }
+  return `${BACKEND_URL}/${url}`;
+}
+
 function normalizeMission(rawMission = {}) {
   const videoUrl = rawMission.video?.url || rawMission.videoUrl || "";
   const mission = {
@@ -96,15 +114,17 @@ function normalizeMission(rawMission = {}) {
     assets: {
       ...(rawMission.assets || {}),
       video: videoUrl || rawMission.assets?.video || "",
-      pointCloud:
+      pointCloud: resolveAssetUrl(
         rawMission.assets?.pointCloud ||
         rawMission.reconstruction?.point_cloud_url ||
         rawMission.reconstruction?.pointCloud ||
-        "",
-      mesh:
+        ""
+      ),
+      mesh: resolveAssetUrl(
         rawMission.assets?.mesh ||
         rawMission.reconstruction?.mesh_url ||
-        "",
+        ""
+      ),
     },
   };
 
@@ -540,3 +560,44 @@ export async function measureVolume3D(missionId, payload = {}) {
     throw error;
   }
 }
+
+export async function fetchSemanticScene(missionId) {
+  try {
+    const response = await fetch(`${API_BASE}/missions/${missionId}/semantic-scene`);
+    return await response.json();
+  } catch (error) {
+    console.error("fetchSemanticScene error:", error);
+    return { success: false, semantic_scene: null };
+  }
+}
+
+export async function fetchObjects3D(missionId) {
+  try {
+    const response = await fetch(`${API_BASE}/missions/${missionId}/objects-3d`);
+    return await response.json();
+  } catch (error) {
+    console.error("fetchObjects3D error:", error);
+    return { success: false, objects: [] };
+  }
+}
+
+export async function fetchObjectEvidence(missionId, objectId) {
+  try {
+    const response = await fetch(`${API_BASE}/missions/${missionId}/objects/${objectId}/evidence`);
+    return await response.json();
+  } catch (error) {
+    console.error("fetchObjectEvidence error:", error);
+    return { success: false, error: error.message };
+  }
+}
+
+export async function fetchReconstruction(missionId) {
+  try {
+    const response = await fetch(`${API_BASE}/missions/${missionId}/reconstruction`);
+    return await response.json();
+  } catch (error) {
+    console.error("fetchReconstruction error:", error);
+    return { success: false, reconstruction: null };
+  }
+}
+

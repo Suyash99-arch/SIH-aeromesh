@@ -1392,6 +1392,38 @@ async def get_mission_object_summary(mission_id: str):
     return {"success": True, "mission_id": mission_id, **payload["summary"]}
 
 
+def _get_mission_fused_objects(mission_id: str, mission: MissionData) -> list:
+    """Retrieve 3D fused objects with fallback to disk artifacts if empty."""
+    objects_3d = mission.get("objects_3d")
+    if objects_3d and len(objects_3d) > 0:
+        return objects_3d
+
+    # Check for mission-specific semantic scene artifact
+    semantic_file = DATA_DIR / "missions" / mission_id / "semantic_scene.json"
+    if semantic_file.exists():
+        try:
+            with open(semantic_file, "r") as f:
+                data = json.load(f)
+                objs = data.get("objects") or data.get("fused_objects")
+                if objs:
+                    return objs
+        except Exception as exc:
+            logger.warning("Failed to load %s: %s", semantic_file, exc)
+
+    # Check phase 6 validation artifact for phase5_drone_validation
+    phase6_file = DATA_DIR / "validation" / "phase6" / "phase6_fusion.json"
+    if phase6_file.exists():
+        try:
+            with open(phase6_file, "r") as f:
+                data = json.load(f)
+                if data.get("mission_id") == mission_id or mission_id == "phase5_drone_validation":
+                    return data.get("fused_objects") or []
+        except Exception as exc:
+            logger.warning("Failed to load %s: %s", phase6_file, exc)
+
+    return []
+
+
 @app.get("/api/missions/{mission_id}/semantic-scene")
 async def get_mission_semantic_scene(mission_id: str):
     """Return the 3D semantic scene representation with spatial fusion results."""
@@ -1401,13 +1433,15 @@ async def get_mission_semantic_scene(mission_id: str):
 
     scene = mission.get("semantic_scene")
     if not scene:
-        objects_3d = mission.get("objects_3d") or []
+        objects_3d = _get_mission_fused_objects(mission_id, mission)
         scene = {
             "coordinate_system": "LOCAL_ARBITRARY",
             "scale_status": "RELATIVE_SCALE",
             "georeferencing_status": "UNREFERENCED",
             "total_objects": len(objects_3d),
             "valid_objects": sum(1 for obj in objects_3d if obj.get("association_status") == "VALID"),
+            "low_confidence_objects": sum(1 for obj in objects_3d if obj.get("association_status") == "LOW_CONFIDENCE"),
+            "insufficient_evidence_objects": sum(1 for obj in objects_3d if obj.get("association_status") == "INSUFFICIENT_EVIDENCE"),
             "moving_objects": sum(1 for obj in objects_3d if obj.get("motion_state") == "MOVING"),
             "static_objects": sum(1 for obj in objects_3d if obj.get("motion_state") == "STATIC"),
             "objects": objects_3d,
@@ -1422,7 +1456,7 @@ async def get_mission_objects_3d(mission_id: str):
     if not mission.data:
         raise HTTPException(status_code=404, detail="Mission not found")
 
-    objects_3d = mission.get("objects_3d") or []
+    objects_3d = _get_mission_fused_objects(mission_id, mission)
     return {
         "success": True,
         "mission_id": mission_id,
@@ -1441,7 +1475,7 @@ async def get_mission_object_3d(mission_id: str, object_id: str):
     if not mission.data:
         raise HTTPException(status_code=404, detail="Mission not found")
 
-    objects_3d = mission.get("objects_3d") or []
+    objects_3d = _get_mission_fused_objects(mission_id, mission)
     match = None
     for obj in objects_3d:
         if obj.get("object_id") == object_id or obj.get("track_id") == object_id:
@@ -1452,6 +1486,94 @@ async def get_mission_object_3d(mission_id: str, object_id: str):
         raise HTTPException(status_code=404, detail=f"3D Object {object_id} not found in mission")
 
     return {"success": True, "mission_id": mission_id, "object": match}
+
+
+@app.get("/api/missions/{mission_id}/objects/{object_id}/evidence")
+async def get_mission_object_evidence(mission_id: str, object_id: str):
+    """Return source video observations, 2D bounding boxes, and reprojection error overlays for an object."""
+    mission = MissionData(mission_id)
+    if not mission.data:
+        raise HTTPException(status_code=404, detail="Mission not found")
+
+    objects_3d = _get_mission_fused_objects(mission_id, mission)
+    match = None
+    for obj in objects_3d:
+        if obj.get("object_id") == object_id or obj.get("track_id") == object_id:
+            match = obj
+            break
+
+    if not match:
+        raise HTTPException(status_code=404, detail=f"3D Object {object_id} not found")
+
+    observations = match.get("observations") or []
+    normalized_obs = []
+    for obs in observations:
+        frame_id = obs.get("frame_id") or obs.get("image_name")
+        overlay_path = obs.get("overlay_path", "")
+        overlay_name = Path(overlay_path).name if overlay_path else f"overlay_{match.get('object_id')}_{frame_id}"
+        
+        overlay_exists = (DATA_DIR / "validation" / "phase6" / overlay_name).exists()
+        overlay_url = f"/api/missions/{mission_id}/evidence/overlays/{overlay_name}" if overlay_exists else None
+        frame_exists = (DATA_DIR / "missions" / mission_id / "reconstruction" / "frames" / frame_id).exists()
+        frame_url = f"/api/missions/{mission_id}/evidence/frames/{frame_id}" if frame_exists else None
+
+        normalized_obs.append({
+            "frame_id": frame_id,
+            "timestamp": obs.get("timestamp", 0.0),
+            "bbox_2d": obs.get("bbox_2d"),
+            "pixel_center": obs.get("pixel_center"),
+            "reprojected_point_2d": obs.get("reprojected_point_2d"),
+            "reprojection_error_px": obs.get("reprojection_error_px"),
+            "overlay_url": overlay_url,
+            "frame_url": frame_url,
+            "camera_id": obs.get("camera_id"),
+        })
+
+    obs_with_overlays = [o for o in normalized_obs if o.get("overlay_url")]
+    if obs_with_overlays:
+        best_obs = min(obs_with_overlays, key=lambda x: x.get("reprojection_error_px", float("inf")))
+    else:
+        best_obs = min(normalized_obs, key=lambda x: x.get("reprojection_error_px", float("inf"))) if normalized_obs else None
+
+    return {
+        "success": True,
+        "mission_id": mission_id,
+        "object_id": match.get("object_id"),
+        "track_id": match.get("track_id"),
+        "class": match.get("class") or match.get("class_name"),
+        "position_3d": match.get("position_3d"),
+        "motion_state": match.get("motion_state"),
+        "association_status": match.get("association_status"),
+        "association_confidence": match.get("association_confidence"),
+        "mean_reprojection_error_px": match.get("mean_reprojection_error_px") or match.get("reprojection_error"),
+        "observations_count": len(normalized_obs),
+        "best_observation": best_obs,
+        "observations": normalized_obs,
+    }
+
+
+@app.get("/api/missions/{mission_id}/evidence/overlays/{image_name}")
+async def get_evidence_overlay(mission_id: str, image_name: str):
+    """Serve visual reprojection overlay images."""
+    phase6_overlay = DATA_DIR / "validation" / "phase6" / image_name
+    if phase6_overlay.exists():
+        return FileResponse(str(phase6_overlay), media_type="image/jpeg")
+
+    mission_overlay = DATA_DIR / "missions" / mission_id / "evidence" / image_name
+    if mission_overlay.exists():
+        return FileResponse(str(mission_overlay), media_type="image/jpeg")
+
+    raise HTTPException(status_code=404, detail="Evidence overlay image not found")
+
+
+@app.get("/api/missions/{mission_id}/evidence/frames/{frame_name}")
+async def get_evidence_frame(mission_id: str, frame_name: str):
+    """Serve source video keyframe images."""
+    frame_path = DATA_DIR / "missions" / mission_id / "reconstruction" / "frames" / frame_name
+    if frame_path.exists():
+        return FileResponse(str(frame_path), media_type="image/jpeg")
+
+    raise HTTPException(status_code=404, detail="Source frame not found")
 
 
 @app.post("/api/missions/{mission_id}/fuse-3d")

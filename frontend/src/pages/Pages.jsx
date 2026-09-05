@@ -5,6 +5,7 @@ import { Button, CountUp, Panel, Progress, Status } from "../components/ui/UI";
 import { missions, pipelineStages } from "../data/missions";
 import ReconstructionViewer from "../components/reconstruction/ReconstructionViewer";
 import VideoPlayer from "../components/reconstruction/VideoPlayer";
+import MissionAnalysisWorkspace from "../components/analysis/MissionAnalysisWorkspace";
 import {
   fetchCalibrations,
   calibrateReferenceDistance,
@@ -577,173 +578,19 @@ export function DronePage({ mission }) {
 }
 
 export function ReconstructionPage({ mission, notice }) {
-  const [mode, setMode] = useState("hybrid");
-  const [selected, setSelected] = useState(null);
-  const [layers, setLayers] = useState({
-    terrain: true,
-    buildings: true,
-    roads: true,
-    flight: true,
-    cloud: true,
-    findings: true,
-    grid: true,
-    occlusion: false,
-    confidence: true,
-  });
-
-  const toggle = (k) => setLayers((p) => ({ ...p, [k]: !p[k] }));
-  const qualityMetrics = [
-    [
-      "Motion Blur",
-      mission.quality.blur,
-      "Estimated motion stability across reconstruction frames.",
-    ],
-    [
-      "Compression",
-      mission.quality.compression,
-      "Preserved image detail after video compression.",
-    ],
-    [
-      "Lighting",
-      mission.quality.lighting,
-      "Lighting consistency across the single flight.",
-    ],
-    [
-      "GPS Confidence",
-      mission.quality.gps,
-      "Estimated trajectory reliability.",
-    ],
-    [
-      "Sensor Noise",
-      mission.quality.sensor,
-      "Signal quality after sensor-noise correction.",
-    ],
-    [
-      "Surface Coverage",
-      mission.reconstruction.visible,
-      "Percentage of the scene sufficiently observed.",
-    ],
-    [
-      "Occlusion",
-      100 - mission.reconstruction.occluded,
-      "Surface visibility after occluded regions are discounted.",
-    ],
-    [
-      "Metric Confidence",
-      Number.parseInt(mission.measurements.confidence, 10),
-      "Expected measurement reliability without dense GCPs.",
-    ],
-  ];
-
   return (
     <>
       <Header
-        kicker="3D RECONSTRUCTION"
-        title={`${mission.name} model`}
-        copy="A georeferenced 3D representation generated from the selected drone flight."
+        kicker="3D RECONSTRUCTION & GIS ANALYSIS"
+        title={`${mission?.name || "AeroMesh"} 3D Analysis`}
+        copy="Interactive photogrammetric mission analysis, real surface mesh, AI-to-3D spatial fusion, scale calibration, and geometric measurements."
       >
-        <Status>EST. CONFIDENCE {mission.confidence}%</Status>
+        <Status tone="info">
+          {mission?.reconstruction?.status || "MESH_GENERATED"}
+        </Status>
       </Header>
 
-      <section className="reconstruction">
-        <ReconstructionViewer
-          key={mission.id}
-          mission={mission}
-          layers={layers}
-          mode={mode}
-          onFinding={setSelected}
-        />
-
-        <aside className="recon-controls">
-          <span className="eyebrow">VIEW MODE</span>
-          <div className="mode-controls">
-            {["hybrid", "solid", "wireframe", "point cloud", "topographic"].map(
-              (x) => (
-                <button
-                  key={x}
-                  className={mode === x ? "active" : ""}
-                  onClick={() => setMode(x)}
-                >
-                  {x}
-                </button>
-              ),
-            )}
-          </div>
-
-          <span className="eyebrow">LAYERS</span>
-          <div className="layer-controls">
-            {[
-              ["terrain", "Terrain"],
-              ["buildings", "Structures"],
-              ["roads", "Roads"],
-              ["flight", "Flight path"],
-              ["cloud", "Point cloud"],
-              ["findings", "AI findings"],
-              ["occlusion", "Occlusion"],
-              ["confidence", "Confidence"],
-              ["grid", "Survey grid"],
-            ].map(([k, l]) => (
-              <label key={k}>
-                <input
-                  type="checkbox"
-                  checked={layers[k]}
-                  onChange={() => toggle(k)}
-                />
-                <span>{l}</span>
-              </label>
-            ))}
-          </div>
-
-          <Button
-            onClick={() =>
-              notice(
-                "Orbit controls: drag to rotate · scroll to zoom · right-drag to pan",
-              )
-            }
-          >
-            Camera controls
-          </Button>
-
-          {selected && (
-            <div className="finding-pop">
-              <button onClick={() => setSelected(null)}>×</button>
-              <span className="eyebrow">{selected.severity}</span>
-              <strong>{selected.title}</strong>
-              <small>
-                Source frame {selected.frame}. Linked evidence is available in
-                video and map views.
-              </small>
-            </div>
-          )}
-        </aside>
-      </section>
-
-      <div className="recon-metrics">
-        {[
-          ["POINT CLOUD", mission.reconstruction.points],
-          ["MESH", "READY"],
-          ["TEXTURE", mission.reconstruction.texture],
-          ["VISIBLE", `${mission.reconstruction.visible}%`],
-          ["OCCLUDED", `${mission.reconstruction.occluded}%`],
-          ["PARTIAL", `${mission.reconstruction.partial}%`],
-        ].map(([label, value]) => (
-          <Stat key={label} label={label} value={value} />
-        ))}
-      </div>
-      <Panel className="reconstruction-quality">
-        <span className="eyebrow">
-          RECONSTRUCTION CONFIDENCE / DATA QUALITY
-        </span>
-        <div>
-          {qualityMetrics.map(([label, value, help]) => (
-            <section key={label} title={help}>
-              <span>{label}</span>
-              <Progress value={value} />
-              <b>{value}%</b>
-            </section>
-          ))}
-        </div>
-      </Panel>
+      <MissionAnalysisWorkspace mission={mission} notice={notice} />
     </>
   );
 }
