@@ -1039,10 +1039,11 @@ async def download_storage_object(storage_key: str):
 @app.post("/api/jobs")
 async def create_processing_job(
     mission_id: str = Query(...),
-    frame_sampling: int = Query(2),
+    frame_sampling: float = Query(2.0),
     inference_resolution: int = Query(640),
     detection_confidence: float = Query(0.35),
     reconstruction_quality: str = Query("medium"),
+    scene_profile: Optional[str] = Query(None),
 ):
     mission = MissionData(mission_id)
     if not mission.data:
@@ -1052,6 +1053,7 @@ async def create_processing_job(
         "inference_resolution": inference_resolution,
         "detection_confidence": detection_confidence,
         "reconstruction_quality": reconstruction_quality,
+        "scene_profile": scene_profile,
     })
     mission.update({"processing_job_id": job["id"]})
     enqueue_processing_job(job["id"])
@@ -1083,10 +1085,11 @@ async def get_processing_status(mission_id: str):
 @app.post("/api/missions/{mission_id}/process")
 async def process_video(
     mission_id: str,
-    frame_sampling: int = Query(2),
+    frame_sampling: float = Query(2.0),
     inference_resolution: int = Query(640),
     detection_confidence: float = Query(0.35),
-    reconstruction_quality: str = Query("medium")
+    reconstruction_quality: str = Query("medium"),
+    scene_profile: Optional[str] = Query(None),
 ):
     """Process uploaded video using real metadata and evidence-first analysis."""
     mission = MissionData(mission_id)
@@ -1102,6 +1105,7 @@ async def process_video(
         "inference_resolution": inference_resolution,
         "detection_confidence": detection_confidence,
         "reconstruction_quality": reconstruction_quality,
+        "scene_profile": scene_profile,
     })
     mission.update({"processing_job_id": job["id"]})
     update_job(job["id"], status="VALIDATING", stage="VALIDATING", progress_percent=5, message="Validating uploaded video")
@@ -1131,7 +1135,14 @@ async def process_video(
         # Load aeromesh model with fallback to yolo11n
         try:
             model, model_name, is_aeromesh = _load_detection_model(use_aeromesh=True)
-            result = _run_yolo_detection(video_path, model, sample_fps=frame_sampling, confidence=detection_confidence, is_aeromesh=is_aeromesh)
+            result = _run_yolo_detection(
+                video_path,
+                model,
+                sample_fps=frame_sampling,
+                confidence=detection_confidence,
+                is_aeromesh=is_aeromesh,
+                scene_profile=scene_profile,
+            )
             result["video"] = {**video_info, **result.get("video", {}), **real_summary}
             result["processing"]["status"] = "COMPLETE"
             result["processing"]["warning"] = "" if result.get("detections", {}).get("uniqueTracks", 0) else "No confident detections were observed in the uploaded video."
@@ -1390,7 +1401,15 @@ def summarize_uploaded_video(video_path: Path) -> dict:
     }
 
 
-def _run_yolo_detection(video_path: Path, model, sample_fps: int, confidence: float, is_aeromesh: bool = True) -> dict:
+def _run_yolo_detection(
+    video_path: Path,
+    model,
+    sample_fps: float = 2.0,
+    confidence: float = 0.35,
+    is_aeromesh: bool = True,
+    scene_profile: str | None = None,
+    allowed_classes: set[str] | list[str] | None = None,
+) -> dict:
     """
     Run real YOLO inference and reduce false positives using temporal persistence.
     
@@ -1408,25 +1427,33 @@ def _run_yolo_detection(video_path: Path, model, sample_fps: int, confidence: fl
     Args:
         video_path: Path to video file
         model: Loaded YOLO model instance
-        sample_fps: Frames per second to sample at
-        confidence: Base confidence threshold (may be overridden by per-class for aeromesh)
+        sample_fps: Frames per second to sample at (default: 2.0)
+        confidence: Base confidence threshold (default: 0.35)
         is_aeromesh: Whether using aeromesh (VisDrone fine-tuned) model vs. YOLO11n
+        scene_profile: Optional profile (e.g. 'road', 'terrestrial_road', 'all')
+        allowed_classes: Optional explicit set of classes to keep
     
     Returns:
         Detection results dict with tracks, detections, scene_analysis, etc.
     """
-    from backend.detection import DetectionRecord
+    from backend.detection import DetectionRecord, resolve_allowed_classes
     from backend.tracking import UltralyticsTracker
+
+    resolved_classes = resolve_allowed_classes(scene_profile, allowed_classes)
 
     records = UltralyticsTracker(model).track_video(
         video_path,
         sample_fps=sample_fps,
         confidence=confidence,
         iou=float(os.getenv("YOLO_IOU", "0.7")),
+        classes=resolved_classes,
+        scene_profile=scene_profile,
     )
     filtered = []
     for record in records:
         if is_aeromesh and record.confidence < _get_confidence_threshold(record.class_name, True):
+            continue
+        if resolved_classes is not None and record.class_name not in resolved_classes:
             continue
         class_name = _remap_visdrone_class(record.class_name) if is_aeromesh else record.class_name
         filtered.append(DetectionRecord(record.frame_id, class_name, record.confidence, record.bbox, record.timestamp, record.track_id))

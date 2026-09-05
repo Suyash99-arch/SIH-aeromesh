@@ -17,6 +17,55 @@ class DetectionRecord:
     track_id: str | None = None
 
 
+def calculate_frame_interval(fps: float, sample_fps: float = 2.0) -> int:
+    """Calculate frame stride/interval from video FPS and target sampling FPS."""
+    if fps <= 0:
+        return 1
+    safe_sample_fps = max(0.1, float(sample_fps))
+    return max(1, round(float(fps) / safe_sample_fps))
+
+
+ROAD_SCENE_CLASSES: frozenset[str] = frozenset({
+    "car",
+    "motorcycle",
+    "bus",
+    "truck",
+    "bicycle",
+    "person",
+})
+
+SCENE_PROFILES: dict[str, frozenset[str] | None] = {
+    "all": None,
+    "default": None,
+    "road": ROAD_SCENE_CLASSES,
+    "terrestrial_road": ROAD_SCENE_CLASSES,
+    "rail": frozenset({"train", "person", "car", "truck"}),
+    "maritime": frozenset({"boat", "person"}),
+    "aerial": frozenset({"airplane"}),
+}
+
+
+def resolve_allowed_classes(
+    scene_profile: str | None = None,
+    allowed_classes: Iterable[str] | None = None,
+) -> set[str] | None:
+    """Resolve allowed classes set from explicit list or named scene profile.
+
+    If neither is specified, returns None (all classes permitted, preserving default behavior).
+    """
+    if allowed_classes is not None:
+        return set(allowed_classes)
+    if scene_profile:
+        profile_key = str(scene_profile).strip().lower()
+        if profile_key in SCENE_PROFILES:
+            profile_set = SCENE_PROFILES[profile_key]
+            return set(profile_set) if profile_set is not None else None
+        raise ValueError(
+            f"Unknown scene_profile '{scene_profile}'. Supported profiles: {list(SCENE_PROFILES.keys())}"
+        )
+    return None
+
+
 class DetectionService:
     def __init__(self, registry: ModelRegistry | None = None, model: Any = None):
         self.registry = registry or ModelRegistry()
@@ -38,7 +87,15 @@ class DetectionService:
         result = model(frame, **{key: value for key, value in kwargs.items() if value is not None})[0]
         return self._normalize(result, frame_id, timestamp, classes, confidence)
 
-    def detect_video(self, video_path: Path, sample_fps: float = 2.0, confidence: float = 0.35, iou: float = 0.7, classes: set[str] | None = None) -> list[DetectionRecord]:
+    def detect_video(
+        self,
+        video_path: Path,
+        sample_fps: float = 2.0,
+        confidence: float = 0.35,
+        iou: float = 0.7,
+        classes: set[str] | None = None,
+        scene_profile: str | None = None,
+    ) -> list[DetectionRecord]:
         import cv2
         capture = cv2.VideoCapture(str(video_path))
         if not capture.isOpened():
@@ -47,7 +104,8 @@ class DetectionService:
         if fps <= 0:
             capture.release()
             raise ValueError("INVALID_VIDEO")
-        interval = max(1, round(fps / max(sample_fps, 0.1)))
+        interval = calculate_frame_interval(fps, sample_fps)
+        effective_classes = resolve_allowed_classes(scene_profile, classes)
         records: list[DetectionRecord] = []
         frame_number = 0
         while True:
@@ -55,7 +113,7 @@ class DetectionService:
             if not ok:
                 break
             if frame_number % interval == 0:
-                records.extend(self.detect_frame(frame, str(frame_number), frame_number / fps, confidence, iou, classes))
+                records.extend(self.detect_frame(frame, str(frame_number), frame_number / fps, confidence, iou, effective_classes))
             frame_number += 1
         capture.release()
         return records

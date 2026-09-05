@@ -103,3 +103,61 @@ def test_canonical_model_resolution_finds_yolo11n(monkeypatch, tmp_path):
     assert name2 == "yolo11n"
     assert is_aeromesh2 is False
     assert len(model_from_tmp.names) == 80
+
+
+def test_calculate_frame_interval():
+    from backend.detection import calculate_frame_interval
+
+    assert calculate_frame_interval(24.0, 2.0) == 12
+    assert calculate_frame_interval(24.0, 5.0) == 5
+    assert calculate_frame_interval(30.0, 2.0) == 15
+    assert calculate_frame_interval(30.0, 5.0) == 6
+    assert calculate_frame_interval(60.0, 2.0) == 30
+    assert calculate_frame_interval(0.0, 2.0) == 1
+    assert calculate_frame_interval(-10.0, 2.0) == 1
+
+
+def test_scene_profile_resolution():
+    from backend.detection import resolve_allowed_classes, ROAD_SCENE_CLASSES
+
+    # Default None -> None (all classes permitted)
+    assert resolve_allowed_classes(None) is None
+    assert resolve_allowed_classes("all") is None
+    assert resolve_allowed_classes("default") is None
+
+    # Road profile
+    road_classes = resolve_allowed_classes("road")
+    assert road_classes == set(ROAD_SCENE_CLASSES)
+    assert "car" in road_classes
+    assert "truck" in road_classes
+    assert "train" not in road_classes
+
+    # Case insensitivity
+    assert resolve_allowed_classes("TERRESTRIAL_ROAD") == set(ROAD_SCENE_CLASSES)
+
+    # Explicit allowed classes overrides profile
+    explicit = resolve_allowed_classes("road", allowed_classes=["car", "bicycle"])
+    assert explicit == {"car", "bicycle"}
+
+    # Unknown profile raises ValueError
+    with pytest.raises(ValueError, match="Unknown scene_profile"):
+        resolve_allowed_classes("unknown_space_station")
+
+
+def test_phase4_authoritative_artifact_is_not_mutated():
+    from pathlib import Path
+    import json
+
+    artifact_path = Path("data/validation/phase4/phase4_validation.json")
+    assert artifact_path.exists(), "Phase 4.5 validation artifact must exist"
+
+    with artifact_path.open("r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    assert data["validation_phase"] == "Phase 4.5D - Real YOLO11n Validation"
+    assert data["model"]["name"] == "yolo11n"
+    assert data["detection_metrics"]["total_detections"] == 399
+    assert data["detection_metrics"]["detections_by_class"]["car"] == 383
+    assert data["detection_metrics"]["detections_by_class"]["train"] == 15
+    assert data["detection_metrics"]["detections_by_class"]["truck"] == 1
+    assert data["tracking_metrics"]["unique_tracks"] == 23

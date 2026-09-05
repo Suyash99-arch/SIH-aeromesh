@@ -4,7 +4,7 @@ from dataclasses import asdict, dataclass, field
 from typing import Any, Iterable
 import os
 
-from .detection import DetectionRecord
+from .detection import DetectionRecord, calculate_frame_interval, resolve_allowed_classes
 
 
 @dataclass
@@ -131,13 +131,25 @@ class ByteTrackAdapter:
 class UltralyticsTracker:
     """Run Ultralytics' persistent ByteTrack or BoT-SORT implementation."""
 
+    @staticmethod
+    def configured_tracker() -> str:
+        return ByteTrackAdapter.configured_tracker()
+
     def __init__(self, model: Any, tracker_type: str | None = None):
         self.model = model
         self.tracker_type = (tracker_type or self.configured_tracker())
         if self.tracker_type not in {"bytetrack", "botsort"}:
             raise ValueError("TRACKING_FAILED: unsupported tracker type")
 
-    def track_video(self, video_path, sample_fps: float = 2.0, confidence: float = 0.35, iou: float = 0.7) -> list[DetectionRecord]:
+    def track_video(
+        self,
+        video_path,
+        sample_fps: float = 2.0,
+        confidence: float = 0.35,
+        iou: float = 0.7,
+        classes: set[str] | list[str] | None = None,
+        scene_profile: str | None = None,
+    ) -> list[DetectionRecord]:
         import cv2
         capture = cv2.VideoCapture(str(video_path))
         if not capture.isOpened():
@@ -146,7 +158,8 @@ class UltralyticsTracker:
         if fps <= 0:
             capture.release()
             raise ValueError("INVALID_VIDEO")
-        interval = max(1, round(fps / max(sample_fps, 0.1)))
+        interval = calculate_frame_interval(fps, sample_fps)
+        allowed_classes = resolve_allowed_classes(scene_profile, classes)
         records = []
         frame_number = 0
         while True:
@@ -159,11 +172,14 @@ class UltralyticsTracker:
                 boxes = getattr(result, "boxes", [])
                 for box in boxes:
                     class_id = int(_scalar(box.cls[0]))
+                    class_name = str(names[class_id] if isinstance(names, dict) else names[class_id])
+                    if allowed_classes is not None and class_name not in allowed_classes:
+                        continue
                     confidence_value = float(_scalar(box.conf[0]))
                     bbox = box.xyxy[0].tolist() if hasattr(box.xyxy[0], "tolist") else box.xyxy[0]
                     ids = getattr(box, "id", None)
                     track_id = str(int(_scalar(ids[0]))) if ids is not None else None
-                    records.append(DetectionRecord(str(frame_number), str(names[class_id]), confidence_value, [float(value) for value in bbox], frame_number / fps, track_id))
+                    records.append(DetectionRecord(str(frame_number), class_name, confidence_value, [float(value) for value in bbox], frame_number / fps, track_id))
             frame_number += 1
         capture.release()
         return records

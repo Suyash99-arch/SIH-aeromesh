@@ -1,0 +1,222 @@
+{
+  "benchmark_phase": "Phase B \u2014 Temporal Sampling & Scene-Specific Class Tuning",
+  "timestamp": "2026-09-05T19:49:11.063245+00:00",
+  "hardware_environment": {
+    "platform": "Windows 11 x86_64",
+    "cpu_cores": 16,
+    "acceleration": "CPU-only (PyTorch CPU)",
+    "device": "cpu"
+  },
+  "video_source": {
+    "path": "data\\objects\\missions\\f65c0ec3-008\\original\\WhatsApp_Video_2026-09-01_at_11.27.02__1_.mp4",
+    "filename": "WhatsApp_Video_2026-09-01_at_11.27.02__1_.mp4",
+    "native_fps": 24.0,
+    "total_frames": 725,
+    "duration_seconds": 30.21,
+    "resolution": "3840x2160"
+  },
+  "authoritative_baseline_reference": {
+    "phase4_artifact": "data/validation/phase4/phase4_validation.json",
+    "phase4_total_detections": 399,
+    "phase4_unique_tracks": 23,
+    "phase4_effective_fps": 1.98
+  },
+  "runs": {
+    "run_2fps_default": {
+      "configuration": {
+        "target_sample_fps": 2.0,
+        "scene_profile": "all (default)",
+        "confidence_threshold": 0.35,
+        "iou_threshold": 0.7
+      },
+      "execution": {
+        "frames_evaluated": 58,
+        "wall_clock_runtime_seconds": 23.75,
+        "effective_processing_fps": 2.44,
+        "seconds_per_frame": 0.4095
+      },
+      "detection_metrics": {
+        "total_detections": 143,
+        "detections_by_class": {
+          "car": 142,
+          "bus": 1
+        },
+        "confidence_stats": {
+          "min": 0.3525,
+          "max": 0.8292,
+          "mean": 0.5299,
+          "median": 0.5126
+        }
+      },
+      "tracking_metrics": {
+        "unique_tracks": 14,
+        "tracks_by_class": {
+          "car": 13,
+          "bus": 1
+        },
+        "track_duration_stats_seconds": {
+          "min": 0.0,
+          "max": 28.0,
+          "mean": 6.86,
+          "median": 0.75
+        },
+        "hits_per_track_stats": {
+          "min": 1,
+          "max": 57,
+          "mean": 10.2,
+          "median": 2.0
+        }
+      }
+    },
+    "run_2fps_road_profile": {
+      "configuration": {
+        "target_sample_fps": 2.0,
+        "scene_profile": "road",
+        "confidence_threshold": 0.35,
+        "iou_threshold": 0.7
+      },
+      "execution": {
+        "frames_evaluated": 58,
+        "wall_clock_runtime_seconds": 16.95,
+        "effective_processing_fps": 3.42,
+        "seconds_per_frame": 0.2923
+      },
+      "detection_metrics": {
+        "total_detections": 143,
+        "detections_by_class": {
+          "car": 142,
+          "bus": 1
+        },
+        "confidence_stats": {
+          "min": 0.3525,
+          "max": 0.8292,
+          "mean": 0.5299,
+          "median": 0.5126
+        }
+      },
+      "tracking_metrics": {
+        "unique_tracks": 16,
+        "tracks_by_class": {
+          "car": 15,
+          "bus": 1
+        },
+        "track_duration_stats_seconds": {
+          "min": 0.0,
+          "max": 27.5,
+          "mean": 5.94,
+          "median": 0.5
+        },
+        "hits_per_track_stats": {
+          "min": 1,
+          "max": 56,
+          "mean": 8.9,
+          "median": 2.0
+        }
+      }
+    },
+    "run_5fps_default": {
+      "configuration": {
+        "target_sample_fps": 5.0,
+        "scene_profile": "all (default)",
+        "confidence_threshold": 0.35,
+        "iou_threshold": 0.7
+      },
+      "execution": {
+        "frames_evaluated": 137,
+        "wall_clock_runtime_seconds": 26.55,
+        "effective_processing_fps": 5.16,
+        "seconds_per_frame": 0.1938
+      },
+      "detection_metrics": {
+        "total_detections": 414,
+        "detections_by_class": {
+          "car": 413,
+          "train": 1
+        },
+        "confidence_stats": {
+          "min": 0.35,
+          "max": 0.837,
+          "mean": 0.5135,
+          "median": 0.4731
+        }
+      },
+      "tracking_metrics": {
+        "unique_tracks": 29,
+        "tracks_by_class": {
+          "car": 28,
+          "train": 1
+        },
+        "track_duration_stats_seconds": {
+          "min": 0.0,
+          "max": 29.17,
+          "mean": 4.92,
+          "median": 0.62
+        },
+        "hits_per_track_stats": {
+          "min": 1,
+          "max": 134,
+          "mean": 14.3,
+          "median": 3.0
+        }
+      }
+    },
+    "run_5fps_road_profile": {
+      "configuration": {
+        "target_sample_fps": 5.0,
+        "scene_profile": "road",
+        "confidence_threshold": 0.35,
+        "iou_threshold": 0.7
+      },
+      "execution": {
+        "frames_evaluated": 137,
+        "wall_clock_runtime_seconds": 21.9,
+        "effective_processing_fps": 6.26,
+        "seconds_per_frame": 0.1598
+      },
+      "detection_metrics": {
+        "total_detections": 413,
+        "detections_by_class": {
+          "car": 413
+        },
+        "confidence_stats": {
+          "min": 0.35,
+          "max": 0.837,
+          "mean": 0.5136,
+          "median": 0.4723
+        }
+      },
+      "tracking_metrics": {
+        "unique_tracks": 28,
+        "tracks_by_class": {
+          "car": 28
+        },
+        "track_duration_stats_seconds": {
+          "min": 0.0,
+          "max": 29.17,
+          "mean": 5.1,
+          "median": 0.73
+        },
+        "hits_per_track_stats": {
+          "min": 1,
+          "max": 134,
+          "mean": 14.8,
+          "median": 3.0
+        }
+      }
+    }
+  },
+  "comparative_analysis": {
+    "temporal_sampling_comparison": {
+      "evaluated_frames_ratio": "137 / 58 = 2.36x",
+      "detections_count_ratio": "414 / 143 = 2.90x",
+      "wall_clock_time_ratio": "26.55s / 23.75s = 1.12x",
+      "mean_hits_per_track": "2 FPS: 10.2 hits/track vs 5 FPS: 14.3 hits/track"
+    },
+    "class_profile_tuning_comparison": {
+      "2fps_spurious_train_removed": 0,
+      "5fps_spurious_train_removed": 1,
+      "2fps_valid_car_retained": 142,
+      "5fps_valid_car_retained": 413
+    }
+  }
+}
