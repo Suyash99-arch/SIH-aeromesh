@@ -4,7 +4,13 @@ from dataclasses import asdict, dataclass, field
 from typing import Any, Iterable
 import os
 
-from .detection import DetectionRecord, calculate_frame_interval, resolve_allowed_classes
+from .detection import (
+    DetectionRecord,
+    calculate_frame_interval,
+    generate_tiles,
+    resolve_allowed_classes,
+    suppress_tile_duplicates,
+)
 
 
 @dataclass
@@ -42,6 +48,9 @@ class ByteTrackAdapter:
     def __init__(self, max_missed_frames: int = 3, iou_threshold: float = 0.3):
         self.max_missed_frames = max_missed_frames
         self.iou_threshold = iou_threshold
+        self.active: list[TrackRecord] = []
+        self.completed: list[TrackRecord] = []
+        self.next_id: int = 1
 
     @staticmethod
     def configured_tracker() -> str:
@@ -50,44 +59,76 @@ class ByteTrackAdapter:
             raise ValueError("TRACKING_FAILED: TRACKER_TYPE must be bytetrack or botsort")
         return tracker
 
-    def track(self, detections_by_frame: Iterable[Iterable[DetectionRecord]]) -> list[TrackRecord]:
-        active: list[TrackRecord] = []
-        completed: list[TrackRecord] = []
-        next_id = 1
-        for frame_detections in detections_by_frame:
-            detections = list(frame_detections)
-            matched: set[int] = set()
-            for detection in detections:
-                candidate = self._best_track(active, detection, matched)
-                if candidate is None:
-                    candidate = TrackRecord(f"T{next_id:04d}", detection.class_name, detection.frame_id, detection.frame_id, detection.timestamp, detection.timestamp)
-                    next_id += 1
-                    active.append(candidate)
-                candidate.last_frame = detection.frame_id
-                candidate.last_timestamp = detection.timestamp
-                candidate.detection_count += 1
-                candidate.confidences.append(detection.confidence)
-                candidate.trajectory.append([(detection.bbox[0] + detection.bbox[2]) / 2, (detection.bbox[1] + detection.bbox[3]) / 2])
-                candidate.observations.append({
-                    "frame_id": detection.frame_id,
-                    "bbox": [float(v) for v in detection.bbox],
-                    "confidence": float(detection.confidence),
-                    "timestamp": float(detection.timestamp),
-                })
-                candidate.missed_frames = 0
-                matched.add(id(candidate))
-            survivors = []
-            for track in active:
-                if id(track) not in matched:
-                    track.missed_frames += 1
-                if track.missed_frames > self.max_missed_frames:
-                    completed.append(track)
-                else:
-                    survivors.append(track)
-            active = survivors
-        return completed + active
+    def update_frame(
+        self,
+        frame_detections: Iterable[DetectionRecord],
+        camera_motion: CameraMotion | None = None,
+    ) -> list[DetectionRecord]:
+        """Update active tracks with detections from a single frame and assign track IDs."""
+        detections = list(frame_detections)
+        matched: set[int] = set()
+        assigned_records: list[DetectionRecord] = []
 
-    def _best_track(self, tracks: list[TrackRecord], detection: DetectionRecord, matched: set[int]) -> TrackRecord | None:
+        for detection in detections:
+            candidate = self._best_track(self.active, detection, matched, camera_motion=camera_motion)
+            if candidate is None:
+                candidate = TrackRecord(
+                    f"T{self.next_id:04d}",
+                    detection.class_name,
+                    detection.frame_id,
+                    detection.frame_id,
+                    detection.timestamp,
+                    detection.timestamp,
+                )
+                self.next_id += 1
+                self.active.append(candidate)
+            candidate.last_frame = detection.frame_id
+            candidate.last_timestamp = detection.timestamp
+            candidate.detection_count += 1
+            candidate.confidences.append(detection.confidence)
+            candidate.trajectory.append([(detection.bbox[0] + detection.bbox[2]) / 2, (detection.bbox[1] + detection.bbox[3]) / 2])
+            candidate.observations.append({
+                "frame_id": detection.frame_id,
+                "bbox": [float(v) for v in detection.bbox],
+                "confidence": float(detection.confidence),
+                "timestamp": float(detection.timestamp),
+            })
+            candidate.missed_frames = 0
+            matched.add(id(candidate))
+            assigned_records.append(
+                DetectionRecord(
+                    frame_id=detection.frame_id,
+                    class_name=detection.class_name,
+                    confidence=detection.confidence,
+                    bbox=detection.bbox,
+                    timestamp=detection.timestamp,
+                    track_id=candidate.track_id,
+                )
+            )
+
+        survivors = []
+        for track in self.active:
+            if id(track) not in matched:
+                track.missed_frames += 1
+            if track.missed_frames > self.max_missed_frames:
+                self.completed.append(track)
+            else:
+                survivors.append(track)
+        self.active = survivors
+        return assigned_records
+
+    def track(self, detections_by_frame: Iterable[Iterable[DetectionRecord]]) -> list[TrackRecord]:
+        for frame_detections in detections_by_frame:
+            self.update_frame(frame_detections)
+        return self.completed + self.active
+
+    def _best_track(
+        self,
+        tracks: list[TrackRecord],
+        detection: DetectionRecord,
+        matched: set[int],
+        camera_motion: CameraMotion | None = None,
+    ) -> TrackRecord | None:
         best = None
         best_score = self.iou_threshold
         for track in tracks:
@@ -95,6 +136,13 @@ class ByteTrackAdapter:
                 continue
             if track.observations:
                 prev_bbox = track.observations[-1]["bbox"]
+                if camera_motion is not None and camera_motion.success:
+                    prev_bbox = [
+                        prev_bbox[0] - camera_motion.dx,
+                        prev_bbox[1] - camera_motion.dy,
+                        prev_bbox[2] - camera_motion.dx,
+                        prev_bbox[3] - camera_motion.dy,
+                    ]
                 det_bbox = detection.bbox
                 ix1 = max(prev_bbox[0], det_bbox[0])
                 iy1 = max(prev_bbox[1], det_bbox[1])
@@ -117,14 +165,17 @@ class ByteTrackAdapter:
                     diag = max(30.0, ((prev_bbox[2] - prev_bbox[0])**2 + (prev_bbox[3] - prev_bbox[1])**2)**0.5)
                     if dist <= diag * 1.5:
                         score = max(score, max(0.0, 1.0 - dist / (diag * 1.5)))
+                if score >= best_score:
+                    best_score = score
+                    best = track
             else:
                 previous = track.trajectory[-1]
                 current = [(detection.bbox[0] + detection.bbox[2]) / 2, (detection.bbox[1] + detection.bbox[3]) / 2]
                 distance = abs(previous[0] - current[0]) + abs(previous[1] - current[1])
                 score = 1 / (1 + distance)
-            if score > best_score:
-                best_score = score
-                best = track
+                if score > best_score:
+                    best_score = score
+                    best = track
         return best
 
 
@@ -411,6 +462,7 @@ class UltralyticsTracker:
         self.last_stitched_count: int = 0
         self.last_raw_tracks: int = 0
         self.last_final_tracks: int = 0
+        self.last_tile_duplicates_suppressed: int = 0
 
     def track_video(
         self,
@@ -424,6 +476,11 @@ class UltralyticsTracker:
         enable_stitching: bool = True,
         stitching_max_gap: float = 3.5,
         stitching_max_distance: float = 250.0,
+        tile_inference: bool = False,
+        tile_rows: int = 2,
+        tile_cols: int = 2,
+        tile_overlap: float = 0.15,
+        tile_iou: float = 0.5,
     ) -> list[DetectionRecord]:
         import cv2
         capture = cv2.VideoCapture(str(video_path))
@@ -440,6 +497,12 @@ class UltralyticsTracker:
         camera_motions: dict[int, CameraMotion] = {}
         motion_failures = 0
 
+        online_tracker = ByteTrackAdapter(
+            max_missed_frames=max(3, int(sample_fps * 1.5)),
+            iou_threshold=0.25,
+        ) if tile_inference else None
+        total_tile_duplicates = 0
+
         records = []
         frame_number = 0
         while True:
@@ -447,31 +510,71 @@ class UltralyticsTracker:
             if not ok:
                 break
             if frame_number % interval == 0:
+                motion = None
                 if motion_estimator is not None:
                     motion = motion_estimator.estimate(frame)
                     camera_motions[frame_number] = motion
                     if not motion.success:
                         motion_failures += 1
 
-                result = self.model.track(frame, persist=True, tracker=f"{self.tracker_type}.yaml", conf=confidence, iou=iou, verbose=False)[0]
-                names = getattr(result, "names", {})
-                boxes = getattr(result, "boxes", [])
-                for box in boxes:
-                    class_id = int(_scalar(box.cls[0]))
-                    class_name = str(names[class_id] if isinstance(names, dict) else names[class_id])
-                    if allowed_classes is not None and class_name not in allowed_classes:
-                        continue
-                    confidence_value = float(_scalar(box.conf[0]))
-                    bbox = box.xyxy[0].tolist() if hasattr(box.xyxy[0], "tolist") else box.xyxy[0]
-                    ids = getattr(box, "id", None)
-                    track_id = str(int(_scalar(ids[0]))) if ids is not None else None
-                    records.append(DetectionRecord(str(frame_number), class_name, confidence_value, [float(value) for value in bbox], frame_number / fps, track_id))
+                if tile_inference:
+                    h, w = frame.shape[:2]
+                    tiles = generate_tiles(w, h, rows=tile_rows, cols=tile_cols, overlap=tile_overlap)
+                    raw_frame_records = []
+                    for tx1, ty1, tx2, ty2 in tiles:
+                        tile = frame[ty1:ty2, tx1:tx2]
+                        result = self.model(tile, conf=confidence, iou=iou, verbose=False)[0]
+                        names = getattr(result, "names", {})
+                        boxes = getattr(result, "boxes", [])
+                        for box in boxes:
+                            class_id = int(_scalar(box.cls[0]))
+                            class_name = str(names[class_id] if isinstance(names, dict) else names[class_id])
+                            if allowed_classes is not None and class_name not in allowed_classes:
+                                continue
+                            confidence_value = float(_scalar(box.conf[0]))
+                            raw_box = box.xyxy[0].tolist() if hasattr(box.xyxy[0], "tolist") else box.xyxy[0]
+                            remapped_bbox = [
+                                round(max(0.0, min(float(w), float(raw_box[0]) + tx1)), 4),
+                                round(max(0.0, min(float(h), float(raw_box[1]) + ty1)), 4),
+                                round(max(0.0, min(float(w), float(raw_box[2]) + tx1)), 4),
+                                round(max(0.0, min(float(h), float(raw_box[3]) + ty1)), 4),
+                            ]
+                            raw_frame_records.append(
+                                DetectionRecord(
+                                    frame_id=str(frame_number),
+                                    class_name=class_name,
+                                    confidence=confidence_value,
+                                    bbox=remapped_bbox,
+                                    timestamp=frame_number / fps,
+                                )
+                            )
+                        del tile
+
+                    kept_records, dups = suppress_tile_duplicates(raw_frame_records, iou_threshold=tile_iou)
+                    total_tile_duplicates += dups
+                    assigned = online_tracker.update_frame(kept_records, camera_motion=motion)
+                    records.extend(assigned)
+                else:
+                    result = self.model.track(frame, persist=True, tracker=f"{self.tracker_type}.yaml", conf=confidence, iou=iou, verbose=False)[0]
+                    names = getattr(result, "names", {})
+                    boxes = getattr(result, "boxes", [])
+                    for box in boxes:
+                        class_id = int(_scalar(box.cls[0]))
+                        class_name = str(names[class_id] if isinstance(names, dict) else names[class_id])
+                        if allowed_classes is not None and class_name not in allowed_classes:
+                            continue
+                        confidence_value = float(_scalar(box.conf[0]))
+                        bbox = box.xyxy[0].tolist() if hasattr(box.xyxy[0], "tolist") else box.xyxy[0]
+                        ids = getattr(box, "id", None)
+                        track_id = str(int(_scalar(ids[0]))) if ids is not None else None
+                        records.append(DetectionRecord(str(frame_number), class_name, confidence_value, [float(value) for value in bbox], frame_number / fps, track_id))
             frame_number += 1
         capture.release()
 
         raw_tracks = len({r.track_id for r in records if r.track_id})
         self.last_motion_failures = motion_failures
         self.last_raw_tracks = raw_tracks
+        self.last_tile_duplicates_suppressed = total_tile_duplicates
 
         if enable_stitching and records:
             stitched_records, num_stitched = stitch_tracklets(

@@ -1090,6 +1090,10 @@ async def process_video(
     detection_confidence: float = Query(0.35),
     reconstruction_quality: str = Query("medium"),
     scene_profile: Optional[str] = Query(None),
+    tile_inference: bool = Query(False),
+    tile_rows: int = Query(2),
+    tile_cols: int = Query(2),
+    tile_overlap: float = Query(0.15),
 ):
     """Process uploaded video using real metadata and evidence-first analysis."""
     mission = MissionData(mission_id)
@@ -1106,6 +1110,10 @@ async def process_video(
         "detection_confidence": detection_confidence,
         "reconstruction_quality": reconstruction_quality,
         "scene_profile": scene_profile,
+        "tile_inference": tile_inference,
+        "tile_rows": tile_rows,
+        "tile_cols": tile_cols,
+        "tile_overlap": tile_overlap,
     })
     mission.update({"processing_job_id": job["id"]})
     update_job(job["id"], status="VALIDATING", stage="VALIDATING", progress_percent=5, message="Validating uploaded video")
@@ -1142,6 +1150,10 @@ async def process_video(
                 confidence=detection_confidence,
                 is_aeromesh=is_aeromesh,
                 scene_profile=scene_profile,
+                tile_inference=tile_inference,
+                tile_rows=tile_rows,
+                tile_cols=tile_cols,
+                tile_overlap=tile_overlap,
             )
             result["video"] = {**video_info, **result.get("video", {}), **real_summary}
             result["processing"]["status"] = "COMPLETE"
@@ -1410,6 +1422,11 @@ def _run_yolo_detection(
     scene_profile: str | None = None,
     allowed_classes: set[str] | list[str] | None = None,
     enable_stitching: bool = True,
+    tile_inference: bool = False,
+    tile_rows: int = 2,
+    tile_cols: int = 2,
+    tile_overlap: float = 0.15,
+    tile_iou: float = 0.5,
 ) -> dict:
     """
     Run real YOLO inference and reduce false positives using temporal persistence.
@@ -1434,6 +1451,11 @@ def _run_yolo_detection(
         scene_profile: Optional profile (e.g. 'road', 'terrestrial_road', 'all')
         allowed_classes: Optional explicit set of classes to keep
         enable_stitching: Whether to apply camera-motion-aware conservative tracklet stitching (default: True)
+        tile_inference: Optional flag to enable 4K tiled inference (default: False)
+        tile_rows: Number of tile rows (default: 2)
+        tile_cols: Number of tile columns (default: 2)
+        tile_overlap: Overlap fraction between tiles (default: 0.15)
+        tile_iou: Duplicate suppression IoU threshold (default: 0.5)
     
     Returns:
         Detection results dict with tracks, detections, scene_analysis, etc.
@@ -1452,6 +1474,11 @@ def _run_yolo_detection(
         scene_profile=scene_profile,
         enable_motion_compensation=True,
         enable_stitching=enable_stitching,
+        tile_inference=tile_inference,
+        tile_rows=tile_rows,
+        tile_cols=tile_cols,
+        tile_overlap=tile_overlap,
+        tile_iou=tile_iou,
     )
     filtered = []
     for record in records:

@@ -240,3 +240,107 @@ def test_stitch_tracklets_stitches_broken_gap():
     assert len({r.track_id for r in stitched}) == 1
     # All records unified under the same track ID
     assert stitched[0].track_id == stitched[2].track_id
+
+
+def test_tile_geometry_generation_and_overlap():
+    from backend.detection import generate_tiles
+
+    # 4K UHD test
+    tiles = generate_tiles(3840, 2160, rows=2, cols=2, overlap=0.15)
+    assert len(tiles) == 4
+
+    # Top-left, top-right, bottom-left, bottom-right
+    t_tl, t_tr, t_bl, t_br = tiles
+    assert t_tl[0] == 0 and t_tl[1] == 0
+    assert t_tr[2] == 3840 and t_tr[1] == 0
+    assert t_bl[0] == 0 and t_bl[3] == 2160
+    assert t_br[2] == 3840 and t_br[3] == 2160
+
+    # Overlap validation (~15%)
+    tile_w = t_tl[2] - t_tl[0]
+    tile_h = t_tl[3] - t_tl[1]
+    overlap_x = t_tl[2] - t_tr[0]
+    overlap_y = t_tl[3] - t_bl[1]
+    assert 0.14 <= (overlap_x / tile_w) <= 0.16
+    assert 0.14 <= (overlap_y / tile_h) <= 0.16
+
+
+def test_duplicate_detection_suppression():
+    from backend.detection import DetectionRecord, suppress_tile_duplicates
+
+    # Two overlapping detections of the same car across adjacent tiles
+    rec1 = DetectionRecord("0", "car", 0.72, [1800.0, 1000.0, 1950.0, 1100.0], 0.0)
+    rec2 = DetectionRecord("0", "car", 0.88, [1802.0, 1001.0, 1951.0, 1102.0], 0.0)
+    # Distinct vehicle further away
+    rec3 = DetectionRecord("0", "car", 0.75, [2500.0, 1200.0, 2600.0, 1280.0], 0.0)
+
+    kept, suppressed = suppress_tile_duplicates([rec1, rec2, rec3], iou_threshold=0.5)
+    assert suppressed == 1
+    assert len(kept) == 2
+    # Highest confidence detection is preserved
+    assert any(r.confidence == 0.88 for r in kept)
+    assert not any(r.confidence == 0.72 for r in kept)
+
+
+def test_tile_inference_remaps_coordinates_and_respects_scene_profile():
+    import numpy as np
+    from backend.detection import DetectionService
+
+    # Mock model that returns a box in tile coordinates [50, 50, 100, 100]
+    class MockTileBox:
+        def __init__(self, cls_id, conf, bbox):
+            self.cls = [[cls_id]]
+            self.conf = [[conf]]
+            self.xyxy = [bbox]
+
+    class MockTileModel:
+        names = {0: "car", 1: "airplane"}
+
+        def __call__(self, tile, **kwargs):
+            return [SimpleNamespace(names=self.names, boxes=[
+                MockTileBox(0, 0.85, [50.0, 50.0, 100.0, 100.0]),
+                MockTileBox(1, 0.90, [60.0, 60.0, 120.0, 120.0]),  # filtered by road profile
+            ])]
+
+    service = DetectionService(model=MockTileModel())
+    # Create fake 4K frame
+    frame = np.zeros((2160, 3840, 3), dtype=np.uint8)
+
+    # Road profile filters out "airplane"
+    detections = service.detect_frame(
+        frame,
+        frame_id="0",
+        classes={"car", "bus", "truck"},
+        tile_inference=True,
+        tile_rows=2,
+        tile_cols=2,
+        tile_overlap=0.15,
+    )
+
+    assert len(detections) >= 1
+    assert all(d.class_name == "car" for d in detections)
+    # Check that remapping shifted coordinates beyond tile 0 for later tiles
+    assert any(d.bbox[0] >= 0.0 and d.bbox[2] <= 3840.0 for d in detections)
+
+
+def test_default_tile_inference_is_false():
+    from backend.detection import DetectionService
+    import inspect
+
+    sig = inspect.signature(DetectionService.detect_frame)
+    assert sig.parameters["tile_inference"].default is False
+    assert sig.parameters["tile_rows"].default == 2
+    assert sig.parameters["tile_cols"].default == 2
+    assert sig.parameters["tile_overlap"].default == 0.15
+
+    sig_v = inspect.signature(DetectionService.detect_video)
+    assert sig_v.parameters["tile_inference"].default is False
+
+
+def test_no_mutation_of_authoritative_validation_artifacts():
+    from pathlib import Path
+    base = Path("data/validation")
+    assert (base / "accuracy_remediation" / "phase_b_sampling_benchmark.json").exists()
+    assert (base / "accuracy_remediation" / "phase_c_tracking_benchmark.json").exists()
+    assert (base / "accuracy_remediation" / "phase_e_40keyframe_reconstruction.json").exists()
+    assert (base / "phase5" / "phase5_reconstruction.json").exists()

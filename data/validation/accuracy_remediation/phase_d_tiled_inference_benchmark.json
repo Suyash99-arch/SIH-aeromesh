@@ -1,0 +1,363 @@
+{
+  "validation_phase": "Phase D \u2014 4K Tiled Inference Benchmark",
+  "timestamp": "2026-09-06T02:30:00Z",
+  "video_source": {
+    "path": "d:\\SIH\\SIH-aeromesh\\data\\objects\\missions\\f65c0ec3-008\\original\\WhatsApp_Video_2026-09-01_at_11.27.02__1_.mp4",
+    "resolution": "3840x2160",
+    "fps": 24.0,
+    "total_frames": 725,
+    "duration_seconds": 30.21
+  },
+  "tile_configuration": {
+    "tile_rows": 2,
+    "tile_cols": 2,
+    "overlap_fraction": 0.15,
+    "tile_width_px": 2076,
+    "tile_height_px": 1168,
+    "duplicate_suppression_iou": 0.5,
+    "model_input_size": 640,
+    "effective_scale_preservation_factor": 1.85
+  },
+  "scientific_disclosures": {
+    "ground_truth_status": "NO_PIXEL_LEVEL_GROUND_TRUTH",
+    "accuracy_statement": "Increases in detection counts reflect higher coverage and sensitivity on small objects, NOT proven ground-truth accuracy.",
+    "coordinate_space": "FULL_FRAME_PIXEL_COORDINATES_4K"
+  },
+  "benchmark_configurations": {
+    "standard_2fps": {
+      "total_detections": 143,
+      "unique_tracks": 11,
+      "frames_evaluated": 61,
+      "frames_with_detections": 58,
+      "detections_per_frame": 2.34,
+      "class_breakdown": {
+        "car": 142,
+        "bus": 1
+      },
+      "confidence_stats": {
+        "mean": 0.5299,
+        "median": 0.5126,
+        "min": 0.3525,
+        "max": 0.8292,
+        "std": 0.1301,
+        "p25": 0.4108,
+        "p75": 0.6507
+      },
+      "track_stats": {
+        "short_tracks_count": 6,
+        "short_tracks_pct": 54.5,
+        "longest_track_hits": 57,
+        "longest_track_duration_s": 28.0,
+        "mean_track_duration_s": 9.09,
+        "median_track_duration_s": 0.5,
+        "mean_hits_per_track": 12.9
+      },
+      "tile_duplicates_suppressed": 0,
+      "wall_clock_seconds": 20.07,
+      "effective_fps": 3.04,
+      "sampled_frame_count": 61
+    },
+    "tiled_2fps": {
+      "total_detections": 543,
+      "unique_tracks": 77,
+      "frames_evaluated": 61,
+      "frames_with_detections": 61,
+      "detections_per_frame": 8.9,
+      "class_breakdown": {
+        "car": 502,
+        "person": 25,
+        "truck": 16
+      },
+      "confidence_stats": {
+        "mean": 0.4656,
+        "median": 0.4458,
+        "min": 0.3501,
+        "max": 0.8134,
+        "std": 0.085,
+        "p25": 0.4007,
+        "p75": 0.5187
+      },
+      "track_stats": {
+        "short_tracks_count": 37,
+        "short_tracks_pct": 48.1,
+        "longest_track_hits": 39,
+        "longest_track_duration_s": 25.5,
+        "mean_track_duration_s": 5.18,
+        "median_track_duration_s": 2.5,
+        "mean_hits_per_track": 7.1
+      },
+      "tile_duplicates_suppressed": 95,
+      "wall_clock_seconds": 30.18,
+      "effective_fps": 2.02,
+      "sampled_frame_count": 61
+    },
+    "standard_5fps": {
+      "total_detections": 413,
+      "unique_tracks": 16,
+      "frames_evaluated": 145,
+      "frames_with_detections": 137,
+      "detections_per_frame": 2.85,
+      "class_breakdown": {
+        "car": 413
+      },
+      "confidence_stats": {
+        "mean": 0.5136,
+        "median": 0.4723,
+        "min": 0.35,
+        "max": 0.837,
+        "std": 0.1298,
+        "p25": 0.3983,
+        "p75": 0.6298
+      },
+      "track_stats": {
+        "short_tracks_count": 8,
+        "short_tracks_pct": 50.0,
+        "longest_track_hits": 134,
+        "longest_track_duration_s": 29.17,
+        "mean_track_duration_s": 9.84,
+        "median_track_duration_s": 3.23,
+        "mean_hits_per_track": 25.5
+      },
+      "tile_duplicates_suppressed": 0,
+      "wall_clock_seconds": 23.21,
+      "effective_fps": 6.25,
+      "sampled_frame_count": 145
+    },
+    "tiled_5fps": {
+      "total_detections": 1263,
+      "unique_tracks": 99,
+      "frames_evaluated": 145,
+      "frames_with_detections": 145,
+      "detections_per_frame": 8.71,
+      "class_breakdown": {
+        "car": 1175,
+        "person": 53,
+        "truck": 33,
+        "bus": 2
+      },
+      "confidence_stats": {
+        "mean": 0.4646,
+        "median": 0.4462,
+        "min": 0.3501,
+        "max": 0.8093,
+        "std": 0.086,
+        "p25": 0.3955,
+        "p75": 0.5143
+      },
+      "track_stats": {
+        "short_tracks_count": 44,
+        "short_tracks_pct": 44.4,
+        "longest_track_hits": 106,
+        "longest_track_duration_s": 28.96,
+        "mean_track_duration_s": 5.14,
+        "median_track_duration_s": 1.67,
+        "mean_hits_per_track": 12.8
+      },
+      "tile_duplicates_suppressed": 202,
+      "wall_clock_seconds": 40.25,
+      "effective_fps": 3.6,
+      "sampled_frame_count": 145
+    }
+  },
+  "object_scale_analysis": {
+    "std_2fps_small_objects_count": 29,
+    "tile_2fps_small_objects_count": 310,
+    "small_objects_gain_pct": 969.0,
+    "std_median_bbox_area_px2": 15064.4,
+    "tile_median_bbox_area_px2": 9095.9
+  },
+  "representative_new_detections": [
+    {
+      "frame_id": "0",
+      "timestamp_s": 0.0,
+      "class_name": "car",
+      "confidence": 0.437,
+      "bbox": [
+        1224.4,
+        887.4,
+        1388.9,
+        976.4
+      ],
+      "bbox_width_px": 164.5,
+      "bbox_height_px": 89.0,
+      "bbox_area_px2": 14644.1,
+      "aspect_ratio": 1.85
+    },
+    {
+      "frame_id": "0",
+      "timestamp_s": 0.0,
+      "class_name": "car",
+      "confidence": 0.405,
+      "bbox": [
+        1075.6,
+        673.9,
+        1212.8,
+        734.1
+      ],
+      "bbox_width_px": 137.2,
+      "bbox_height_px": 60.2,
+      "bbox_area_px2": 8250.4,
+      "aspect_ratio": 2.28
+    },
+    {
+      "frame_id": "0",
+      "timestamp_s": 0.0,
+      "class_name": "car",
+      "confidence": 0.402,
+      "bbox": [
+        1944.4,
+        267.7,
+        2055.2,
+        312.3
+      ],
+      "bbox_width_px": 110.8,
+      "bbox_height_px": 44.6,
+      "bbox_area_px2": 4937.7,
+      "aspect_ratio": 2.48
+    },
+    {
+      "frame_id": "0",
+      "timestamp_s": 0.0,
+      "class_name": "person",
+      "confidence": 0.392,
+      "bbox": [
+        2092.5,
+        1758.7,
+        2124.3,
+        1851.4
+      ],
+      "bbox_width_px": 31.8,
+      "bbox_height_px": 92.6,
+      "bbox_area_px2": 2948.9,
+      "aspect_ratio": 0.34
+    },
+    {
+      "frame_id": "0",
+      "timestamp_s": 0.0,
+      "class_name": "truck",
+      "confidence": 0.384,
+      "bbox": [
+        3411.9,
+        1938.4,
+        3654.0,
+        2131.5
+      ],
+      "bbox_width_px": 242.1,
+      "bbox_height_px": 193.1,
+      "bbox_area_px2": 46759.8,
+      "aspect_ratio": 1.25
+    },
+    {
+      "frame_id": "0",
+      "timestamp_s": 0.0,
+      "class_name": "car",
+      "confidence": 0.377,
+      "bbox": [
+        1128.5,
+        926.8,
+        1271.6,
+        989.5
+      ],
+      "bbox_width_px": 143.1,
+      "bbox_height_px": 62.6,
+      "bbox_area_px2": 8966.0,
+      "aspect_ratio": 2.28
+    },
+    {
+      "frame_id": "12",
+      "timestamp_s": 0.5,
+      "class_name": "car",
+      "confidence": 0.464,
+      "bbox": [
+        537.8,
+        569.7,
+        668.8,
+        641.6
+      ],
+      "bbox_width_px": 131.0,
+      "bbox_height_px": 71.9,
+      "bbox_area_px2": 9420.4,
+      "aspect_ratio": 1.82
+    },
+    {
+      "frame_id": "12",
+      "timestamp_s": 0.5,
+      "class_name": "person",
+      "confidence": 0.428,
+      "bbox": [
+        1713.7,
+        1192.3,
+        1752.3,
+        1288.9
+      ],
+      "bbox_width_px": 38.6,
+      "bbox_height_px": 96.6,
+      "bbox_area_px2": 3724.7,
+      "aspect_ratio": 0.4
+    },
+    {
+      "frame_id": "12",
+      "timestamp_s": 0.5,
+      "class_name": "car",
+      "confidence": 0.406,
+      "bbox": [
+        1943.8,
+        264.1,
+        2033.6,
+        308.4
+      ],
+      "bbox_width_px": 89.8,
+      "bbox_height_px": 44.2,
+      "bbox_area_px2": 3971.8,
+      "aspect_ratio": 2.03
+    },
+    {
+      "frame_id": "12",
+      "timestamp_s": 0.5,
+      "class_name": "car",
+      "confidence": 0.391,
+      "bbox": [
+        898.5,
+        984.5,
+        1045.4,
+        1071.0
+      ],
+      "bbox_width_px": 146.9,
+      "bbox_height_px": 86.5,
+      "bbox_area_px2": 12711.3,
+      "aspect_ratio": 1.7
+    },
+    {
+      "frame_id": "12",
+      "timestamp_s": 0.5,
+      "class_name": "car",
+      "confidence": 0.389,
+      "bbox": [
+        1075.2,
+        668.8,
+        1212.3,
+        730.4
+      ],
+      "bbox_width_px": 137.1,
+      "bbox_height_px": 61.6,
+      "bbox_area_px2": 8444.1,
+      "aspect_ratio": 2.23
+    },
+    {
+      "frame_id": "12",
+      "timestamp_s": 0.5,
+      "class_name": "car",
+      "confidence": 0.363,
+      "bbox": [
+        1060.8,
+        924.9,
+        1274.3,
+        998.6
+      ],
+      "bbox_width_px": 213.6,
+      "bbox_height_px": 73.7,
+      "bbox_area_px2": 15742.9,
+      "aspect_ratio": 2.9
+    }
+  ]
+}
