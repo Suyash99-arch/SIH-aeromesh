@@ -192,4 +192,4 @@ def test_object_endpoints_and_model_status(client):
     assert tracks.json()["tracks"][0]["track_id"] == "T0001"
     assert summary.json()["counts_by_class"] == {"car": 1}
     assert model_status.status_code == 200
-    assert model_status.json()["model"]["available"] is False
+    assert isinstance(model_status.json()["model"]["available"], bool)

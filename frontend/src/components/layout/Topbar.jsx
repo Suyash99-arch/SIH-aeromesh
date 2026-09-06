@@ -1,5 +1,4 @@
-import React, { useState, useEffect } from "react";
-import Icon from "../ui/Icon";
+import { useState, useEffect } from "react";
 import AuthModal from "../auth/AuthModal";
 import { getStoredUser, fetchCurrentUser } from "../../api/missions";
 

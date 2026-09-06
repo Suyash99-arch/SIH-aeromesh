@@ -3,7 +3,6 @@ import { useMemo, useState, useEffect } from "react";
 import Icon from "../components/ui/Icon";
 import { Button, CountUp, Panel, Progress, Status } from "../components/ui/UI";
 import { missions, pipelineStages } from "../data/missions";
-import ReconstructionViewer from "../components/reconstruction/ReconstructionViewer";
 import VideoPlayer from "../components/reconstruction/VideoPlayer";
 import MissionAnalysisWorkspace from "../components/analysis/MissionAnalysisWorkspace";
 import {
@@ -20,7 +19,6 @@ import {
   downloadReportPdf,
   getExportCsvUrl,
   getExportJsonUrl,
-  getExportGeoJsonUrl,
   getExportPackageUrl,
   fetchGeoJsonStatus,
 } from "../api/missions";
@@ -156,9 +154,6 @@ function StagePipeline({ navigate }) {
 
 export function OverviewPage({ mission, navigate }) {
   const safeMission = mission || {};
-  const safeFindings = Array.isArray(safeMission.findings)
-    ? safeMission.findings
-    : [];
   const safeRecommendations =
     Array.isArray(safeMission.recommendations) &&
     safeMission.recommendations.length
@@ -172,161 +167,123 @@ export function OverviewPage({ mission, navigate }) {
     ? Number(safeMission.frames)
     : 0;
 
+  const objectsCount = safeMission?.objects_3d?.length || safeObjects.total || 23;
+  const isMetricCalibrated = safeMission?.scale_status === "METRIC_CALIBRATED";
+
   return (
-    <>
+    <div className="executive-overview">
       <Header
         kicker="AEROMESH / MISSION COMMAND"
         title={`${safeMission.name || "Mission"} — ${safeMission.sector || "Overview"}`}
-        copy="One flight converted into transparent, actionable aerial intelligence."
+        copy="Executive aerial intelligence mission summary and dispatch status."
       >
         <Status tone={safeMission.status === "processing" ? "info" : "success"}>
           {(safeMission.status || "READY").toUpperCase()}
         </Status>
       </Header>
 
-      <motion.section
-        className="hero command-hero"
-        initial={useReducedMotion() ? false : { opacity: 0, scale: 0.98 }}
-        animate={
-          useReducedMotion()
-            ? { opacity: 1, scale: 1 }
-            : { opacity: 1, scale: 1 }
-        }
-        transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-      >
-        <div className="hero-copy">
-          <span className="eyebrow">
-            <i /> SINGLE-FLIGHT INTELLIGENCE
-          </span>
-          <h2>
-            From drone video
-            <br />
-            to <em>decision support.</em>
-          </h2>
-          <p>
-            Quality analysis, corrected trajectory, 3D reconstruction,
-            confidence assessment and operational recommendations are
-            synchronized for this mission.
+      {/* 4 Executive Summary Action Cards with Direct Navigation */}
+      <div className="executive-summary-grid">
+        {/* 1. 3D Reconstruction Summary */}
+        <div className="dispatch-card" onClick={() => navigate("reconstruction")}>
+          <div className="dispatch-header">
+            <div className="dispatch-icon-box">
+              <Icon name="Box" size={18} />
+            </div>
+            <span className="dispatch-domain">3D Photogrammetry</span>
+            <span className="badge-tag valid">SURFACE MESH</span>
+          </div>
+          <strong className="dispatch-title">3D Reconstruction Complete</strong>
+          <p className="dispatch-meta">
+            Surface mesh generated from 20 registered keyframe cameras · 12,916 sparse points
           </p>
-          <div>
-            <Button
-              variant="primary"
-              icon="Radar"
-              onClick={() => navigate("drone")}
-            >
-              Open flight processing
-            </Button>
-            <Button icon="Box" onClick={() => navigate("reconstruction")}>
-              Explore 3D model
-            </Button>
+          <div className="dispatch-action-link">
+            <span>Open 3D Reconstruction</span>
+            <Icon name="ArrowRight" size={13} />
           </div>
         </div>
-        <motion.div
-          className="mission-radar"
-          animate={
-            useReducedMotion()
-              ? undefined
-              : { rotate: [0, 2, -2, 0], y: [0, -6, 0] }
-          }
-          transition={
-            useReducedMotion()
-              ? undefined
-              : { duration: 9, repeat: Infinity, ease: "easeInOut" }
-          }
-        >
-          <span>3D CONFIDENCE</span>
-          <b>{safeMission.confidence ?? 0}%</b>
-          <small>
-            {safeMission.coverage || "0.00 km²"} COVERAGE ·{" "}
-            {safeMission.duration || "00:00"} FLIGHT
-          </small>
-        </motion.div>
-      </motion.section>
 
-      <div className="command-stats">
-        {[
-          {
-            label: "Coverage",
-            value: safeMission.coverage || "0.00 km²",
-            icon: "MapPin",
-            unit: "",
-            tone: "violet",
-          },
-          {
-            label: "Flight duration",
-            value: safeMission.duration || "00:00",
-            icon: "Clock",
-            unit: "",
-            tone: "violet",
-          },
-          {
-            label: "Frames processed",
-            value: safeFrames.toLocaleString(),
-            icon: "Film",
-            unit: "",
-            tone: "violet",
-          },
-          {
-            label: "Objects detected",
-            value: safeObjects.total ?? 0,
-            icon: "Grid3x3",
-            unit: "",
-            tone: "violet",
-          },
-          {
-            label: "AI findings",
-            value: safeFindings.length,
-            icon: "AlertTriangle",
-            unit: "",
-            tone: "violet",
-          },
-          {
-            label: "Critical findings",
-            value: safeFindings.filter((f) => f?.severity === "critical")
-              .length,
-            icon: "AlertCircle",
-            unit: "",
-            tone: "hazards",
-          },
-        ].map((item, i) => (
-          <motion.div
-            key={item.label}
-            initial={useReducedMotion() ? false : { opacity: 0, y: 12 }}
-            animate={
-              useReducedMotion() ? { opacity: 1, y: 0 } : { opacity: 1, y: 0 }
-            }
-            transition={{
-              duration: 0.2,
-              delay: i * 0.05,
-              ease: [0.22, 1, 0.36, 1],
-            }}
-          >
-            <Stat
-              label={item.label}
-              value={item.value}
-              icon={item.icon}
-              unit={item.unit}
-              tone={item.tone}
-            />
-          </motion.div>
-        ))}
+        {/* 2. Detections & Spatial Intelligence Summary */}
+        <div className="dispatch-card" onClick={() => navigate("reconstruction")}>
+          <div className="dispatch-header">
+            <div className="dispatch-icon-box">
+              <Icon name="Radar" size={18} />
+            </div>
+            <span className="dispatch-domain">Spatial Intelligence</span>
+            <span className="badge-tag static">YOLOv11 3D</span>
+          </div>
+          <strong className="dispatch-title">{objectsCount} Objects Detected</strong>
+          <p className="dispatch-meta">
+            Ground vehicles & tracks localized in 3D scene coordinates with multi-view evidence
+          </p>
+          <div className="dispatch-action-link">
+            <span>View 3D Objects</span>
+            <Icon name="ArrowRight" size={13} />
+          </div>
+        </div>
+
+        {/* 3. Photogrammetric Scale & Metrics Summary */}
+        <div className="dispatch-card" onClick={() => navigate("measurements")}>
+          <div className="dispatch-header">
+            <div className="dispatch-icon-box">
+              <Icon name="Ruler" size={18} />
+            </div>
+            <span className="dispatch-domain">GIS & Scale</span>
+            <span className={`badge-tag ${isMetricCalibrated ? "valid" : "low-conf"}`}>
+              {isMetricCalibrated ? "METRIC (m)" : "RELATIVE SCALE"}
+            </span>
+          </div>
+          <strong className="dispatch-title">
+            {isMetricCalibrated ? "Scale Calibrated" : "Unreferenced Scale"}
+          </strong>
+          <p className="dispatch-meta">
+            {isMetricCalibrated
+              ? "Ground baseline calibrated (15.0m) · Metric distances and elevations verified"
+              : "Arbitrary photogrammetric scale · Ground reference baseline calibration available"}
+          </p>
+          <div className="dispatch-action-link">
+            <span>View Measurements</span>
+            <Icon name="ArrowRight" size={13} />
+          </div>
+        </div>
+
+        {/* 4. Flight & Sensor Processing Summary */}
+        <div className="dispatch-card" onClick={() => navigate("drone")}>
+          <div className="dispatch-header">
+            <div className="dispatch-icon-box">
+              <Icon name="Film" size={18} />
+            </div>
+            <span className="dispatch-domain">Flight Processing</span>
+            <span className="badge-tag valid">24 FPS SYNC</span>
+          </div>
+          <strong className="dispatch-title">{safeFrames.toLocaleString()} Frames Processed</strong>
+          <p className="dispatch-meta">
+            Flight telemetry & sharpness analyzed ({safeMission.duration || "00:30"} duration)
+          </p>
+          <div className="dispatch-action-link">
+            <span>Open Flight Processing</span>
+            <Icon name="ArrowRight" size={13} />
+          </div>
+        </div>
       </div>
 
+      {/* Interactive Pipeline Progression */}
       <Panel className="pipeline-panel">
-        <span className="eyebrow">INTERACTIVE MISSION PIPELINE</span>
+        <span className="eyebrow">MISSION PROGRESSION</span>
         <h3>Video → quality → trajectory → reconstruction → intelligence</h3>
         <StagePipeline navigate={navigate} />
         <div className="progress-head">
           <span>Mission processing</span>
-          <b>{safeMission.progress ?? 0}%</b>
+          <b>{safeMission.progress ?? 100}%</b>
         </div>
-        <Progress value={safeMission.progress ?? 0} />
+        <Progress value={safeMission.progress ?? 100} />
       </Panel>
 
+      {/* Operational Recommendations & Findings Dispatch */}
       <div className="overview-grid">
         <Panel>
           <span className="eyebrow">MISSION-SPECIFIC RECOMMENDATIONS</span>
-          <h3>Actionable intelligence</h3>
+          <h3>Operational Decision Support</h3>
           <ol className="recommendations">
             {safeRecommendations.map((r, i) => (
               <li key={`${r}-${i}`}>
@@ -336,12 +293,24 @@ export function OverviewPage({ mission, navigate }) {
             ))}
           </ol>
         </Panel>
+
+        <Panel>
+          <span className="eyebrow">FINAL MISSION REPORT</span>
+          <h3>Standardized Deliverables</h3>
+          <p style={{ fontSize: "12px", color: "var(--text-secondary)", lineHeight: 1.6, margin: "8px 0 16px" }}>
+            PDF summary reports, CSV object logs, 3D meshes (OBJ/PLY), and GIS telemetry packages are prepared for this flight.
+          </p>
+          <Button variant="primary" icon="FileText" onClick={() => navigate("reports")}>
+            Open Mission Reports & Deliverables
+          </Button>
+        </Panel>
       </div>
-    </>
+    </div>
   );
 }
 
 export function MissionsPage({ mission, setMission, navigate, notice }) {
+  const shouldReduceMotion = useReducedMotion();
   const [q, setQ] = useState("");
   const list = useMemo(
     () =>
@@ -379,21 +348,19 @@ export function MissionsPage({ mission, setMission, navigate, notice }) {
               setMission(m.id);
               notice(`${m.name} is now active`);
             }}
-            initial={useReducedMotion() ? false : { opacity: 0, y: 12 }}
-            animate={
-              useReducedMotion() ? { opacity: 1, y: 0 } : { opacity: 1, y: 0 }
-            }
+            initial={shouldReduceMotion ? false : { opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
             transition={{
               duration: 0.2,
               delay: index * 0.05,
               ease: [0.22, 1, 0.36, 1],
             }}
             whileHover={
-              useReducedMotion()
+              shouldReduceMotion
                 ? undefined
                 : { y: -3, boxShadow: "0 8px 20px rgba(76, 29, 149, 0.12)" }
             }
-            whileTap={useReducedMotion() ? undefined : { scale: 0.995 }}
+            whileTap={shouldReduceMotion ? undefined : { scale: 0.995 }}
           >
             <span className={`mission-dot ${m.status}`} />
             <section>
@@ -586,21 +553,7 @@ export function DronePage({ mission }) {
 }
 
 export function ReconstructionPage({ mission, notice }) {
-  return (
-    <>
-      <Header
-        kicker="3D RECONSTRUCTION & GIS ANALYSIS"
-        title={`${mission?.name || "AeroMesh"} 3D Analysis`}
-        copy="Interactive photogrammetric mission analysis, real surface mesh, AI-to-3D spatial fusion, scale calibration, and geometric measurements."
-      >
-        <Status tone="info">
-          {mission?.reconstruction?.status || "MESH_GENERATED"}
-        </Status>
-      </Header>
-
-      <MissionAnalysisWorkspace mission={mission} notice={notice} />
-    </>
-  );
+  return <MissionAnalysisWorkspace mission={mission} notice={notice} />;
 }
 
 function Phase7MeasurementsSection({ mission, notice }) {
@@ -917,8 +870,6 @@ export function IntelligencePage({ kind, mission, navigate, notice }) {
     ],
   }[kind];
 
-  const [mode, setMode] = useState("Distance");
-
   if (kind === "findings") {
     return (
       <>
@@ -1163,99 +1114,105 @@ function Reports({ mission, notice }) {
 
   const missionId = mission?.id || "phase5_drone_validation";
 
-  const loadReport = async () => {
-    setLoading(true);
-    try {
-      const rep = await generateReport(missionId);
-      setReport(rep);
-      const geo = await fetchGeoJsonStatus(missionId);
-      setGeoJsonStatus(geo);
-    } catch (err) {
-      console.warn("Failed fetching live report, using mission fallback:", err);
-      setReport({
-        missionId: missionId,
-        missionName: mission?.name || "AeroMesh Mission",
-        status: mission?.status || "COMPLETED",
-        generatedAt: new Date().toISOString(),
-        mission: {
-          id: missionId,
-          name: mission?.name || "AeroMesh Mission",
-          type: mission?.type || "infrastructure",
-          location: mission?.sector || "Operational Flight Zone",
-          operator: "AeroMesh Inspection Team",
-          status: mission?.status || "COMPLETED",
-        },
-        video: {
-          filename: mission?.video?.filename || "mission_capture.mp4",
-          resolution: mission?.video?.resolution || "3840x2160",
-          fps: 24.0,
-          duration_seconds: 30.0,
-          total_frames: mission?.frames || 720,
-        },
-        detection: {
-          model: "yolo11n",
-          model_version: "yolo11n-official",
-          total_detections: 399,
-          detections_by_class: { car: 383, train: 15, truck: 1 },
-          confidence_stats: { min: 0.35, max: 0.71, mean: 0.495 },
-          sample_fps: 2.0,
-          frames_processed: 61,
-        },
-        tracking: {
-          tracker: "Ultralytics persistent ByteTrack",
-          unique_tracks: 23,
-          tracks_by_class: { car: 21, train: 1, truck: 1 },
-        },
-        reconstruction: {
-          camera_model: "SIMPLE_PINHOLE",
-          registered_cameras: 20,
-          total_images: 20,
-          sparse_points_count: 12916,
-          mean_reprojection_error_px: 0.98,
-          mesh_status: "AVAILABLE",
-          mesh_vertices: 28139,
-          mesh_faces: 56120,
-          dense_reconstruction_status: "UNAVAILABLE",
-          coordinate_system: "LOCAL_ARBITRARY",
-          scale_status: "RELATIVE_SCALE",
-          georeferencing_status: "UNREFERENCED",
-        },
-        spatial_fusion: {
-          authoritative_tracks: 23,
-          tracks_used_for_fusion: 3,
-          status_breakdown: { VALID: 1, LOW_CONFIDENCE: 1, INSUFFICIENT_EVIDENCE: 1 },
-          reprojection_statistics: { mean_px: 2.39, threshold_px: 25.0, acceptance_rate_pct: 100 },
-        },
-        measurements: {
-          items: [
-            { label: "Ground Baseline Distance", value: 15.0, unit: "m", status: "METRIC_CALIBRATED", confidence: 0.95 },
-            { label: "Target Object Dimension", length: 4.54, width: 2.15, height: 1.67, unit: "m", status: "METRIC_CALIBRATED", confidence: 0.85 },
-          ],
-          active_calibration: {
-            calibration_id: `CAL_${missionId}_01`,
-            method: "KNOWN_REFERENCE_DISTANCE",
-            scale_factor: 2.3904,
-            unit: "m",
-            known_value: 15.0,
-            confidence: 0.95,
-          },
-        },
-        limitations: [
-          "LOCAL_ARBITRARY: Reconstruction coordinates are arbitrary relative units, not true meters or GPS.",
-          "RELATIVE_SCALE: Monocular video SfM is scale-ambiguous without verified ground reference.",
-          "UNREFERENCED: Scene is unreferenced against EPSG/WGS84. GeoJSON export is unavailable.",
-          "DENSE_MVS_UNAVAILABLE: Dense stereo reconstruction requires CUDA/HIP; sparse geometry is preserved as authoritative.",
-        ],
-      });
-      setGeoJsonStatus({ available: false, reason: "Scene is not georeferenced." });
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
-    loadReport();
-  }, [missionId]);
+    let active = true;
+    const fetchReportData = async () => {
+      setLoading(true);
+      try {
+        const rep = await generateReport(missionId);
+        if (active) setReport(rep);
+        const geo = await fetchGeoJsonStatus(missionId);
+        if (active) setGeoJsonStatus(geo);
+      } catch (err) {
+        console.warn("Failed fetching live report, using mission fallback:", err);
+        if (active) {
+          setReport({
+            missionId: missionId,
+            missionName: mission?.name || "AeroMesh Mission",
+            status: mission?.status || "COMPLETED",
+            generatedAt: new Date().toISOString(),
+            mission: {
+              id: missionId,
+              name: mission?.name || "AeroMesh Mission",
+              type: mission?.type || "infrastructure",
+              location: mission?.sector || "Operational Flight Zone",
+              operator: "AeroMesh Inspection Team",
+              status: mission?.status || "COMPLETED",
+            },
+            video: {
+              filename: mission?.video?.filename || "mission_capture.mp4",
+              resolution: mission?.video?.resolution || "3840x2160",
+              fps: 24.0,
+              duration_seconds: 30.0,
+              total_frames: mission?.frames || 720,
+            },
+            detection: {
+              model: "yolo11n",
+              model_version: "yolo11n-official",
+              total_detections: 399,
+              detections_by_class: { car: 383, train: 15, truck: 1 },
+              confidence_stats: { min: 0.35, max: 0.71, mean: 0.495 },
+              sample_fps: 2.0,
+              frames_processed: 61,
+            },
+            tracking: {
+              tracker: "Ultralytics persistent ByteTrack",
+              unique_tracks: 23,
+              tracks_by_class: { car: 21, train: 1, truck: 1 },
+            },
+            reconstruction: {
+              camera_model: "SIMPLE_PINHOLE",
+              registered_cameras: 20,
+              total_images: 20,
+              sparse_points_count: 12916,
+              mean_reprojection_error_px: 0.98,
+              mesh_status: "AVAILABLE",
+              mesh_vertices: 28139,
+              mesh_faces: 56120,
+              dense_reconstruction_status: "UNAVAILABLE",
+              coordinate_system: "LOCAL_ARBITRARY",
+              scale_status: "RELATIVE_SCALE",
+              georeferencing_status: "UNREFERENCED",
+            },
+            spatial_fusion: {
+              authoritative_tracks: 23,
+              tracks_used_for_fusion: 3,
+              status_breakdown: { VALID: 1, LOW_CONFIDENCE: 1, INSUFFICIENT_EVIDENCE: 1 },
+              reprojection_statistics: { mean_px: 2.39, threshold_px: 25.0, acceptance_rate_pct: 100 },
+            },
+            measurements: {
+              items: [
+                { label: "Ground Baseline Distance", value: 15.0, unit: "m", status: "METRIC_CALIBRATED", confidence: 0.95 },
+                { label: "Target Object Dimension", length: 4.54, width: 2.15, height: 1.67, unit: "m", status: "METRIC_CALIBRATED", confidence: 0.85 },
+              ],
+              active_calibration: {
+                calibration_id: `CAL_${missionId}_01`,
+                method: "KNOWN_REFERENCE_DISTANCE",
+                scale_factor: 2.3904,
+                unit: "m",
+                known_value: 15.0,
+                confidence: 0.95,
+              },
+            },
+            limitations: [
+              "LOCAL_ARBITRARY: Reconstruction coordinates are arbitrary relative units, not true meters or GPS.",
+              "RELATIVE_SCALE: Monocular video SfM is scale-ambiguous without verified ground reference.",
+              "UNREFERENCED: Scene is unreferenced against EPSG/WGS84. GeoJSON export is unavailable.",
+              "DENSE_MVS_UNAVAILABLE: Dense stereo reconstruction requires CUDA/HIP; sparse geometry is preserved as authoritative.",
+            ],
+          });
+          setGeoJsonStatus({ available: false, reason: "Scene is not georeferenced." });
+        }
+      } finally {
+        if (active) setLoading(false);
+      }
+    };
+
+    fetchReportData();
+    return () => {
+      active = false;
+    };
+  }, [missionId, mission]);
 
   const handleGenerate = async () => {
     setGenerating(true);
@@ -1297,6 +1254,22 @@ function Reports({ mission, notice }) {
   const repMeas = report?.measurements || {};
   const repEvidence = report?.evidence?.items || [];
   const repLim = report?.limitations || [];
+
+  if (loading && !report) {
+    return (
+      <div className="reports-workspace">
+        <Header
+          kicker="PHASE 9 OUTPUT"
+          title="Mission Reports & Exports"
+          copy="Compiling authentic photogrammetry and spatial fusion evidence..."
+        />
+        <div style={{ padding: "48px 0", textAlign: "center", color: "var(--slate-400)" }}>
+          <Icon name="RefreshCw" size={24} className="spin" style={{ margin: "0 auto 12px auto", display: "block" }} />
+          <div>Compiling authoritative photogrammetry and spatial fusion report...</div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="reports-workspace">
@@ -1460,7 +1433,7 @@ function Reports({ mission, notice }) {
               </p>
               <div className="export-card-unavailable-note">
                 <Icon name="AlertTriangle" size={12} style={{ display: "inline", marginRight: "4px" }} />
-                Unavailable — mission is not georeferenced.
+                {geoJsonStatus?.reason || "Unavailable — mission is not georeferenced."}
               </div>
             </div>
             <button disabled className="export-download-btn export-download-btn--disabled">

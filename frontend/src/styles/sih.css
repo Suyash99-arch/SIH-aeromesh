@@ -422,3 +422,111 @@
     height: 160px;
   }
 }
+
+/* Executive Summary Action Cards (Overview Dashboard) */
+.executive-overview {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.executive-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+@media (max-width: 1200px) {
+  .executive-summary-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 680px) {
+  .executive-summary-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.dispatch-card {
+  background: var(--bg-surface, #0f1624);
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+  border-radius: 8px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  position: relative;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.35);
+}
+
+.dispatch-card:hover {
+  background: var(--bg-elevated, #162032);
+  border-color: rgba(14, 165, 233, 0.4);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+}
+
+.dispatch-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dispatch-icon-box {
+  width: 30px;
+  height: 30px;
+  border-radius: 6px;
+  background: rgba(14, 165, 233, 0.12);
+  color: var(--accent-primary, #0ea5e9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dispatch-domain {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted, #94a3b8);
+}
+
+.dispatch-header .badge-tag {
+  margin-left: auto;
+}
+
+.dispatch-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #ffffff;
+  letter-spacing: -0.01em;
+  line-height: 1.25;
+}
+
+.dispatch-meta {
+  font-size: 11px;
+  color: var(--text-secondary, #94a3b8);
+  line-height: 1.45;
+  margin: 0;
+  flex: 1;
+}
+
+.dispatch-action-link {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent-primary, #0ea5e9);
+  margin-top: 4px;
+  transition: gap 0.15s ease;
+}
+
+.dispatch-card:hover .dispatch-action-link {
+  color: #38bdf8;
+  gap: 9px;
+}

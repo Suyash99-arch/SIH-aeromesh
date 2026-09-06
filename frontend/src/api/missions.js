@@ -6,7 +6,7 @@
 import { missions as seededMissions } from "../data/missions";
 
 // API base URL
-const API_BASE = "http://localhost:8000/api";
+const API_BASE = (typeof import.meta !== "undefined" && import.meta.env?.VITE_API_BASE_URL) || "http://localhost:8000/api";
 
 const fallbackMission = {
   id: "sector-04",
@@ -17,7 +17,7 @@ const fallbackMission = {
   type: "Single-Pass Aerial Reconstruction",
   drone: "AERO-X4",
   coverage: "0.00 km²",
-  duration: "00:00",
+  duration: "—",
   frames: 0,
   progress: 0,
   confidence: 0,
@@ -90,9 +90,26 @@ export function resolveAssetUrl(url) {
 
 function normalizeMission(rawMission = {}) {
   const videoUrl = rawMission.video?.url || rawMission.videoUrl || "";
+
+  let duration = rawMission.duration;
+  const durationSec =
+    rawMission.video?.duration_seconds ??
+    rawMission.video?.durationSeconds ??
+    rawMission.durationSeconds;
+  if (!duration || duration === "00:00") {
+    if (typeof durationSec === "number" && durationSec > 0) {
+      const mins = Math.floor(durationSec / 60);
+      const secs = Math.round(durationSec % 60);
+      duration = `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+    } else {
+      duration = "—";
+    }
+  }
+
   const mission = {
     ...fallbackMission,
     ...rawMission,
+    duration,
     objects: { ...fallbackMission.objects, ...(rawMission.objects || {}) },
     telemetry: {
       ...fallbackMission.telemetry,
@@ -115,14 +132,14 @@ function normalizeMission(rawMission = {}) {
       ...(rawMission.assets || {}),
       video: videoUrl || rawMission.assets?.video || "",
       pointCloud: resolveAssetUrl(
-        rawMission.assets?.pointCloud ||
         rawMission.reconstruction?.point_cloud_url ||
+        rawMission.assets?.pointCloud ||
         rawMission.reconstruction?.pointCloud ||
         ""
       ),
       mesh: resolveAssetUrl(
-        rawMission.assets?.mesh ||
         rawMission.reconstruction?.mesh_url ||
+        rawMission.assets?.mesh ||
         ""
       ),
     },
@@ -176,6 +193,7 @@ export async function createMission({ name, missionType, location, operator }) {
 
     const response = await fetch(`${API_BASE}/missions?${params}`, {
       method: "POST",
+      headers: getAuthHeaders(),
     });
 
     const data = await parseResponse(response);
@@ -323,6 +341,7 @@ export async function uploadVideo(missionId, file) {
 
     const response = await fetch(`${API_BASE}/missions/${missionId}/upload`, {
       method: "POST",
+      headers: getAuthHeaders(),
       body: formData,
     });
 
@@ -369,6 +388,7 @@ export async function processVideo(
       `${API_BASE}/missions/${missionId}/process?${params}`,
       {
         method: "POST",
+        headers: getAuthHeaders(),
       },
     );
 
@@ -416,6 +436,7 @@ export async function generateReconstruction(missionId) {
       `${API_BASE}/missions/${missionId}/reconstruct`,
       {
         method: "POST",
+        headers: getAuthHeaders(),
       },
     );
 
@@ -435,7 +456,9 @@ export async function generateReconstruction(missionId) {
 
 export async function generateReport(missionId) {
   try {
-    const response = await fetch(`${API_BASE}/missions/${missionId}/report`);
+    const response = await fetch(`${API_BASE}/missions/${missionId}/report`, {
+      headers: getAuthHeaders(),
+    });
     const data = await response.json();
     if (data.success) {
       return data.report;
@@ -531,7 +554,9 @@ export function getCachedMissions() {
 
 export async function fetchCalibrations(missionId) {
   try {
-    const response = await fetch(`${API_BASE}/missions/${missionId}/calibrations`);
+    const response = await fetch(`${API_BASE}/missions/${missionId}/calibrations`, {
+      headers: getAuthHeaders(),
+    });
     return await response.json();
   } catch (error) {
     console.error("fetchCalibrations error:", error);
@@ -543,7 +568,7 @@ export async function calibrateReferenceDistance(missionId, payload) {
   try {
     const response = await fetch(`${API_BASE}/missions/${missionId}/calibrations/reference-distance`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: getAuthHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify(payload),
     });
     return await response.json();
@@ -557,6 +582,7 @@ export async function deactivateCalibrations(missionId) {
   try {
     const response = await fetch(`${API_BASE}/missions/${missionId}/calibrations/deactivate`, {
       method: "POST",
+      headers: getAuthHeaders(),
     });
     return await response.json();
   } catch (error) {
@@ -569,7 +595,7 @@ export async function measureDistance3D(missionId, payload) {
   try {
     const response = await fetch(`${API_BASE}/missions/${missionId}/measurements/distance`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: getAuthHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify(payload),
     });
     return await response.json();
@@ -583,7 +609,7 @@ export async function measurePolygon3D(missionId, payload) {
   try {
     const response = await fetch(`${API_BASE}/missions/${missionId}/measurements/polygon`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: getAuthHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify(payload),
     });
     return await response.json();
@@ -597,7 +623,7 @@ export async function measureElevation3D(missionId, payload) {
   try {
     const response = await fetch(`${API_BASE}/missions/${missionId}/measurements/elevation`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: getAuthHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify(payload),
     });
     return await response.json();
@@ -611,7 +637,7 @@ export async function measureObject3D(missionId, objectId, payload = {}) {
   try {
     const response = await fetch(`${API_BASE}/missions/${missionId}/measurements/object/${objectId}`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: getAuthHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify(payload),
     });
     return await response.json();
@@ -625,7 +651,7 @@ export async function measureVolume3D(missionId, payload = {}) {
   try {
     const response = await fetch(`${API_BASE}/missions/${missionId}/measurements/volume`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: getAuthHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify(payload),
     });
     return await response.json();
@@ -637,7 +663,9 @@ export async function measureVolume3D(missionId, payload = {}) {
 
 export async function fetchSemanticScene(missionId) {
   try {
-    const response = await fetch(`${API_BASE}/missions/${missionId}/semantic-scene`);
+    const response = await fetch(`${API_BASE}/missions/${missionId}/semantic-scene`, {
+      headers: getAuthHeaders(),
+    });
     return await response.json();
   } catch (error) {
     console.error("fetchSemanticScene error:", error);
@@ -647,7 +675,9 @@ export async function fetchSemanticScene(missionId) {
 
 export async function fetchObjects3D(missionId) {
   try {
-    const response = await fetch(`${API_BASE}/missions/${missionId}/objects-3d`);
+    const response = await fetch(`${API_BASE}/missions/${missionId}/objects-3d`, {
+      headers: getAuthHeaders(),
+    });
     return await response.json();
   } catch (error) {
     console.error("fetchObjects3D error:", error);
@@ -657,7 +687,9 @@ export async function fetchObjects3D(missionId) {
 
 export async function fetchObjectEvidence(missionId, objectId) {
   try {
-    const response = await fetch(`${API_BASE}/missions/${missionId}/objects/${objectId}/evidence`);
+    const response = await fetch(`${API_BASE}/missions/${missionId}/objects/${objectId}/evidence`, {
+      headers: getAuthHeaders(),
+    });
     return await response.json();
   } catch (error) {
     console.error("fetchObjectEvidence error:", error);
@@ -667,7 +699,9 @@ export async function fetchObjectEvidence(missionId, objectId) {
 
 export async function fetchReconstruction(missionId) {
   try {
-    const response = await fetch(`${API_BASE}/missions/${missionId}/reconstruction`);
+    const response = await fetch(`${API_BASE}/missions/${missionId}/reconstruction`, {
+      headers: getAuthHeaders(),
+    });
     return await response.json();
   } catch (error) {
     console.error("fetchReconstruction error:", error);

@@ -605,13 +605,18 @@ def _run_dense_and_meshing(
             has_normals = _export_point_cloud_with_normals(best_recon, normals_ply)
             if has_normals:
                 options = pycolmap.PoissonMeshingOptions()
-                options.depth = 8
+                options.depth = 12
                 options.trim = 2.0
                 options.num_threads = min(os.cpu_count() or 4, 4)
                 pycolmap.poisson_meshing(str(normals_ply), str(mesh_ply_path), options=options)
                 if mesh_ply_path.exists() and mesh_ply_path.stat().st_size > 0:
                     v_count, f_count = _count_ply_points_and_faces(mesh_ply_path)
                     bbox = _compute_mesh_bounding_box(mesh_ply_path)
+                    
+                    logger.info(f"Poisson Mesh source verified - Vertices: {v_count}, Faces: {f_count}")
+                    if bbox:
+                        logger.info(f"Poisson Mesh bounding box: Min={bbox['min']}, Max={bbox['max']}, Dimensions={bbox['dimensions']}")
+                        
                     if v_count > 0:
                         mesh_info = {
                             "status": "AVAILABLE",
@@ -862,40 +867,97 @@ def run_reconstruction_for_mission(
 
 def get_reconstruction_pointcloud_path(mission_id: str) -> Optional[Path]:
     """Locate point cloud PLY file for a mission."""
-    recon_dir = MISSIONS_DIR / mission_id / "reconstruction"
-    candidates = [
-        recon_dir / "point_cloud.ply",
-        recon_dir / "model" / "point_cloud.ply",
-        recon_dir / "pinhole_model" / "model_0.ply",
-        recon_dir / "dense" / "sparse_with_normals.ply",
+    recon_dirs = [
+        MISSIONS_DIR / mission_id / "reconstruction",
+        DATA_DIR / "objects" / "missions" / mission_id / "reconstruction",
     ]
-    for candidate in candidates:
-        if candidate.exists():
-            return candidate
+    for recon_dir in recon_dirs:
+        candidates = [
+            recon_dir / "hybrid_point_cloud.ply",
+            recon_dir / "point_cloud.ply",
+            recon_dir / "model" / "point_cloud.ply",
+            recon_dir / "pinhole_model" / "model_0.ply",
+            recon_dir / "dense" / "sparse_with_normals.ply",
+        ]
+        for candidate in candidates:
+            if candidate.exists():
+                return candidate
     return None
 
 
 def get_reconstruction_mesh_path(mission_id: str) -> Optional[Path]:
-    """Locate surface mesh PLY file for a mission."""
-    recon_dir = MISSIONS_DIR / mission_id / "reconstruction"
-    candidates = [
-        recon_dir / "mesh.ply",
-        recon_dir / "model" / "mesh.ply",
-        recon_dir / "dense" / "mesh_poisson.ply",
-        recon_dir / "mesh_poisson.ply",
+    """Locate surface mesh file for a mission."""
+    recon_dirs = [
+        MISSIONS_DIR / mission_id / "reconstruction",
+        DATA_DIR / "objects" / "missions" / mission_id / "reconstruction",
     ]
-    for candidate in candidates:
-        if candidate.exists():
-            return candidate
+    for recon_dir in recon_dirs:
+        candidates = [
+            recon_dir / "hybrid_mesh.glb",
+            recon_dir / "hybrid_mesh.obj",
+            recon_dir / "mesh.ply",
+            recon_dir / "model" / "mesh.ply",
+            recon_dir / "dense" / "mesh_poisson.ply",
+            recon_dir / "mesh_poisson.ply",
+        ]
+        for candidate in candidates:
+            if candidate.exists():
+                return candidate
     return None
+
 
 
 def get_reconstruction_metadata(mission_id: str) -> Optional[Dict[str, Any]]:
     """Retrieve saved reconstruction metadata JSON for a mission."""
-    summary_file = MISSIONS_DIR / mission_id / "reconstruction" / "reconstruction_metadata.json"
-    if summary_file.exists():
-        try:
-            return json.loads(summary_file.read_text(encoding="utf-8"))
-        except Exception:
-            pass
+    summary_files = [
+        MISSIONS_DIR / mission_id / "reconstruction" / "reconstruction_metadata.json",
+        DATA_DIR / "objects" / "missions" / mission_id / "reconstruction" / "reconstruction_metadata.json",
+    ]
+    for summary_file in summary_files:
+        if summary_file.exists():
+            try:
+                return json.loads(summary_file.read_text(encoding="utf-8"))
+            except Exception:
+                pass
+
+    # Check top-level mission file (e.g. phase5_drone_validation.json or {mission_id}.json)
+    mission_files = [
+        MISSIONS_DIR / f"{mission_id}.json",
+        DATA_DIR / "objects" / "missions" / f"{mission_id}.json",
+    ]
+    for mfile in mission_files:
+        if mfile.exists():
+            try:
+                data = json.loads(mfile.read_text(encoding="utf-8"))
+                # Check nested reconstruction key
+                if isinstance(data.get("reconstruction"), dict) and (data["reconstruction"].get("point_count", 0) > 0 or data["reconstruction"].get("sparse_point_count", 0) > 0):
+                    return data["reconstruction"]
+                # Check top-level reconstruction fields (e.g. in phase5_drone_validation.json)
+                if data.get("sparse_point_count") or data.get("point_cloud_url") or data.get("mesh_url"):
+                    sparse_info = data.get("sparse_reconstruction") or {}
+                    surface_mesh = data.get("surface_mesh") or {}
+                    dense_info = data.get("dense_reconstruction") or {}
+                    scale_info = data.get("scale_and_georeferencing") or {}
+                    return {
+                        "success": data.get("success", True),
+                        "status": data.get("status", "MESH_GENERATED"),
+                        "engine": sparse_info.get("engine", "pycolmap_authoritative"),
+                        "sparse_point_count": data.get("sparse_point_count", sparse_info.get("sparse_point_count", 0)),
+                        "point_count": data.get("sparse_point_count", sparse_info.get("sparse_point_count", 0)),
+                        "dense_point_count": dense_info.get("point_count", 0),
+                        "registered_cameras": data.get("registered_cameras", sparse_info.get("registered_cameras", 0)),
+                        "total_images": sparse_info.get("total_images", data.get("registered_cameras", 0)),
+                        "mean_reprojection_error": sparse_info.get("mean_reprojection_error_px", 0.98),
+                        "camera_poses": data.get("camera_poses", []),
+                        "point_cloud_path": sparse_info.get("ply_path"),
+                        "point_cloud_url": data.get("point_cloud_url", f"/api/missions/{mission_id}/reconstruction/pointcloud"),
+                        "mesh": surface_mesh,
+                        "mesh_url": data.get("mesh_url", f"/api/missions/{mission_id}/reconstruction/mesh"),
+                        "dense": dense_info,
+                        "scale": scale_info,
+                        "error": None,
+                    }
+            except Exception:
+                pass
+
     return None

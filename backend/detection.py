@@ -32,6 +32,13 @@ ROAD_SCENE_CLASSES: frozenset[str] = frozenset({
     "truck",
     "bicycle",
     "person",
+    "pedestrian",
+    "people",
+    "van",
+    "motor",
+    "tricycle",
+    "awning-tricycle",
+    "vehicle",
 })
 
 SCENE_PROFILES: dict[str, frozenset[str] | None] = {

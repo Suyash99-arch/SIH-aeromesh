@@ -159,6 +159,7 @@ export default function App() {
         mission={mission}
         setMission={setMissionId}
         onCreateMission={() => setShowCreateMission(true)}
+        onNavigateHome={() => setShowHomepage(true)}
       />
 
       <main className="main">

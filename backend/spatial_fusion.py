@@ -446,12 +446,20 @@ class SpatialFusionEngine:
 
         # 1. Camera Pose & Ray Unprojection
         for det in raw_detections:
-            frame_name = str(det.get("frame_id", ""))
-            norm_name = Path(frame_name).name if frame_name else ""
-            if norm_name not in poses_by_name and not norm_name.endswith(".jpg"):
-                norm_name = f"{norm_name}.jpg"
+            frame_raw = det.get("frame_id")
+            if frame_raw is None:
+                frame_raw = det.get("frame")
 
-            bbox = det.get("bbox") or [0.0, 0.0, 0.0, 0.0]
+            if isinstance(frame_raw, int) or (isinstance(frame_raw, str) and frame_raw.isdigit()):
+                norm_name = f"frame_{int(frame_raw):05d}.jpg"
+                frame_name = norm_name
+            else:
+                frame_name = str(frame_raw or "")
+                norm_name = Path(frame_name).name if frame_name else ""
+                if norm_name not in poses_by_name and not norm_name.endswith(".jpg"):
+                    norm_name = f"{norm_name}.jpg"
+
+            bbox = det.get("bbox") or det.get("boundingBox") or [0.0, 0.0, 0.0, 0.0]
             cx = (bbox[0] + bbox[2]) / 2.0
             cy = (bbox[1] + bbox[3]) / 2.0
             conf = float(det.get("confidence", 0.5))
@@ -694,7 +702,7 @@ class SpatialFusionEngine:
         """Batch fuse multiple tracks into 3D objects."""
         results: list[FusedObject3D] = []
         for t in tracks:
-            track_id = str(t.get("track_id", "T0000"))
+            track_id = str(t.get("track_id") or t.get("trackId") or "T0000")
             class_name = str(t.get("class_name") or t.get("class", "object"))
             raw_dets = t.get("observations") or t.get("detections") or []
             if not raw_dets and "trajectory" in t:

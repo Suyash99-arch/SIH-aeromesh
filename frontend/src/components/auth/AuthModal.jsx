@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { loginUser, clearAuthToken } from "../../api/missions";
 
 export default function AuthModal({ isOpen, onClose, currentUser, onUserChange, notice }) {

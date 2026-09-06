@@ -52,13 +52,21 @@ export default function Sidebar({
   mission,
   setMission,
   onCreateMission,
+  onNavigateHome,
 }) {
   const [selectorOpen, setSelectorOpen] = useState(false);
 
   return (
     <>
       <aside className="sidebar">
-        <div className="brand">
+        <div
+          className="brand"
+          onClick={onNavigateHome}
+          role="button"
+          tabIndex={0}
+          style={{ cursor: "pointer" }}
+          title="Return to Presentation Home Page"
+        >
           <div>
             <Icon name="Radar" size={21} />
           </div>
