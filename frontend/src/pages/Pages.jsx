@@ -167,13 +167,14 @@ export function OverviewPage({ mission, navigate }) {
     ? Number(safeMission.frames)
     : 0;
 
-  const objectsCount = safeMission?.objects_3d?.length || safeObjects.total || 23;
+  const objectsCount =
+    safeMission?.objects_3d?.length || safeObjects.total || 23;
   const isMetricCalibrated = safeMission?.scale_status === "METRIC_CALIBRATED";
 
   return (
     <div className="executive-overview">
       <Header
-        kicker="AEROMESH / MISSION COMMAND"
+        kicker="HEXA SPARK / MISSION COMMAND"
         title={`${safeMission.name || "Mission"} — ${safeMission.sector || "Overview"}`}
         copy="Executive aerial intelligence mission summary and dispatch status."
       >
@@ -185,7 +186,10 @@ export function OverviewPage({ mission, navigate }) {
       {/* 4 Executive Summary Action Cards with Direct Navigation */}
       <div className="executive-summary-grid">
         {/* 1. 3D Reconstruction Summary */}
-        <div className="dispatch-card" onClick={() => navigate("reconstruction")}>
+        <div
+          className="dispatch-card"
+          onClick={() => navigate("reconstruction")}
+        >
           <div className="dispatch-header">
             <div className="dispatch-icon-box">
               <Icon name="Box" size={18} />
@@ -195,7 +199,8 @@ export function OverviewPage({ mission, navigate }) {
           </div>
           <strong className="dispatch-title">3D Reconstruction Complete</strong>
           <p className="dispatch-meta">
-            Surface mesh generated from 20 registered keyframe cameras · 12,916 sparse points
+            Surface mesh generated from 20 registered keyframe cameras · 12,916
+            sparse points
           </p>
           <div className="dispatch-action-link">
             <span>Open 3D Reconstruction</span>
@@ -204,7 +209,10 @@ export function OverviewPage({ mission, navigate }) {
         </div>
 
         {/* 2. Detections & Spatial Intelligence Summary */}
-        <div className="dispatch-card" onClick={() => navigate("reconstruction")}>
+        <div
+          className="dispatch-card"
+          onClick={() => navigate("reconstruction")}
+        >
           <div className="dispatch-header">
             <div className="dispatch-icon-box">
               <Icon name="Radar" size={18} />
@@ -212,9 +220,12 @@ export function OverviewPage({ mission, navigate }) {
             <span className="dispatch-domain">Spatial Intelligence</span>
             <span className="badge-tag static">YOLOv11 3D</span>
           </div>
-          <strong className="dispatch-title">{objectsCount} Objects Detected</strong>
+          <strong className="dispatch-title">
+            {objectsCount} Objects Detected
+          </strong>
           <p className="dispatch-meta">
-            Ground vehicles & tracks localized in 3D scene coordinates with multi-view evidence
+            Ground vehicles & tracks localized in 3D scene coordinates with
+            multi-view evidence
           </p>
           <div className="dispatch-action-link">
             <span>View 3D Objects</span>
@@ -229,7 +240,9 @@ export function OverviewPage({ mission, navigate }) {
               <Icon name="Ruler" size={18} />
             </div>
             <span className="dispatch-domain">GIS & Scale</span>
-            <span className={`badge-tag ${isMetricCalibrated ? "valid" : "low-conf"}`}>
+            <span
+              className={`badge-tag ${isMetricCalibrated ? "valid" : "low-conf"}`}
+            >
               {isMetricCalibrated ? "METRIC (m)" : "RELATIVE SCALE"}
             </span>
           </div>
@@ -256,9 +269,12 @@ export function OverviewPage({ mission, navigate }) {
             <span className="dispatch-domain">Flight Processing</span>
             <span className="badge-tag valid">24 FPS SYNC</span>
           </div>
-          <strong className="dispatch-title">{safeFrames.toLocaleString()} Frames Processed</strong>
+          <strong className="dispatch-title">
+            {safeFrames.toLocaleString()} Frames Processed
+          </strong>
           <p className="dispatch-meta">
-            Flight telemetry & sharpness analyzed ({safeMission.duration || "00:30"} duration)
+            Flight telemetry & sharpness analyzed (
+            {safeMission.duration || "00:30"} duration)
           </p>
           <div className="dispatch-action-link">
             <span>Open Flight Processing</span>
@@ -297,10 +313,22 @@ export function OverviewPage({ mission, navigate }) {
         <Panel>
           <span className="eyebrow">FINAL MISSION REPORT</span>
           <h3>Standardized Deliverables</h3>
-          <p style={{ fontSize: "12px", color: "var(--text-secondary)", lineHeight: 1.6, margin: "8px 0 16px" }}>
-            PDF summary reports, CSV object logs, 3D meshes (OBJ/PLY), and GIS telemetry packages are prepared for this flight.
+          <p
+            style={{
+              fontSize: "12px",
+              color: "var(--text-secondary)",
+              lineHeight: 1.6,
+              margin: "8px 0 16px",
+            }}
+          >
+            PDF summary reports, CSV object logs, 3D meshes (OBJ/PLY), and GIS
+            telemetry packages are prepared for this flight.
           </p>
-          <Button variant="primary" icon="FileText" onClick={() => navigate("reports")}>
+          <Button
+            variant="primary"
+            icon="FileText"
+            onClick={() => navigate("reports")}
+          >
             Open Mission Reports & Deliverables
           </Button>
         </Panel>
@@ -588,7 +616,10 @@ function Phase7MeasurementsSection({ mission, notice }) {
       if (res.success) {
         setScaleStatus("METRIC_CALIBRATED");
         setActiveCal(res.calibration);
-        if (notice) notice(`Scale calibrated: factor = ${res.calibration.scale_factor.toFixed(4)} m/unit`);
+        if (notice)
+          notice(
+            `Scale calibrated: factor = ${res.calibration.scale_factor.toFixed(4)} m/unit`,
+          );
       }
     } catch (e) {
       console.error(e);
@@ -645,7 +676,11 @@ function Phase7MeasurementsSection({ mission, notice }) {
       } else if (mode === "Volume") {
         res = await measureVolume3D(mission.id, {
           is_watertight: false,
-          vertices: [[0, 0, 0], [1, 0, 0], [0, 1, 0]],
+          vertices: [
+            [0, 0, 0],
+            [1, 0, 0],
+            [0, 1, 0],
+          ],
           faces: [[0, 1, 2]],
         });
       }
@@ -661,42 +696,103 @@ function Phase7MeasurementsSection({ mission, notice }) {
   };
 
   return (
-    <div className="measure-layout" style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}>
+    <div
+      className="measure-layout"
+      style={{ display: "flex", flexDirection: "column", gap: "1.5rem" }}
+    >
       {/* Scientific Framework & Scale Disclosure Banner */}
-      <Panel style={{ borderLeft: scaleStatus === "METRIC_CALIBRATED" ? "4px solid #10b981" : "4px solid #f59e0b" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "1rem" }}>
+      <Panel
+        style={{
+          borderLeft:
+            scaleStatus === "METRIC_CALIBRATED"
+              ? "4px solid #10b981"
+              : "4px solid #f59e0b",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            flexWrap: "wrap",
+            gap: "1rem",
+          }}
+        >
           <div>
-            <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
-              <span className="eyebrow" style={{ color: scaleStatus === "METRIC_CALIBRATED" ? "#10b981" : "#f59e0b" }}>
-                {scaleStatus === "METRIC_CALIBRATED" ? "● METRIC SCALE CALIBRATED" : "▲ UNREFERENCED RELATIVE SCALE"}
+            <div
+              style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}
+            >
+              <span
+                className="eyebrow"
+                style={{
+                  color:
+                    scaleStatus === "METRIC_CALIBRATED" ? "#10b981" : "#f59e0b",
+                }}
+              >
+                {scaleStatus === "METRIC_CALIBRATED"
+                  ? "● METRIC SCALE CALIBRATED"
+                  : "▲ UNREFERENCED RELATIVE SCALE"}
               </span>
-              <span style={{ fontSize: "0.75rem", padding: "2px 6px", borderRadius: "4px", background: "rgba(255,255,255,0.08)", color: "#94a3b8" }}>
+              <span
+                style={{
+                  fontSize: "0.75rem",
+                  padding: "2px 6px",
+                  borderRadius: "4px",
+                  background: "rgba(255,255,255,0.08)",
+                  color: "#94a3b8",
+                }}
+              >
                 LOCAL_ARBITRARY · UNREFERENCED
               </span>
             </div>
-            <p style={{ margin: "0.4rem 0 0 0", fontSize: "0.875rem", color: "#cbd5e1" }}>
+            <p
+              style={{
+                margin: "0.4rem 0 0 0",
+                fontSize: "0.875rem",
+                color: "#cbd5e1",
+              }}
+            >
               {scaleStatus === "METRIC_CALIBRATED"
                 ? `Scale factor: ${activeCal?.scale_factor?.toFixed(4)} m/unit (${activeCal?.method || "Reference"}). Distances reported in meters.`
                 : "Monocular Structure-from-Motion is scale-ambiguous. Coordinates are relative units. Scale calibration is required before claiming meters."}
             </p>
           </div>
-          <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+          <div
+            style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}
+          >
             {scaleStatus === "RELATIVE_SCALE" ? (
-              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+              <div
+                style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}
+              >
                 <input
                   type="number"
                   value={knownDistance}
                   onChange={(e) => setKnownDistance(e.target.value)}
-                  style={{ width: "70px", padding: "6px 8px", background: "#0f172a", border: "1px solid #334155", borderRadius: "4px", color: "#fff" }}
+                  style={{
+                    width: "70px",
+                    padding: "6px 8px",
+                    background: "#0f172a",
+                    border: "1px solid #334155",
+                    borderRadius: "4px",
+                    color: "#fff",
+                  }}
                   placeholder="10.0"
                 />
                 <span style={{ fontSize: "0.8rem", color: "#94a3b8" }}>m</span>
-                <Button variant="primary" onClick={handleCalibrate} disabled={loading}>
+                <Button
+                  variant="primary"
+                  onClick={handleCalibrate}
+                  disabled={loading}
+                >
                   Calibrate Scale
                 </Button>
               </div>
             ) : (
-              <Button variant="secondary" onClick={handleDeactivate} disabled={loading}>
+              <Button
+                variant="secondary"
+                onClick={handleDeactivate}
+                disabled={loading}
+              >
                 Revert to Relative
               </Button>
             )}
@@ -705,10 +801,23 @@ function Phase7MeasurementsSection({ mission, notice }) {
       </Panel>
 
       {/* Measurement Mode Selection & Actions */}
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1.5rem" }}>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "1fr 1fr",
+          gap: "1.5rem",
+        }}
+      >
         <Panel>
           <span className="eyebrow">MEASUREMENT MODE</span>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem", margin: "0.75rem 0 1.25rem 0" }}>
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: "0.5rem",
+              margin: "0.75rem 0 1.25rem 0",
+            }}
+          >
             {[
               { key: "Distance", label: "3D Distance" },
               { key: "Area", label: "3D Polygon Area" },
@@ -719,7 +828,10 @@ function Phase7MeasurementsSection({ mission, notice }) {
               <Button
                 key={m.key}
                 variant={mode === m.key ? "primary" : "secondary"}
-                onClick={() => { setMode(m.key); setResult(null); }}
+                onClick={() => {
+                  setMode(m.key);
+                  setResult(null);
+                }}
               >
                 {m.label}
               </Button>
@@ -727,8 +839,24 @@ function Phase7MeasurementsSection({ mission, notice }) {
           </div>
 
           {(mode === "Elevation" || mode === "Object") && (
-            <div style={{ padding: "0.75rem", background: "rgba(255,255,255,0.04)", borderRadius: "6px", marginBottom: "1rem" }}>
-              <label style={{ display: "flex", alignItems: "center", gap: "0.5rem", fontSize: "0.85rem", cursor: "pointer", color: "#cbd5e1" }}>
+            <div
+              style={{
+                padding: "0.75rem",
+                background: "rgba(255,255,255,0.04)",
+                borderRadius: "6px",
+                marginBottom: "1rem",
+              }}
+            >
+              <label
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.5rem",
+                  fontSize: "0.85rem",
+                  cursor: "pointer",
+                  color: "#cbd5e1",
+                }}
+              >
                 <input
                   type="checkbox"
                   checked={hasVerifiedGravity}
@@ -737,23 +865,43 @@ function Phase7MeasurementsSection({ mission, notice }) {
                 Verified Vertical / Gravity Reference Available
               </label>
               {!hasVerifiedGravity && (
-                <p style={{ margin: "0.3rem 0 0 1.5rem", fontSize: "0.75rem", color: "#fbbf24" }}>
-                  Without verified gravity, arbitrary Z cannot be interpreted as true physical height.
+                <p
+                  style={{
+                    margin: "0.3rem 0 0 1.5rem",
+                    fontSize: "0.75rem",
+                    color: "#fbbf24",
+                  }}
+                >
+                  Without verified gravity, arbitrary Z cannot be interpreted as
+                  true physical height.
                 </p>
               )}
             </div>
           )}
 
-          <Button variant="primary" onClick={handleExecuteMeasure} disabled={loading} style={{ width: "100%" }}>
+          <Button
+            variant="primary"
+            onClick={handleExecuteMeasure}
+            disabled={loading}
+            style={{ width: "100%" }}
+          >
             {loading ? "Calculating..." : `Calculate ${mode}`}
           </Button>
 
-          <small className="help-text" style={{ display: "block", marginTop: "1rem", color: "#94a3b8" }}>
-            {mode === "Distance" && "Computes 3D Euclidean distance between selected point vectors."}
-            {mode === "Area" && "Computes 3D planar polygon area and perimeter using Stokes' theorem (Newell's method)."}
-            {mode === "Elevation" && "Measures vertical difference Delta Z and slope gradient between elevations."}
-            {mode === "Object" && "Measures length, width, and footprint area with strict geometry validation."}
-            {mode === "Volume" && "Strictly requires closed, watertight mesh surfaces. Open terrain returns VOLUME_UNAVAILABLE."}
+          <small
+            className="help-text"
+            style={{ display: "block", marginTop: "1rem", color: "#94a3b8" }}
+          >
+            {mode === "Distance" &&
+              "Computes 3D Euclidean distance between selected point vectors."}
+            {mode === "Area" &&
+              "Computes 3D planar polygon area and perimeter using Stokes' theorem (Newell's method)."}
+            {mode === "Elevation" &&
+              "Measures vertical difference Delta Z and slope gradient between elevations."}
+            {mode === "Object" &&
+              "Measures length, width, and footprint area with strict geometry validation."}
+            {mode === "Volume" &&
+              "Strictly requires closed, watertight mesh surfaces. Open terrain returns VOLUME_UNAVAILABLE."}
           </small>
         </Panel>
 
@@ -762,7 +910,14 @@ function Phase7MeasurementsSection({ mission, notice }) {
           <span className="eyebrow">MEASUREMENT INSPECTION</span>
           {result ? (
             <div style={{ marginTop: "0.75rem" }}>
-              <div style={{ display: "flex", alignItems: "center", gap: "0.5rem", marginBottom: "0.75rem" }}>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.5rem",
+                  marginBottom: "0.75rem",
+                }}
+              >
                 <span
                   style={{
                     padding: "3px 8px",
@@ -773,66 +928,140 @@ function Phase7MeasurementsSection({ mission, notice }) {
                       result.status === "METRIC"
                         ? "rgba(16, 185, 129, 0.2)"
                         : result.status === "RELATIVE"
-                        ? "rgba(245, 158, 11, 0.2)"
-                        : "rgba(239, 68, 68, 0.2)",
+                          ? "rgba(245, 158, 11, 0.2)"
+                          : "rgba(239, 68, 68, 0.2)",
                     color:
                       result.status === "METRIC"
                         ? "#10b981"
                         : result.status === "RELATIVE"
-                        ? "#f59e0b"
-                        : "#f87171",
+                          ? "#f59e0b"
+                          : "#f87171",
                   }}
                 >
                   {result.status}
                 </span>
                 <span style={{ fontSize: "0.8rem", color: "#94a3b8" }}>
-                  Unit: <b>{result.unit || result.unit_area || "relative_units"}</b>
+                  Unit:{" "}
+                  <b>{result.unit || result.unit_area || "relative_units"}</b>
                 </span>
               </div>
 
               {result.value !== undefined && (
-                <div style={{ fontSize: "2rem", fontWeight: 700, color: "#fff", marginBottom: "0.5rem" }}>
-                  {result.value} <span style={{ fontSize: "1rem", color: "#94a3b8" }}>{result.unit}</span>
+                <div
+                  style={{
+                    fontSize: "2rem",
+                    fontWeight: 700,
+                    color: "#fff",
+                    marginBottom: "0.5rem",
+                  }}
+                >
+                  {result.value}{" "}
+                  <span style={{ fontSize: "1rem", color: "#94a3b8" }}>
+                    {result.unit}
+                  </span>
                 </div>
               )}
 
               {result.area !== undefined && (
-                <div style={{ fontSize: "1.75rem", fontWeight: 700, color: "#fff", marginBottom: "0.5rem" }}>
-                  Area: {result.area} <span style={{ fontSize: "0.9rem", color: "#94a3b8" }}>{result.unit_area}</span>
-                  <div style={{ fontSize: "1rem", fontWeight: 400, color: "#94a3b8" }}>
+                <div
+                  style={{
+                    fontSize: "1.75rem",
+                    fontWeight: 700,
+                    color: "#fff",
+                    marginBottom: "0.5rem",
+                  }}
+                >
+                  Area: {result.area}{" "}
+                  <span style={{ fontSize: "0.9rem", color: "#94a3b8" }}>
+                    {result.unit_area}
+                  </span>
+                  <div
+                    style={{
+                      fontSize: "1rem",
+                      fontWeight: 400,
+                      color: "#94a3b8",
+                    }}
+                  >
                     Perimeter: {result.perimeter} {result.unit_perimeter}
                   </div>
                 </div>
               )}
 
               {result.length !== undefined && (
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0.5rem", marginBottom: "0.75rem" }}>
-                  <Stat label="Length" value={`${result.length} ${result.unit}`} />
-                  <Stat label="Width" value={`${result.width} ${result.unit}`} />
-                  <Stat label="Footprint" value={`${result.footprint_area} ${result.area_unit}`} />
+                <div
+                  style={{
+                    display: "grid",
+                    gridTemplateColumns: "1fr 1fr",
+                    gap: "0.5rem",
+                    marginBottom: "0.75rem",
+                  }}
+                >
+                  <Stat
+                    label="Length"
+                    value={`${result.length} ${result.unit}`}
+                  />
+                  <Stat
+                    label="Width"
+                    value={`${result.width} ${result.unit}`}
+                  />
+                  <Stat
+                    label="Footprint"
+                    value={`${result.footprint_area} ${result.area_unit}`}
+                  />
                   <Stat
                     label="Height"
-                    value={result.height !== null ? `${result.height} ${result.unit}` : result.height_status}
+                    value={
+                      result.height !== null
+                        ? `${result.height} ${result.unit}`
+                        : result.height_status
+                    }
                     tone={result.height !== null ? "emerald" : "amber"}
                   />
                 </div>
               )}
 
               {result.status === "VOLUME_UNAVAILABLE" && (
-                <div style={{ padding: "0.75rem", background: "rgba(239, 68, 68, 0.1)", border: "1px solid rgba(239, 68, 68, 0.3)", borderRadius: "6px", color: "#fca5a5", fontSize: "0.875rem", marginBottom: "0.75rem" }}>
-                  VOLUME_UNAVAILABLE: Reconstruction surface mesh has open boundaries. Watertight geometry is required to compute enclosed volume honestly.
+                <div
+                  style={{
+                    padding: "0.75rem",
+                    background: "rgba(239, 68, 68, 0.1)",
+                    border: "1px solid rgba(239, 68, 68, 0.3)",
+                    borderRadius: "6px",
+                    color: "#fca5a5",
+                    fontSize: "0.875rem",
+                    marginBottom: "0.75rem",
+                  }}
+                >
+                  VOLUME_UNAVAILABLE: Reconstruction surface mesh has open
+                  boundaries. Watertight geometry is required to compute
+                  enclosed volume honestly.
                 </div>
               )}
 
               {result.note && (
-                <p style={{ fontSize: "0.8rem", color: "#94a3b8", fontStyle: "italic", borderTop: "1px solid rgba(255,255,255,0.06)", paddingTop: "0.5rem" }}>
+                <p
+                  style={{
+                    fontSize: "0.8rem",
+                    color: "#94a3b8",
+                    fontStyle: "italic",
+                    borderTop: "1px solid rgba(255,255,255,0.06)",
+                    paddingTop: "0.5rem",
+                  }}
+                >
                   Note: {result.note}
                 </p>
               )}
             </div>
           ) : (
-            <div style={{ padding: "2rem 1rem", textAlign: "center", color: "#64748b" }}>
-              Select a mode and click Calculate to perform real 3D geometric measurement.
+            <div
+              style={{
+                padding: "2rem 1rem",
+                textAlign: "center",
+                color: "#64748b",
+              }}
+            >
+              Select a mode and click Calculate to perform real 3D geometric
+              measurement.
             </div>
           )}
         </Panel>
@@ -892,7 +1121,11 @@ export function IntelligencePage({ kind, mission, navigate, notice }) {
   if (kind === "measurements") {
     return (
       <>
-        <Header kicker={cfg[0]} title={cfg[1]} copy="Scientifically honest 3D spatial measurements with scale calibration and geometric validation." />
+        <Header
+          kicker={cfg[0]}
+          title={cfg[1]}
+          copy="Scientifically honest 3D spatial measurements with scale calibration and geometric validation."
+        />
         <Phase7MeasurementsSection mission={mission} notice={notice} />
       </>
     );
@@ -1108,7 +1341,10 @@ function Reports({ mission, notice }) {
   const [generating, setGenerating] = useState(false);
   const [activeTab, setActiveTab] = useState("mission");
   const [openModal, setOpenModal] = useState(false);
-  const [geoJsonStatus, setGeoJsonStatus] = useState({ available: false, reason: "Checking georeferencing status…" });
+  const [geoJsonStatus, setGeoJsonStatus] = useState({
+    available: false,
+    reason: "Checking georeferencing status…",
+  });
   const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [pdfError, setPdfError] = useState(null);
 
@@ -1124,7 +1360,10 @@ function Reports({ mission, notice }) {
         const geo = await fetchGeoJsonStatus(missionId);
         if (active) setGeoJsonStatus(geo);
       } catch (err) {
-        console.warn("Failed fetching live report, using mission fallback:", err);
+        console.warn(
+          "Failed fetching live report, using mission fallback:",
+          err,
+        );
         if (active) {
           setReport({
             missionId: missionId,
@@ -1177,13 +1416,35 @@ function Reports({ mission, notice }) {
             spatial_fusion: {
               authoritative_tracks: 23,
               tracks_used_for_fusion: 3,
-              status_breakdown: { VALID: 1, LOW_CONFIDENCE: 1, INSUFFICIENT_EVIDENCE: 1 },
-              reprojection_statistics: { mean_px: 2.39, threshold_px: 25.0, acceptance_rate_pct: 100 },
+              status_breakdown: {
+                VALID: 1,
+                LOW_CONFIDENCE: 1,
+                INSUFFICIENT_EVIDENCE: 1,
+              },
+              reprojection_statistics: {
+                mean_px: 2.39,
+                threshold_px: 25.0,
+                acceptance_rate_pct: 100,
+              },
             },
             measurements: {
               items: [
-                { label: "Ground Baseline Distance", value: 15.0, unit: "m", status: "METRIC_CALIBRATED", confidence: 0.95 },
-                { label: "Target Object Dimension", length: 4.54, width: 2.15, height: 1.67, unit: "m", status: "METRIC_CALIBRATED", confidence: 0.85 },
+                {
+                  label: "Ground Baseline Distance",
+                  value: 15.0,
+                  unit: "m",
+                  status: "METRIC_CALIBRATED",
+                  confidence: 0.95,
+                },
+                {
+                  label: "Target Object Dimension",
+                  length: 4.54,
+                  width: 2.15,
+                  height: 1.67,
+                  unit: "m",
+                  status: "METRIC_CALIBRATED",
+                  confidence: 0.85,
+                },
               ],
               active_calibration: {
                 calibration_id: `CAL_${missionId}_01`,
@@ -1201,7 +1462,10 @@ function Reports({ mission, notice }) {
               "DENSE_MVS_UNAVAILABLE: Dense stereo reconstruction requires CUDA/HIP; sparse geometry is preserved as authoritative.",
             ],
           });
-          setGeoJsonStatus({ available: false, reason: "Scene is not georeferenced." });
+          setGeoJsonStatus({
+            available: false,
+            reason: "Scene is not georeferenced.",
+          });
         }
       } finally {
         if (active) setLoading(false);
@@ -1263,9 +1527,22 @@ function Reports({ mission, notice }) {
           title="Mission Reports & Exports"
           copy="Compiling authentic photogrammetry and spatial fusion evidence..."
         />
-        <div style={{ padding: "48px 0", textAlign: "center", color: "var(--slate-400)" }}>
-          <Icon name="RefreshCw" size={24} className="spin" style={{ margin: "0 auto 12px auto", display: "block" }} />
-          <div>Compiling authoritative photogrammetry and spatial fusion report...</div>
+        <div
+          style={{
+            padding: "48px 0",
+            textAlign: "center",
+            color: "var(--slate-400)",
+          }}
+        >
+          <Icon
+            name="RefreshCw"
+            size={24}
+            className="spin"
+            style={{ margin: "0 auto 12px auto", display: "block" }}
+          />
+          <div>
+            Compiling authoritative photogrammetry and spatial fusion report...
+          </div>
         </div>
       </div>
     );
@@ -1279,8 +1556,16 @@ function Reports({ mission, notice }) {
         copy="Generate, preview, and export comprehensive decision reports with authentic photogrammetry and spatial fusion evidence."
       >
         <div style={{ display: "flex", gap: "8px" }}>
-          <Button variant="primary" onClick={handleGenerate} disabled={generating}>
-            <Icon name="RefreshCw" size={15} className={generating ? "spin" : ""} />
+          <Button
+            variant="primary"
+            onClick={handleGenerate}
+            disabled={generating}
+          >
+            <Icon
+              name="RefreshCw"
+              size={15}
+              className={generating ? "spin" : ""}
+            />
             {generating ? "Generating…" : "Generate Report"}
           </Button>
           <Button onClick={() => setOpenModal(true)}>
@@ -1295,15 +1580,22 @@ function Reports({ mission, notice }) {
         <div className="reports-header-top">
           <div className="reports-title-group">
             <span className="eyebrow">MISSION REPORT</span>
-            <h2>{repMission.name || mission.name} — {mission.sector || "Operational Sector"}</h2>
+            <h2>
+              {repMission.name || mission.name} —{" "}
+              {mission.sector || "Operational Sector"}
+            </h2>
             <div className="reports-meta-badge-row">
               <span className="reports-badge reports-badge--success">
                 <Icon name="CheckCircle2" size={13} />
-                Status: {repMission.status || mission.status || "MESH_GENERATED"}
+                Status:{" "}
+                {repMission.status || mission.status || "MESH_GENERATED"}
               </span>
               <span className="reports-badge reports-badge--info">
                 <Icon name="Calendar" size={13} />
-                Generated: {report?.generatedAt ? new Date(report.generatedAt).toLocaleString() : "Just now"}
+                Generated:{" "}
+                {report?.generatedAt
+                  ? new Date(report.generatedAt).toLocaleString()
+                  : "Just now"}
               </span>
               <span className="reports-badge reports-badge--warning">
                 <Icon name="Layers" size={13} />
@@ -1314,10 +1606,26 @@ function Reports({ mission, notice }) {
         </div>
 
         <div className="command-stats" style={{ marginTop: "10px" }}>
-          <Stat label="SfM Cameras" value={repRec.registered_cameras ?? 20} tone="cyan" />
-          <Stat label="Sparse Points" value={repRec.sparse_points_count ?? 12916} tone="violet" />
-          <Stat label="Unique Tracks" value={repTrk.unique_tracks ?? 23} tone="emerald" />
-          <Stat label="Fused 3D Objects" value={repFusion.fused_objects_count ?? 3} tone="amber" />
+          <Stat
+            label="SfM Cameras"
+            value={repRec.registered_cameras ?? 20}
+            tone="cyan"
+          />
+          <Stat
+            label="Sparse Points"
+            value={repRec.sparse_points_count ?? 12916}
+            tone="violet"
+          />
+          <Stat
+            label="Unique Tracks"
+            value={repTrk.unique_tracks ?? 23}
+            tone="emerald"
+          />
+          <Stat
+            label="Fused 3D Objects"
+            value={repFusion.fused_objects_count ?? 3}
+            tone="amber"
+          />
         </div>
       </div>
 
@@ -1327,17 +1635,43 @@ function Reports({ mission, notice }) {
         <div>
           <h4>Scientific Accuracy & Coordinate Framework Disclosure</h4>
           <ul>
-            <li><b>Coordinate Framework:</b> <code>LOCAL_ARBITRARY</code> — Monocular drone video lacks absolute WGS84 GPS ground control. Coordinates represent local optical frame units.</li>
-            <li><b>Scale Calibration:</b> <code>RELATIVE_SCALE</code> — Coordinates are relative scale unless an explicit ground reference baseline is calibrated (e.g. 15.0m baseline).</li>
-            <li><b>Georeferencing Status:</b> <code>UNREFERENCED</code> — No synthetic latitude/longitude is fabricated; GeoJSON GIS export remains disabled.</li>
-            <li><b>Reconstruction Integrity:</b> Authoritative sparse SfM (12,916 points) is preserved. Dense MVS was unexecuted due to GPU/CUDA constraints and no synthetic dense points were fabricated.</li>
+            <li>
+              <b>Coordinate Framework:</b> <code>LOCAL_ARBITRARY</code> —
+              Monocular drone video lacks absolute WGS84 GPS ground control.
+              Coordinates represent local optical frame units.
+            </li>
+            <li>
+              <b>Scale Calibration:</b> <code>RELATIVE_SCALE</code> —
+              Coordinates are relative scale unless an explicit ground reference
+              baseline is calibrated (e.g. 15.0m baseline).
+            </li>
+            <li>
+              <b>Georeferencing Status:</b> <code>UNREFERENCED</code> — No
+              synthetic latitude/longitude is fabricated; GeoJSON GIS export
+              remains disabled.
+            </li>
+            <li>
+              <b>Reconstruction Integrity:</b> Authoritative sparse SfM (12,916
+              points) is preserved. Dense MVS was unexecuted due to GPU/CUDA
+              constraints and no synthetic dense points were fabricated.
+            </li>
           </ul>
         </div>
       </div>
 
       {/* 3. Export Center (Download Controls) */}
       <div>
-        <h3 style={{ fontSize: "16px", fontWeight: 700, color: "#fff", marginBottom: "12px", display: "flex", alignItems: "center", gap: "8px" }}>
+        <h3
+          style={{
+            fontSize: "16px",
+            fontWeight: 700,
+            color: "#fff",
+            marginBottom: "12px",
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+          }}
+        >
           <Icon name="Download" size={18} color="#818cf8" />
           Download & Export Center
         </h3>
@@ -1352,7 +1686,9 @@ function Reports({ mission, notice }) {
                 <h4 className="export-card-title">Executive PDF Report</h4>
               </div>
               <p className="export-card-desc" style={{ marginTop: "8px" }}>
-                Multi-page executive decision report with SfM reconstruction, spatial fusion metrics, calibration, and embedded visual reprojection overlays.
+                Multi-page executive decision report with SfM reconstruction,
+                spatial fusion metrics, calibration, and embedded visual
+                reprojection overlays.
               </p>
             </div>
             <a
@@ -1363,11 +1699,21 @@ function Reports({ mission, notice }) {
               aria-disabled={downloadingPdf}
               style={{ pointerEvents: downloadingPdf ? "none" : "auto" }}
             >
-              <Icon name={downloadingPdf ? "RefreshCw" : "Download"} size={14} className={downloadingPdf ? "spin" : ""} />
+              <Icon
+                name={downloadingPdf ? "RefreshCw" : "Download"}
+                size={14}
+                className={downloadingPdf ? "spin" : ""}
+              />
               {downloadingPdf ? "Downloading PDF…" : "Download PDF"}
             </a>
             {pdfError && (
-              <p style={{ color: "#ef4444", fontSize: "11.5px", marginTop: "6px" }}>
+              <p
+                style={{
+                  color: "#ef4444",
+                  fontSize: "11.5px",
+                  marginTop: "6px",
+                }}
+              >
                 {pdfError}
               </p>
             )}
@@ -1383,7 +1729,9 @@ function Reports({ mission, notice }) {
                 <h4 className="export-card-title">3D Object Data (CSV)</h4>
               </div>
               <p className="export-card-desc" style={{ marginTop: "8px" }}>
-                Tabular export containing one row per localized semantic object/track with local 3D coordinates, motion state, confidence, and metric dimensions.
+                Tabular export containing one row per localized semantic
+                object/track with local 3D coordinates, motion state,
+                confidence, and metric dimensions.
               </p>
             </div>
             <a
@@ -1406,7 +1754,9 @@ function Reports({ mission, notice }) {
                 <h4 className="export-card-title">Mission Artifact (JSON)</h4>
               </div>
               <p className="export-card-desc" style={{ marginTop: "8px" }}>
-                Complete structured mission JSON containing video metadata, detection statistics, reconstruction points, 3D fusion, and provenance.
+                Complete structured mission JSON containing video metadata,
+                detection statistics, reconstruction points, 3D fusion, and
+                provenance.
               </p>
             </div>
             <a
@@ -1429,14 +1779,23 @@ function Reports({ mission, notice }) {
                 <h4 className="export-card-title">GeoJSON Layer</h4>
               </div>
               <p className="export-card-desc" style={{ marginTop: "8px" }}>
-                Geographic coordinates in WGS84 for GIS integration. Requires verified GPS RTK or GCP ground reference.
+                Geographic coordinates in WGS84 for GIS integration. Requires
+                verified GPS RTK or GCP ground reference.
               </p>
               <div className="export-card-unavailable-note">
-                <Icon name="AlertTriangle" size={12} style={{ display: "inline", marginRight: "4px" }} />
-                {geoJsonStatus?.reason || "Unavailable — mission is not georeferenced."}
+                <Icon
+                  name="AlertTriangle"
+                  size={12}
+                  style={{ display: "inline", marginRight: "4px" }}
+                />
+                {geoJsonStatus?.reason ||
+                  "Unavailable — mission is not georeferenced."}
               </div>
             </div>
-            <button disabled className="export-download-btn export-download-btn--disabled">
+            <button
+              disabled
+              className="export-download-btn export-download-btn--disabled"
+            >
               Download GeoJSON (Unavailable)
             </button>
           </div>
@@ -1451,7 +1810,9 @@ function Reports({ mission, notice }) {
                 <h4 className="export-card-title">Evidence Package (.zip)</h4>
               </div>
               <p className="export-card-desc" style={{ marginTop: "8px" }}>
-                Complete audit archive containing the executive PDF, CSV data, JSON metadata, GeoJSON refusal disclosure, and visual reprojection overlays.
+                Complete audit archive containing the executive PDF, CSV data,
+                JSON metadata, GeoJSON refusal disclosure, and visual
+                reprojection overlays.
               </p>
             </div>
             <a
@@ -1468,7 +1829,17 @@ function Reports({ mission, notice }) {
 
       {/* 4. Polished Report Summary Preview */}
       <div>
-        <h3 style={{ fontSize: "16px", fontWeight: 700, color: "#fff", marginBottom: "12px", display: "flex", alignItems: "center", gap: "8px" }}>
+        <h3
+          style={{
+            fontSize: "16px",
+            fontWeight: 700,
+            color: "#fff",
+            marginBottom: "12px",
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+          }}
+        >
           <Icon name="Eye" size={18} color="#818cf8" />
           Report Summary Preview
         </h3>
@@ -1498,13 +1869,54 @@ function Reports({ mission, notice }) {
         <div className="report-section-content" style={{ marginTop: "12px" }}>
           {activeTab === "mission" && (
             <div>
-              <h4 style={{ margin: "0 0 10px 0", color: "#60a5fa" }}>Mission & Video Overview</h4>
+              <h4 style={{ margin: "0 0 10px 0", color: "#60a5fa" }}>
+                Mission & Video Overview
+              </h4>
               <table className="report-table">
                 <tbody>
-                  <tr><td><b>Mission ID</b></td><td>{repMission.id || missionId}</td><td><b>Mission Name</b></td><td>{repMission.name || mission.name}</td></tr>
-                  <tr><td><b>Operator</b></td><td>{repMission.operator || mission.operator}</td><td><b>Location / Sector</b></td><td>{repMission.location || mission.sector}</td></tr>
-                  <tr><td><b>Video File</b></td><td>{repVideo.filename || "WhatsApp Video.mp4"}</td><td><b>Resolution</b></td><td>{repVideo.resolution || "3840x2160"}</td></tr>
-                  <tr><td><b>Native FPS</b></td><td>{repVideo.fps || 24.0} FPS</td><td><b>Duration / Frames</b></td><td>{repVideo.duration_seconds || 30.2}s ({repVideo.total_frames || 725} frames)</td></tr>
+                  <tr>
+                    <td>
+                      <b>Mission ID</b>
+                    </td>
+                    <td>{repMission.id || missionId}</td>
+                    <td>
+                      <b>Mission Name</b>
+                    </td>
+                    <td>{repMission.name || mission.name}</td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <b>Operator</b>
+                    </td>
+                    <td>{repMission.operator || mission.operator}</td>
+                    <td>
+                      <b>Location / Sector</b>
+                    </td>
+                    <td>{repMission.location || mission.sector}</td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <b>Video File</b>
+                    </td>
+                    <td>{repVideo.filename || "WhatsApp Video.mp4"}</td>
+                    <td>
+                      <b>Resolution</b>
+                    </td>
+                    <td>{repVideo.resolution || "3840x2160"}</td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <b>Native FPS</b>
+                    </td>
+                    <td>{repVideo.fps || 24.0} FPS</td>
+                    <td>
+                      <b>Duration / Frames</b>
+                    </td>
+                    <td>
+                      {repVideo.duration_seconds || 30.2}s (
+                      {repVideo.total_frames || 725} frames)
+                    </td>
+                  </tr>
                 </tbody>
               </table>
             </div>
@@ -1512,13 +1924,60 @@ function Reports({ mission, notice }) {
 
           {activeTab === "detection" && (
             <div>
-              <h4 style={{ margin: "0 0 10px 0", color: "#60a5fa" }}>AI Object Detection (Phase 4.5)</h4>
+              <h4 style={{ margin: "0 0 10px 0", color: "#60a5fa" }}>
+                AI Object Detection (Phase 4.5)
+              </h4>
               <table className="report-table">
                 <tbody>
-                  <tr><td><b>Detector Model</b></td><td>{repDet.model || "yolo11n"} ({repDet.model_version || "yolo11n-official"})</td><td><b>Sampling FPS</b></td><td>{repDet.sample_fps || 2.0} FPS</td></tr>
-                  <tr><td><b>Total Detections</b></td><td>{repDet.total_detections || 399}</td><td><b>Frames Processed</b></td><td>{repDet.frames_processed || 61}</td></tr>
-                  <tr><td><b>Class Breakdown</b></td><td colSpan="3">{JSON.stringify(repDet.detections_by_class || { car: 383, train: 15, truck: 1 })}</td></tr>
-                  <tr><td><b>Confidence Stats</b></td><td colSpan="3">Mean: {repDet.confidence_stats?.mean?.toFixed(3) || "0.495"} | Min: {repDet.confidence_stats?.min?.toFixed(3) || "0.350"} | Max: {repDet.confidence_stats?.max?.toFixed(3) || "0.707"}</td></tr>
+                  <tr>
+                    <td>
+                      <b>Detector Model</b>
+                    </td>
+                    <td>
+                      {repDet.model || "yolo11n"} (
+                      {repDet.model_version || "yolo11n-official"})
+                    </td>
+                    <td>
+                      <b>Sampling FPS</b>
+                    </td>
+                    <td>{repDet.sample_fps || 2.0} FPS</td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <b>Total Detections</b>
+                    </td>
+                    <td>{repDet.total_detections || 399}</td>
+                    <td>
+                      <b>Frames Processed</b>
+                    </td>
+                    <td>{repDet.frames_processed || 61}</td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <b>Class Breakdown</b>
+                    </td>
+                    <td colSpan="3">
+                      {JSON.stringify(
+                        repDet.detections_by_class || {
+                          car: 383,
+                          train: 15,
+                          truck: 1,
+                        },
+                      )}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <b>Confidence Stats</b>
+                    </td>
+                    <td colSpan="3">
+                      Mean:{" "}
+                      {repDet.confidence_stats?.mean?.toFixed(3) || "0.495"} |
+                      Min: {repDet.confidence_stats?.min?.toFixed(3) || "0.350"}{" "}
+                      | Max:{" "}
+                      {repDet.confidence_stats?.max?.toFixed(3) || "0.707"}
+                    </td>
+                  </tr>
                 </tbody>
               </table>
             </div>
@@ -1526,11 +1985,37 @@ function Reports({ mission, notice }) {
 
           {activeTab === "tracking" && (
             <div>
-              <h4 style={{ margin: "0 0 10px 0", color: "#60a5fa" }}>Temporal Tracking (ByteTrack)</h4>
+              <h4 style={{ margin: "0 0 10px 0", color: "#60a5fa" }}>
+                Temporal Tracking (ByteTrack)
+              </h4>
               <table className="report-table">
                 <tbody>
-                  <tr><td><b>Tracker Engine</b></td><td>{repTrk.tracker || "Ultralytics persistent ByteTrack"}</td><td><b>Unique Tracks</b></td><td>{repTrk.unique_tracks || 23}</td></tr>
-                  <tr><td><b>Tracks Breakdown</b></td><td colSpan="3">{JSON.stringify(repTrk.tracks_by_class || { car: 21, train: 1, truck: 1 })}</td></tr>
+                  <tr>
+                    <td>
+                      <b>Tracker Engine</b>
+                    </td>
+                    <td>
+                      {repTrk.tracker || "Ultralytics persistent ByteTrack"}
+                    </td>
+                    <td>
+                      <b>Unique Tracks</b>
+                    </td>
+                    <td>{repTrk.unique_tracks || 23}</td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <b>Tracks Breakdown</b>
+                    </td>
+                    <td colSpan="3">
+                      {JSON.stringify(
+                        repTrk.tracks_by_class || {
+                          car: 21,
+                          train: 1,
+                          truck: 1,
+                        },
+                      )}
+                    </td>
+                  </tr>
                 </tbody>
               </table>
             </div>
@@ -1538,13 +2023,68 @@ function Reports({ mission, notice }) {
 
           {activeTab === "reconstruction" && (
             <div>
-              <h4 style={{ margin: "0 0 10px 0", color: "#60a5fa" }}>3D Photogrammetry & Surface Reconstruction (Phase 5)</h4>
+              <h4 style={{ margin: "0 0 10px 0", color: "#60a5fa" }}>
+                3D Photogrammetry & Surface Reconstruction (Phase 5)
+              </h4>
               <table className="report-table">
                 <tbody>
-                  <tr><td><b>SfM Camera Model</b></td><td>{repRec.camera_model || "SIMPLE_PINHOLE"}</td><td><b>Registered Cameras</b></td><td>{repRec.registered_cameras || 20} / {repRec.total_images || 20}</td></tr>
-                  <tr><td><b>Sparse Points</b></td><td>{(repRec.sparse_points_count || 12916).toLocaleString()}</td><td><b>Mean Reprojection Error</b></td><td>{repRec.mean_reprojection_error_px?.toFixed(4) || "0.9785"} px</td></tr>
-                  <tr><td><b>Surface Mesh</b></td><td>{repRec.mesh_status || "AVAILABLE"} ({repRec.mesh_method || "pycolmap_poisson"})</td><td><b>Mesh Complexity</b></td><td>{(repRec.mesh_vertices || 28139).toLocaleString()} vertices · {(repRec.mesh_faces || 56120).toLocaleString()} faces</td></tr>
-                  <tr><td><b>Dense Reconstruction</b></td><td colSpan="3" style={{ color: "#fbbf24" }}>{repRec.dense_reconstruction_status || "UNAVAILABLE"} (0 points). {repRec.dense_limitation_reason || "CUDA/HIP required; no synthetic points fabricated."}</td></tr>
+                  <tr>
+                    <td>
+                      <b>SfM Camera Model</b>
+                    </td>
+                    <td>{repRec.camera_model || "SIMPLE_PINHOLE"}</td>
+                    <td>
+                      <b>Registered Cameras</b>
+                    </td>
+                    <td>
+                      {repRec.registered_cameras || 20} /{" "}
+                      {repRec.total_images || 20}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <b>Sparse Points</b>
+                    </td>
+                    <td>
+                      {(repRec.sparse_points_count || 12916).toLocaleString()}
+                    </td>
+                    <td>
+                      <b>Mean Reprojection Error</b>
+                    </td>
+                    <td>
+                      {repRec.mean_reprojection_error_px?.toFixed(4) ||
+                        "0.9785"}{" "}
+                      px
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <b>Surface Mesh</b>
+                    </td>
+                    <td>
+                      {repRec.mesh_status || "AVAILABLE"} (
+                      {repRec.mesh_method || "pycolmap_poisson"})
+                    </td>
+                    <td>
+                      <b>Mesh Complexity</b>
+                    </td>
+                    <td>
+                      {(repRec.mesh_vertices || 28139).toLocaleString()}{" "}
+                      vertices · {(repRec.mesh_faces || 56120).toLocaleString()}{" "}
+                      faces
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <b>Dense Reconstruction</b>
+                    </td>
+                    <td colSpan="3" style={{ color: "#fbbf24" }}>
+                      {repRec.dense_reconstruction_status || "UNAVAILABLE"} (0
+                      points).{" "}
+                      {repRec.dense_limitation_reason ||
+                        "CUDA/HIP required; no synthetic points fabricated."}
+                    </td>
+                  </tr>
                 </tbody>
               </table>
             </div>
@@ -1552,52 +2092,112 @@ function Reports({ mission, notice }) {
 
           {activeTab === "fusion" && (
             <div>
-              <h4 style={{ margin: "0 0 10px 0", color: "#60a5fa" }}>AI-to-3D Multi-View Spatial Fusion (Phase 6)</h4>
+              <h4 style={{ margin: "0 0 10px 0", color: "#60a5fa" }}>
+                AI-to-3D Multi-View Spatial Fusion (Phase 6)
+              </h4>
               <table className="report-table">
                 <tbody>
-                  <tr><td><b>Authoritative Tracks</b></td><td>{repFusion.authoritative_tracks || 23}</td><td><b>Tracks Evaluated</b></td><td>{repFusion.tracks_used_for_fusion || 3}</td></tr>
-                  <tr><td><b>Association Breakdown</b></td><td colSpan="3">VALID: {repFusion.status_breakdown?.VALID || 1} | LOW_CONF: {repFusion.status_breakdown?.LOW_CONFIDENCE || 1} | INSUFFICIENT_EVIDENCE: {repFusion.status_breakdown?.INSUFFICIENT_EVIDENCE || 1}</td></tr>
-                  <tr><td><b>Mean Reproj Error</b></td><td>{repFusion.reprojection_statistics?.mean_px?.toFixed(3) || "2.393"} px</td><td><b>Acceptance Rate</b></td><td>{repFusion.reprojection_statistics?.acceptance_rate_pct || 100}%</td></tr>
+                  <tr>
+                    <td>
+                      <b>Authoritative Tracks</b>
+                    </td>
+                    <td>{repFusion.authoritative_tracks || 23}</td>
+                    <td>
+                      <b>Tracks Evaluated</b>
+                    </td>
+                    <td>{repFusion.tracks_used_for_fusion || 3}</td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <b>Association Breakdown</b>
+                    </td>
+                    <td colSpan="3">
+                      VALID: {repFusion.status_breakdown?.VALID || 1} |
+                      LOW_CONF:{" "}
+                      {repFusion.status_breakdown?.LOW_CONFIDENCE || 1} |
+                      INSUFFICIENT_EVIDENCE:{" "}
+                      {repFusion.status_breakdown?.INSUFFICIENT_EVIDENCE || 1}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <b>Mean Reproj Error</b>
+                    </td>
+                    <td>
+                      {repFusion.reprojection_statistics?.mean_px?.toFixed(3) ||
+                        "2.393"}{" "}
+                      px
+                    </td>
+                    <td>
+                      <b>Acceptance Rate</b>
+                    </td>
+                    <td>
+                      {repFusion.reprojection_statistics?.acceptance_rate_pct ||
+                        100}
+                      %
+                    </td>
+                  </tr>
                 </tbody>
               </table>
 
-              {repFusion.fused_objects && repFusion.fused_objects.length > 0 && (
-                <div style={{ marginTop: "12px" }}>
-                  <h5 style={{ margin: "0 0 8px 0", color: "#e2e8f0" }}>Localized 3D Semantic Objects</h5>
-                  <table className="report-table">
-                    <thead>
-                      <tr>
-                        <th>Object ID</th>
-                        <th>Track</th>
-                        <th>Class</th>
-                        <th>Motion</th>
-                        <th>Status</th>
-                        <th>Local 3D Position [X, Y, Z]</th>
-                        <th>Reproj (px)</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {repFusion.fused_objects.map((obj) => (
-                        <tr key={obj.object_id}>
-                          <td><b>{obj.object_id}</b></td>
-                          <td>{obj.track_id}</td>
-                          <td>{obj.class || obj.class_name}</td>
-                          <td>{obj.motion_state}</td>
-                          <td><span className={`reports-badge ${obj.association_status === "VALID" ? "reports-badge--success" : "reports-badge--warning"}`}>{obj.association_status}</span></td>
-                          <td>{obj.position_3d ? `[${obj.position_3d[0]?.toFixed(2)}, ${obj.position_3d[1]?.toFixed(2)}, ${obj.position_3d[2]?.toFixed(2)}]` : "N/A"}</td>
-                          <td>{obj.mean_reprojection_error_px?.toFixed(2) || obj.reprojection_error?.toFixed(2) || "N/A"}</td>
+              {repFusion.fused_objects &&
+                repFusion.fused_objects.length > 0 && (
+                  <div style={{ marginTop: "12px" }}>
+                    <h5 style={{ margin: "0 0 8px 0", color: "#e2e8f0" }}>
+                      Localized 3D Semantic Objects
+                    </h5>
+                    <table className="report-table">
+                      <thead>
+                        <tr>
+                          <th>Object ID</th>
+                          <th>Track</th>
+                          <th>Class</th>
+                          <th>Motion</th>
+                          <th>Status</th>
+                          <th>Local 3D Position [X, Y, Z]</th>
+                          <th>Reproj (px)</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
+                      </thead>
+                      <tbody>
+                        {repFusion.fused_objects.map((obj) => (
+                          <tr key={obj.object_id}>
+                            <td>
+                              <b>{obj.object_id}</b>
+                            </td>
+                            <td>{obj.track_id}</td>
+                            <td>{obj.class || obj.class_name}</td>
+                            <td>{obj.motion_state}</td>
+                            <td>
+                              <span
+                                className={`reports-badge ${obj.association_status === "VALID" ? "reports-badge--success" : "reports-badge--warning"}`}
+                              >
+                                {obj.association_status}
+                              </span>
+                            </td>
+                            <td>
+                              {obj.position_3d
+                                ? `[${obj.position_3d[0]?.toFixed(2)}, ${obj.position_3d[1]?.toFixed(2)}, ${obj.position_3d[2]?.toFixed(2)}]`
+                                : "N/A"}
+                            </td>
+                            <td>
+                              {obj.mean_reprojection_error_px?.toFixed(2) ||
+                                obj.reprojection_error?.toFixed(2) ||
+                                "N/A"}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
             </div>
           )}
 
           {activeTab === "measurements" && (
             <div>
-              <h4 style={{ margin: "0 0 10px 0", color: "#60a5fa" }}>Geometric Measurements & Validation (Phase 7)</h4>
+              <h4 style={{ margin: "0 0 10px 0", color: "#60a5fa" }}>
+                Geometric Measurements & Validation (Phase 7)
+              </h4>
               <table className="report-table">
                 <thead>
                   <tr>
@@ -1612,12 +2212,34 @@ function Reports({ mission, notice }) {
                 <tbody>
                   {(repMeas.items || []).map((m, idx) => (
                     <tr key={idx}>
-                      <td><b>{m.label || m.type}</b></td>
-                      <td>{m.type === "object_dimensions" ? `L: ${m.length?.toFixed(2)} W: ${m.width?.toFixed(2)} H: ${m.height?.toFixed(2)}` : (m.value !== null ? `${m.value} ${m.unit || ""}` : (m.reason || "N/A"))}</td>
+                      <td>
+                        <b>{m.label || m.type}</b>
+                      </td>
+                      <td>
+                        {m.type === "object_dimensions"
+                          ? `L: ${m.length?.toFixed(2)} W: ${m.width?.toFixed(2)} H: ${m.height?.toFixed(2)}`
+                          : m.value !== null
+                            ? `${m.value} ${m.unit || ""}`
+                            : m.reason || "N/A"}
+                      </td>
                       <td>{m.unit || "N/A"}</td>
-                      <td><span className={`reports-badge ${m.status === "METRIC_CALIBRATED" ? "reports-badge--success" : "reports-badge--warning"}`}>{m.status}</span></td>
-                      <td>{m.confidence !== undefined ? m.confidence.toFixed(2) : "N/A"}</td>
-                      <td>{m.uncertainty !== null && m.uncertainty !== undefined ? `±${m.uncertainty}` : "N/A"}</td>
+                      <td>
+                        <span
+                          className={`reports-badge ${m.status === "METRIC_CALIBRATED" ? "reports-badge--success" : "reports-badge--warning"}`}
+                        >
+                          {m.status}
+                        </span>
+                      </td>
+                      <td>
+                        {m.confidence !== undefined
+                          ? m.confidence.toFixed(2)
+                          : "N/A"}
+                      </td>
+                      <td>
+                        {m.uncertainty !== null && m.uncertainty !== undefined
+                          ? `±${m.uncertainty}`
+                          : "N/A"}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -1627,13 +2249,62 @@ function Reports({ mission, notice }) {
 
           {activeTab === "calibration" && (
             <div>
-              <h4 style={{ margin: "0 0 10px 0", color: "#60a5fa" }}>Active Metric Scale Calibration</h4>
+              <h4 style={{ margin: "0 0 10px 0", color: "#60a5fa" }}>
+                Active Metric Scale Calibration
+              </h4>
               <table className="report-table">
                 <tbody>
-                  <tr><td><b>Calibration ID</b></td><td>{repMeas.active_calibration?.calibration_id || "None"}</td><td><b>Method</b></td><td>{repMeas.active_calibration?.method || "UNREFERENCED"}</td></tr>
-                  <tr><td><b>Scale Factor</b></td><td>{repMeas.active_calibration?.scale_factor?.toFixed(5) || "1.0000"} m/unit</td><td><b>Known Baseline</b></td><td>{repMeas.active_calibration?.known_value || "N/A"} {repMeas.active_calibration?.unit || ""}</td></tr>
-                  <tr><td><b>Source Evidence</b></td><td colSpan="3">{repMeas.active_calibration?.source_evidence || "Ground reference distance baseline"}</td></tr>
-                  <tr><td><b>Confidence / Uncertainty</b></td><td colSpan="3">Confidence: {repMeas.active_calibration?.confidence || "0.95"} | Uncertainty: ±{repMeas.active_calibration?.uncertainty || "0.01"}</td></tr>
+                  <tr>
+                    <td>
+                      <b>Calibration ID</b>
+                    </td>
+                    <td>
+                      {repMeas.active_calibration?.calibration_id || "None"}
+                    </td>
+                    <td>
+                      <b>Method</b>
+                    </td>
+                    <td>
+                      {repMeas.active_calibration?.method || "UNREFERENCED"}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <b>Scale Factor</b>
+                    </td>
+                    <td>
+                      {repMeas.active_calibration?.scale_factor?.toFixed(5) ||
+                        "1.0000"}{" "}
+                      m/unit
+                    </td>
+                    <td>
+                      <b>Known Baseline</b>
+                    </td>
+                    <td>
+                      {repMeas.active_calibration?.known_value || "N/A"}{" "}
+                      {repMeas.active_calibration?.unit || ""}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <b>Source Evidence</b>
+                    </td>
+                    <td colSpan="3">
+                      {repMeas.active_calibration?.source_evidence ||
+                        "Ground reference distance baseline"}
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>
+                      <b>Confidence / Uncertainty</b>
+                    </td>
+                    <td colSpan="3">
+                      Confidence:{" "}
+                      {repMeas.active_calibration?.confidence || "0.95"} |
+                      Uncertainty: ±
+                      {repMeas.active_calibration?.uncertainty || "0.01"}
+                    </td>
+                  </tr>
                 </tbody>
               </table>
             </div>
@@ -1641,7 +2312,9 @@ function Reports({ mission, notice }) {
 
           {activeTab === "evidence" && (
             <div>
-              <h4 style={{ margin: "0 0 10px 0", color: "#60a5fa" }}>Visual Reprojection Evidence & Keyframes</h4>
+              <h4 style={{ margin: "0 0 10px 0", color: "#60a5fa" }}>
+                Visual Reprojection Evidence & Keyframes
+              </h4>
               {repEvidence.length > 0 ? (
                 <div className="report-overlay-preview">
                   {repEvidence.map((ev, idx) => (
@@ -1649,26 +2322,47 @@ function Reports({ mission, notice }) {
                       <img
                         src={ev.url}
                         alt={ev.filename}
-                        onError={(e) => { e.target.style.display = "none"; }}
+                        onError={(e) => {
+                          e.target.style.display = "none";
+                        }}
                       />
                       <div className="report-overlay-caption">
-                        <b>{ev.type === "reprojection_overlay" ? "Reprojection Overlay" : "Keyframe"}:</b> {ev.filename}
+                        <b>
+                          {ev.type === "reprojection_overlay"
+                            ? "Reprojection Overlay"
+                            : "Keyframe"}
+                          :
+                        </b>{" "}
+                        {ev.filename}
                       </div>
                     </div>
                   ))}
                 </div>
               ) : (
-                <p style={{ color: "#94a3b8", fontSize: "12px" }}>No visual evidence stored for this mission.</p>
+                <p style={{ color: "#94a3b8", fontSize: "12px" }}>
+                  No visual evidence stored for this mission.
+                </p>
               )}
             </div>
           )}
 
           {activeTab === "limitations" && (
             <div>
-              <h4 style={{ margin: "0 0 10px 0", color: "#fbbf24" }}>Scientific Limitations & Boundary Conditions</h4>
-              <ul style={{ color: "#cbd5e1", fontSize: "12.5px", lineHeight: "1.6", paddingLeft: "20px" }}>
+              <h4 style={{ margin: "0 0 10px 0", color: "#fbbf24" }}>
+                Scientific Limitations & Boundary Conditions
+              </h4>
+              <ul
+                style={{
+                  color: "#cbd5e1",
+                  fontSize: "12.5px",
+                  lineHeight: "1.6",
+                  paddingLeft: "20px",
+                }}
+              >
                 {repLim.map((lim, idx) => (
-                  <li key={idx} style={{ marginBottom: "8px" }}>{lim}</li>
+                  <li key={idx} style={{ marginBottom: "8px" }}>
+                    {lim}
+                  </li>
                 ))}
               </ul>
             </div>
@@ -1679,20 +2373,40 @@ function Reports({ mission, notice }) {
       {/* 5. Full Report Modal */}
       {openModal && (
         <div className="report-modal" role="dialog" style={{ zIndex: 1000 }}>
-          <article style={{ maxWidth: "880px", maxHeight: "90vh", overflowY: "auto" }}>
+          <article
+            style={{ maxWidth: "880px", maxHeight: "90vh", overflowY: "auto" }}
+          >
             <button onClick={() => setOpenModal(false)}>×</button>
-            <span className="eyebrow">AEROMESH / DECISION REPORT PREVIEW</span>
-            <h2>{repMission.name || mission.name} — {mission.sector}</h2>
+            <span className="eyebrow">
+              HEXA SPARK / DECISION REPORT PREVIEW
+            </span>
+            <h2>
+              {repMission.name || mission.name} — {mission.sector}
+            </h2>
             <p>
-              Comprehensive flight quality, sparse photogrammetry reconstruction, AI detection, and multi-view 3D spatial fusion decision report.
+              Comprehensive flight quality, sparse photogrammetry
+              reconstruction, AI detection, and multi-view 3D spatial fusion
+              decision report.
             </p>
 
             <div className="detail-data" style={{ marginTop: "14px" }}>
-              <Stat label="SfM Cameras" value={repRec.registered_cameras || 20} />
-              <Stat label="Sparse Points" value={repRec.sparse_points_count || 12916} />
-              <Stat label="Surface Mesh Faces" value={repRec.mesh_faces || 56120} />
+              <Stat
+                label="SfM Cameras"
+                value={repRec.registered_cameras || 20}
+              />
+              <Stat
+                label="Sparse Points"
+                value={repRec.sparse_points_count || 12916}
+              />
+              <Stat
+                label="Surface Mesh Faces"
+                value={repRec.mesh_faces || 56120}
+              />
               <Stat label="Unique Tracks" value={repTrk.unique_tracks || 23} />
-              <Stat label="Fused Objects" value={repFusion.fused_objects_count || 3} />
+              <Stat
+                label="Fused Objects"
+                value={repFusion.fused_objects_count || 3}
+              />
               <Stat label="Calibrated Baseline" value="15.00 m" />
             </div>
 
@@ -1701,11 +2415,18 @@ function Reports({ mission, notice }) {
                 href={getReportPdfUrl(missionId)}
                 download={`aeromesh_${missionId}_report.pdf`}
                 className={`export-download-btn export-download-btn--primary ${downloadingPdf ? "export-download-btn--disabled" : ""}`}
-                style={{ width: "auto", pointerEvents: downloadingPdf ? "none" : "auto" }}
+                style={{
+                  width: "auto",
+                  pointerEvents: downloadingPdf ? "none" : "auto",
+                }}
                 onClick={handlePdfDownload}
                 aria-disabled={downloadingPdf}
               >
-                <Icon name={downloadingPdf ? "RefreshCw" : "FileText"} size={14} className={downloadingPdf ? "spin" : ""} />
+                <Icon
+                  name={downloadingPdf ? "RefreshCw" : "FileText"}
+                  size={14}
+                  className={downloadingPdf ? "spin" : ""}
+                />
                 {downloadingPdf ? "Downloading…" : "Download PDF Report"}
               </a>
               <a

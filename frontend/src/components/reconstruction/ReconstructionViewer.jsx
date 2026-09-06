@@ -1,6 +1,14 @@
 import { Canvas } from "@react-three/fiber";
 import { Grid, Line, OrbitControls, Stars, Text } from "@react-three/drei";
-import { Component, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Component,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import * as THREE from "three";
 import { PLYLoader } from "three/examples/jsm/loaders/PLYLoader.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
@@ -61,11 +69,17 @@ function RealPointCloud({ url, onBoundsComputed }) {
         geomCache.set(url, { geometry: geom, bounds });
         setGeometry(geom);
         if (onBoundsComputed) onBoundsComputed(bounds);
+        // Diagnostic logging for blob debugging
+        console.log("[DEBUG] RealPointCloud loaded:", {
+          pointCount: geom.attributes.position?.count,
+          bounds,
+          url: url.substring(url.lastIndexOf("/") + 1),
+        });
       },
       undefined,
       (err) => {
         console.warn("Could not load real PLY point cloud:", err);
-      }
+      },
     );
 
     return () => {
@@ -115,21 +129,24 @@ function RealMesh({ url, mode, onBoundsComputed }) {
     async function loadMesh() {
       try {
         const res = await fetch(url);
-        if (!res.ok) throw new Error(`Mesh fetch failed with HTTP ${res.status}`);
+        if (!res.ok)
+          throw new Error(`Mesh fetch failed with HTTP ${res.status}`);
         const buffer = await res.arrayBuffer();
         if (!active) return;
 
         // Inspect header bytes
-        const bytes = new Uint8Array(buffer, 0, Math.min(32, buffer.byteLength));
+        const bytes = new Uint8Array(
+          buffer,
+          0,
+          Math.min(32, buffer.byteLength),
+        );
         const isGLB =
           bytes[0] === 0x67 &&
           bytes[1] === 0x6c &&
           bytes[2] === 0x54 &&
           bytes[3] === 0x46; // 'glTF'
         const isPLY =
-          bytes[0] === 0x70 &&
-          bytes[1] === 0x6c &&
-          bytes[2] === 0x79; // 'ply'
+          bytes[0] === 0x70 && bytes[1] === 0x6c && bytes[2] === 0x79; // 'ply'
 
         if (isGLB || url.endsWith(".glb") || url.endsWith(".gltf")) {
           const loader = new GLTFLoader();
@@ -155,7 +172,9 @@ function RealMesh({ url, mode, onBoundsComputed }) {
               setMeshData(data);
               if (onBoundsComputed) onBoundsComputed(bounds);
             },
-            (err) => console.warn("GLTFLoader parse error:", err)
+            (err) => {
+              console.warn("[DEBUG] GLTFLoader parse error:", err, url);
+            },
           );
         } else if (
           url.endsWith(".obj") ||
@@ -187,6 +206,10 @@ function RealMesh({ url, mode, onBoundsComputed }) {
           };
 
           const data = { type: "obj", scene: obj, bounds };
+          console.log("[DEBUG] RealMesh (OBJ) loaded:", {
+            bounds,
+            url: url.substring(url.lastIndexOf("/") + 1),
+          });
           geomCache.set(url, data);
           setMeshData(data);
           if (onBoundsComputed) onBoundsComputed(bounds);
@@ -214,9 +237,15 @@ function RealMesh({ url, mode, onBoundsComputed }) {
           geomCache.set(url, data);
           setMeshData(data);
           if (onBoundsComputed) onBoundsComputed(bounds);
+          console.log("[DEBUG] RealMesh (PLY) loaded:", {
+            vertexCount: geom.attributes.position?.count,
+            bounds,
+            url: url.substring(url.lastIndexOf("/") + 1),
+          });
         }
       } catch (err) {
         console.warn("Could not load real surface mesh:", err);
+        console.warn("[DEBUG] Could not load real surface mesh:", err, url);
       }
     }
 
@@ -262,20 +291,85 @@ function RealMesh({ url, mode, onBoundsComputed }) {
 
 /**
  * Camera Trajectory Component
+/**
+ * Camera Station Frustum Component
+ * Renders an oriented frustum pyramid and station sphere marker pointing along viewing direction.
+ */
+function CameraStation({ cam, isSelected, onSelectCamera }) {
+  const [x, y, z] = cam.position;
+  const groupRef = useRef();
+
+  useEffect(() => {
+    if (groupRef.current) {
+      if (cam.viewing_direction && Array.isArray(cam.viewing_direction)) {
+        const target = new THREE.Vector3(
+          x + cam.viewing_direction[0] * 5,
+          y + cam.viewing_direction[1] * 5,
+          z + cam.viewing_direction[2] * 5,
+        );
+        groupRef.current.lookAt(target);
+      } else {
+        groupRef.current.lookAt(new THREE.Vector3(0, 0, 8));
+      }
+    }
+  }, [cam, x, y, z]);
+
+  return (
+    <group position={[x, y, z]}>
+      {/* Station marker sphere */}
+      <mesh
+        onClick={(e) => {
+          e.stopPropagation();
+          if (onSelectCamera) onSelectCamera(cam);
+        }}
+      >
+        <sphereGeometry args={[isSelected ? 0.6 : 0.4, 16, 16]} />
+        <meshStandardMaterial
+          color={isSelected ? "#f59e0b" : "#38bdf8"}
+          emissive={isSelected ? "#f59e0b" : "#0284c7"}
+          emissiveIntensity={isSelected ? 0.9 : 0.5}
+        />
+      </mesh>
+
+      {/* Oriented frustum wireframe pyramid */}
+      <group ref={groupRef}>
+        <mesh
+          rotation={[-Math.PI / 2, 0, 0]}
+          position={[0, 0, 1.2]}
+          onClick={(e) => {
+            e.stopPropagation();
+            if (onSelectCamera) onSelectCamera(cam);
+          }}
+        >
+          <coneGeometry args={[1.0, 2.2, 4]} />
+          <meshBasicMaterial
+            color={isSelected ? "#fbbf24" : "#22d3ee"}
+            wireframe
+          />
+        </mesh>
+      </group>
+    </group>
+  );
+}
+
+/**
+ * Camera Trajectory Component
  * Displays registered camera stations and flight path from SfM poses.
  */
 function CameraTrajectory({ poses, onSelectCamera, selectedCameraId }) {
   const sorted = useMemo(() => {
     if (!poses || !Array.isArray(poses)) return [];
     return [...poses].sort((a, b) =>
-      (a.image_name || "").localeCompare(b.image_name || "")
+      (a.image_name || "").localeCompare(b.image_name || ""),
     );
   }, [poses]);
 
   const points = useMemo(() => {
     return sorted
       .filter((p) => p.position && p.position.length === 3)
-      .map((p) => new THREE.Vector3(p.position[0], p.position[1], p.position[2]));
+      .map(
+        (p) => new THREE.Vector3(p.position[0], p.position[1], p.position[2]),
+      );
   }, [sorted]);
 
   if (!poses || !Array.isArray(poses) || poses.length === 0) return null;
@@ -285,37 +379,23 @@ function CameraTrajectory({ poses, onSelectCamera, selectedCameraId }) {
       {points.length > 1 && (
         <Line
           points={points}
-          color="#22d3ee"
-          lineWidth={2.5}
+          color="#38bdf8"
+          lineWidth={3.5}
           transparent
-          opacity={0.85}
+          opacity={0.9}
         />
       )}
       {sorted.map((cam, i) => {
         if (!cam.position || cam.position.length !== 3) return null;
-        const [x, y, z] = cam.position;
-        const isSelected = selectedCameraId === (cam.image_name || cam.image_id);
+        const isSelected =
+          selectedCameraId === (cam.image_name || cam.image_id);
         return (
-          <group
+          <CameraStation
             key={cam.image_id || cam.image_name || i}
-            position={[x, y, z]}
-            onClick={(e) => {
-              e.stopPropagation();
-              if (onSelectCamera) onSelectCamera(cam);
-            }}
-          >
-            <mesh rotation={[0, 0, 0]}>
-              <coneGeometry args={[0.5, 1.0, 4]} />
-              <meshBasicMaterial
-                color={isSelected ? "#f59e0b" : "#22d3ee"}
-                wireframe
-              />
-            </mesh>
-            <mesh>
-              <sphereGeometry args={[0.2, 12, 12]} />
-              <meshBasicMaterial color={isSelected ? "#f59e0b" : "#38d7ff"} />
-            </mesh>
-          </group>
+            cam={cam}
+            isSelected={isSelected}
+            onSelectCamera={onSelectCamera}
+          />
         );
       })}
     </group>
@@ -332,13 +412,18 @@ function SemanticObjects3D({ objects, selectedId, onSelect, layers }) {
   return (
     <group>
       {objects.map((obj, i) => {
-        if (!obj.position_3d || obj.association_status === "REJECTED") return null;
+        if (!obj.position_3d || obj.association_status === "REJECTED")
+          return null;
 
         const cls = (obj.class || obj.class_name || "").toLowerCase();
         if (layers) {
           if (
             layers.vehicles === false &&
-            (cls === "car" || cls === "truck" || cls === "bus" || cls === "van" || cls === "vehicle")
+            (cls === "car" ||
+              cls === "truck" ||
+              cls === "bus" ||
+              cls === "van" ||
+              cls === "vehicle")
           )
             return null;
           if (
@@ -372,8 +457,8 @@ function SemanticObjects3D({ objects, selectedId, onSelect, layers }) {
           motionState === "MOVING"
             ? "#f97316"
             : motionState === "STATIC"
-            ? "#22d3ee"
-            : "#a855f7";
+              ? "#22d3ee"
+              : "#a855f7";
 
         return (
           <group
@@ -448,6 +533,8 @@ function Scene({
   activeTool,
   cameraActionsRef,
   onBoundsReady,
+  onSelectCamera,
+  selectedCameraId,
 }) {
   const controlsRef = useRef();
   const hasAutoFramedRef = useRef(false);
@@ -475,22 +562,27 @@ function Scene({
 
   const isRealReconstruction = Boolean(
     meshUrl ||
-      pointCloudUrl ||
-      mission?.reconstruction?.status === "MESH_GENERATED" ||
-      mission?.reconstruction?.status === "RECONSTRUCTED" ||
-      (mission?.reconstruction?.sparse_point_count &&
-        mission.reconstruction.sparse_point_count > 0) ||
-      (mission?.reconstruction?.dense_point_count &&
-        mission.reconstruction.dense_point_count > 0)
+    pointCloudUrl ||
+    mission?.reconstruction?.status === "MESH_GENERATED" ||
+    mission?.reconstruction?.status === "RECONSTRUCTED" ||
+    (mission?.reconstruction?.sparse_point_count &&
+      mission.reconstruction.sparse_point_count > 0) ||
+    (mission?.reconstruction?.dense_point_count &&
+      mission.reconstruction.dense_point_count > 0),
   );
 
   // Hierarchy rules:
   // 1. If real mesh exists, mesh is PRIMARY.
   // 2. Point cloud is optional layer (default false if mesh exists; true if mesh is absent).
   const hasMesh = Boolean(meshUrl);
-  const showMesh = layers.mesh !== false && hasMesh && mode !== "point cloud" && layers.pointsOnly !== true;
+  const showMesh =
+    layers.mesh !== false &&
+    hasMesh &&
+    mode !== "point cloud" &&
+    layers.pointsOnly !== true;
   const showCloud =
-    layers.pointCloud === true || layers.pointsOnly === true ||
+    layers.pointCloud === true ||
+    layers.pointsOnly === true ||
     (!hasMesh && layers.pointCloud !== false && Boolean(pointCloudUrl));
 
   const showSemanticObjects =
@@ -506,10 +598,11 @@ function Scene({
     [];
 
   const centroid = useMemo(() => {
-    const c = mission?.reconstruction?.centroid;
+    const c =
+      reconstructionMeta?.centroid || mission?.reconstruction?.centroid;
     if (Array.isArray(c) && c.length === 3) return c;
-    return [1.85, -0.91, 5.43];
-  }, [mission]);
+    return [0.0, 1.5, 2.0];
+  }, [mission, reconstructionMeta]);
 
   // Handle bounds calculation and automatic viewport framing
   const handleBoundsComputed = useCallback(
@@ -520,24 +613,37 @@ function Scene({
 
       if (!hasAutoFramedRef.current && controlsRef.current) {
         hasAutoFramedRef.current = true;
-        const [cx, cy, cz] = bounds.center;
-        const r = bounds.radius;
+        // Focus on the reconstruction corridor centroid rather than distant background geometry
+        const focusTarget =
+          Array.isArray(centroid) && centroid.length === 3
+            ? centroid
+            : bounds.center;
+        const [cx, cy, cz] = focusTarget;
+        const r = Math.min(bounds.radius || 15, 16.0);
         const fov = 45;
         const dist = (r / Math.sin((fov * Math.PI) / 360)) * 1.15;
         const camera = controlsRef.current.object;
-        camera.position.set(cx + dist * 0.45, cy + dist * 0.65, cz + dist * 0.75);
+        camera.position.set(
+          cx + dist * 0.45,
+          cy + dist * 0.65,
+          cz + dist * 0.75,
+        );
         camera.lookAt(cx, cy, cz);
         controlsRef.current.target.set(cx, cy, cz);
         controlsRef.current.update();
       }
     },
-    [onBoundsReady]
+    [onBoundsReady, centroid],
   );
 
   // Respond to cameraTarget prop
   useEffect(() => {
     if (!cameraTarget || !controlsRef.current) return;
-    controlsRef.current.target.set(cameraTarget[0], cameraTarget[1], cameraTarget[2]);
+    controlsRef.current.target.set(
+      cameraTarget[0],
+      cameraTarget[1],
+      cameraTarget[2],
+    );
     controlsRef.current.update();
   }, [cameraTarget]);
 
@@ -583,7 +689,8 @@ function Scene({
   }, [cameraActionsRef, modelBounds, centroid]);
 
   const gridY = modelBounds?.center
-    ? modelBounds.center[1] - (modelBounds.size?.[1] ? modelBounds.size[1] / 2 + 1 : 8)
+    ? modelBounds.center[1] -
+      (modelBounds.size?.[1] ? modelBounds.size[1] / 2 + 1 : 8)
     : centroid[1] - 8;
 
   return (
@@ -594,8 +701,16 @@ function Scene({
       {/* Realistic Environment Lighting */}
       <ambientLight intensity={0.5} />
       <hemisphereLight args={["#b4f0ff", "#1e293b", 0.85]} />
-      <directionalLight position={[50, 100, 60]} intensity={2.0} color="#ffffff" />
-      <directionalLight position={[-40, 30, -30]} intensity={0.6} color="#93c5fd" />
+      <directionalLight
+        position={[50, 100, 60]}
+        intensity={2.0}
+        color="#ffffff"
+      />
+      <directionalLight
+        position={[-40, 30, -30]}
+        intensity={0.6}
+        color="#93c5fd"
+      />
 
       {/* Ground Grid */}
       {layers.grid !== false && (
@@ -632,7 +747,8 @@ function Scene({
           {showCameraTrajectory && (
             <CameraTrajectory
               poses={poses}
-              onSelectCamera={(cam) => console.log("Selected camera:", cam)}
+              onSelectCamera={onSelectCamera}
+              selectedCameraId={selectedCameraId}
             />
           )}
 
@@ -703,12 +819,14 @@ export default function ReconstructionViewer({
   cameraTarget,
   activeTool = "select",
   onToggleLayer,
+  onSelectCamera,
   viewerRef,
   hideEmbeddedControls = false,
 }) {
   const containerRef = useRef();
   const cameraActionsRef = useRef({});
   const [internalLayers, setInternalLayers] = useState({});
+  const [selectedCameraId, setSelectedCameraId] = useState(null);
 
   const toggleFullscreen = useCallback(() => {
     if (!containerRef.current) return;
@@ -734,7 +852,7 @@ export default function ReconstructionViewer({
   // Merge parent layers with any local toggle overrides
   const effectiveLayers = useMemo(
     () => ({ ...layers, ...internalLayers }),
-    [layers, internalLayers]
+    [layers, internalLayers],
   );
 
   const toggleLayer = (key) => {
@@ -759,6 +877,15 @@ export default function ReconstructionViewer({
       }));
     }
   };
+
+  const handleSelectCamera = useCallback(
+    (camera) => {
+      const cameraId = camera?.image_name || camera?.image_id || null;
+      setSelectedCameraId(cameraId);
+      onSelectCamera?.(camera);
+    },
+    [onSelectCamera],
+  );
 
   const meshUrl =
     propMeshUrl ||
@@ -801,7 +928,12 @@ export default function ReconstructionViewer({
     <div
       ref={containerRef}
       className="reconstruction-canvas"
-      style={{ width: "100%", height: "100%", position: "relative", overflow: "hidden" }}
+      style={{
+        width: "100%",
+        height: "100%",
+        position: "relative",
+        overflow: "hidden",
+      }}
     >
       <WebGLBoundary>
         <Canvas
@@ -826,6 +958,8 @@ export default function ReconstructionViewer({
               cameraTarget={cameraTarget}
               activeTool={activeTool}
               cameraActionsRef={cameraActionsRef}
+              onSelectCamera={handleSelectCamera}
+              selectedCameraId={selectedCameraId}
             />
           </Suspense>
         </Canvas>
@@ -850,16 +984,41 @@ export default function ReconstructionViewer({
             zIndex: 10,
           }}
         >
-          <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" strokeWidth="1.5" style={{ marginBottom: "12px", opacity: 0.8 }}>
+          <svg
+            width="36"
+            height="36"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="#38bdf8"
+            strokeWidth="1.5"
+            style={{ marginBottom: "12px", opacity: 0.8 }}
+          >
             <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
             <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
             <line x1="12" y1="22.08" x2="12" y2="12" />
           </svg>
-          <h4 style={{ margin: "0 0 6px 0", color: "#f1f5f9", fontSize: "14px", fontWeight: 600 }}>
+          <h4
+            style={{
+              margin: "0 0 6px 0",
+              color: "#f1f5f9",
+              fontSize: "14px",
+              fontWeight: 600,
+            }}
+          >
             No Reconstructed Geometry Available
           </h4>
-          <p style={{ margin: 0, fontSize: "11px", maxWidth: "320px", lineHeight: 1.5, color: "#94a3b8" }}>
-            This mission does not have an active 3D surface mesh or point cloud on disk. Run photogrammetric reconstruction in Flight Processing to generate geometry.
+          <p
+            style={{
+              margin: 0,
+              fontSize: "11px",
+              maxWidth: "320px",
+              lineHeight: 1.5,
+              color: "#94a3b8",
+            }}
+          >
+            This mission does not have an active 3D surface mesh or point cloud
+            on disk. Run photogrammetric reconstruction in Flight Processing to
+            generate geometry.
           </p>
         </div>
       )}
@@ -876,8 +1035,8 @@ export default function ReconstructionViewer({
               {hasMesh
                 ? "PRIMARY SURFACE MESH"
                 : hasPointCloud
-                ? "POINT CLOUD (Mesh not yet generated)"
-                : "NO RECONSTRUCTION DATA"}
+                  ? "POINT CLOUD (Mesh not yet generated)"
+                  : "NO RECONSTRUCTION DATA"}
             </b>
           </div>
 
@@ -894,13 +1053,53 @@ export default function ReconstructionViewer({
             }}
           >
             {[
-              { key: "pointsOnly", label: "Points Only", available: hasPointCloud, active: effectiveLayers.pointsOnly === true },
-              { key: "mesh", label: "Mesh", available: hasMesh, active: effectiveLayers.mesh !== false && effectiveLayers.pointsOnly !== true },
-              { key: "pointCloud", label: "Cloud Overlay", available: hasPointCloud, active: effectiveLayers.pointCloud === true || effectiveLayers.pointsOnly === true || (!hasMesh && effectiveLayers.pointCloud !== false) },
-              { key: "semanticObjects", label: "Objects", available: true, active: effectiveLayers.semanticObjects !== false },
-              { key: "cameraTrajectory", label: "Flight", available: true, active: effectiveLayers.cameraTrajectory !== false },
-              { key: "grid", label: "Grid", available: true, active: effectiveLayers.grid !== false },
-              { key: "labels", label: "Labels", available: true, active: effectiveLayers.labels !== false },
+              {
+                key: "pointsOnly",
+                label: "Points Only",
+                available: hasPointCloud,
+                active: effectiveLayers.pointsOnly === true,
+              },
+              {
+                key: "mesh",
+                label: "Mesh",
+                available: hasMesh,
+                active:
+                  effectiveLayers.mesh !== false &&
+                  effectiveLayers.pointsOnly !== true,
+              },
+              {
+                key: "pointCloud",
+                label: "Cloud Overlay",
+                available: hasPointCloud,
+                active:
+                  effectiveLayers.pointCloud === true ||
+                  effectiveLayers.pointsOnly === true ||
+                  (!hasMesh && effectiveLayers.pointCloud !== false),
+              },
+              {
+                key: "semanticObjects",
+                label: "Objects",
+                available: true,
+                active: effectiveLayers.semanticObjects !== false,
+              },
+              {
+                key: "cameraTrajectory",
+                label: "Flight",
+                available: true,
+                active: effectiveLayers.cameraTrajectory !== false,
+              },
+              {
+                key: "grid",
+                label: "Grid",
+                available: true,
+                active: effectiveLayers.grid !== false,
+              },
+              {
+                key: "labels",
+                label: "Labels",
+                available: true,
+                active: effectiveLayers.labels !== false,
+              },
             ].map(({ key, label, available, active }) => {
               return (
                 <button
@@ -908,9 +1107,18 @@ export default function ReconstructionViewer({
                   onClick={() => toggleLayer(key)}
                   disabled={!available}
                   style={{
-                    background: active && available ? "rgba(34, 211, 238, 0.2)" : "rgba(6, 16, 23, 0.75)",
-                    border: active && available ? "1px solid #22d3ee" : "1px solid rgba(255, 255, 255, 0.15)",
-                    color: active && available ? "#38d7ff" : "rgba(255, 255, 255, 0.5)",
+                    background:
+                      active && available
+                        ? "rgba(34, 211, 238, 0.2)"
+                        : "rgba(6, 16, 23, 0.75)",
+                    border:
+                      active && available
+                        ? "1px solid #22d3ee"
+                        : "1px solid rgba(255, 255, 255, 0.15)",
+                    color:
+                      active && available
+                        ? "#38d7ff"
+                        : "rgba(255, 255, 255, 0.5)",
                     borderRadius: "14px",
                     padding: "3px 10px",
                     fontSize: "11px",
@@ -1001,37 +1209,73 @@ export default function ReconstructionViewer({
             boxShadow: "0 8px 24px rgba(0, 0, 0, 0.5)",
           }}
         >
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              marginBottom: "8px",
+            }}
+          >
             <span style={{ fontWeight: 700, color: "#fbbf24" }}>
               {selectedObject.object_id || selectedObject.track_id}
             </span>
             <button
               onClick={() => onSelectObject?.(null)}
-              style={{ background: "transparent", border: "none", color: "rgba(255,255,255,0.6)", cursor: "pointer", fontSize: "14px" }}
+              style={{
+                background: "transparent",
+                border: "none",
+                color: "rgba(255,255,255,0.6)",
+                cursor: "pointer",
+                fontSize: "14px",
+              }}
               title="Close card"
             >
               ✕
             </button>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-            <div>Class: <b style={{ color: "#38d7ff" }}>{selectedObject.class || selectedObject.class_name}</b></div>
+            <div>
+              Class:{" "}
+              <b style={{ color: "#38d7ff" }}>
+                {selectedObject.class || selectedObject.class_name}
+              </b>
+            </div>
             {selectedObject.position_3d && (
               <div>
-                3D Pos: <span style={{ fontFamily: "monospace", color: "#e2e8f0" }}>
-                  [{selectedObject.position_3d.map((v) => Number(v).toFixed(2)).join(", ")}]
+                3D Pos:{" "}
+                <span style={{ fontFamily: "monospace", color: "#e2e8f0" }}>
+                  [
+                  {selectedObject.position_3d
+                    .map((v) => Number(v).toFixed(2))
+                    .join(", ")}
+                  ]
                 </span>
               </div>
             )}
             <div>
-              Motion: <b style={{ color: selectedObject.motion_state === "MOVING" ? "#f97316" : "#22d3ee" }}>
+              Motion:{" "}
+              <b
+                style={{
+                  color:
+                    selectedObject.motion_state === "MOVING"
+                      ? "#f97316"
+                      : "#22d3ee",
+                }}
+              >
                 {selectedObject.motion_state || "STATIC"}
               </b>
             </div>
             {selectedObject.association_status && (
-              <div>Status: <span>{selectedObject.association_status}</span></div>
+              <div>
+                Status: <span>{selectedObject.association_status}</span>
+              </div>
             )}
             {selectedObject.reprojection_error && (
-              <div>Reproj Error: <span>{selectedObject.reprojection_error} px</span></div>
+              <div>
+                Reproj Error:{" "}
+                <span>{selectedObject.reprojection_error} px</span>
+              </div>
             )}
           </div>
         </div>
@@ -1064,11 +1308,25 @@ export default function ReconstructionViewer({
             }}
           >
             <div style={{ fontSize: "28px", marginBottom: "8px" }}>📦</div>
-            <h4 style={{ margin: "0 0 8px 0", color: "#38d7ff", fontSize: "16px" }}>
+            <h4
+              style={{
+                margin: "0 0 8px 0",
+                color: "#38d7ff",
+                fontSize: "16px",
+              }}
+            >
               Awaiting 3D Reconstruction
             </h4>
-            <p style={{ margin: 0, fontSize: "12px", color: "rgba(255, 255, 255, 0.65)", lineHeight: 1.5 }}>
-              No photogrammetry model generated yet for this mission. Upload a drone video and run the pipeline to produce the 3D surface mesh.
+            <p
+              style={{
+                margin: 0,
+                fontSize: "12px",
+                color: "rgba(255, 255, 255, 0.65)",
+                lineHeight: 1.5,
+              }}
+            >
+              No photogrammetry model generated yet for this mission. Upload a
+              drone video and run the pipeline to produce the 3D surface mesh.
             </p>
           </div>
         </div>
@@ -1084,8 +1342,8 @@ export default function ReconstructionViewer({
         {hasMesh
           ? `AUTHORITATIVE REAL 3D MESH (${meshVertices ? `${meshVertices.toLocaleString()} vertices` : "Poisson Mesh"} · Scale: ${scaleStatus})`
           : hasPointCloud
-          ? `POINT CLOUD ONLY (${pointCount ? `${Number(pointCount).toLocaleString()} points` : "Dense Cloud"} · Mesh not yet generated)`
-          : "NO 3D MODEL AVAILABLE (Awaiting reconstruction)"}
+            ? `POINT CLOUD ONLY (${pointCount ? `${Number(pointCount).toLocaleString()} points` : "Dense Cloud"} · Mesh not yet generated)`
+            : "NO 3D MODEL AVAILABLE (Awaiting reconstruction)"}
       </div>
 
       {/* Legend */}

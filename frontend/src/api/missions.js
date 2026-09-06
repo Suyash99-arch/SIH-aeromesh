@@ -6,7 +6,9 @@
 import { missions as seededMissions } from "../data/missions";
 
 // API base URL
-const API_BASE = (typeof import.meta !== "undefined" && import.meta.env?.VITE_API_BASE_URL) || "http://localhost:8000/api";
+const API_BASE =
+  (typeof import.meta !== "undefined" && import.meta.env?.VITE_API_BASE_URL) ||
+  "http://localhost:8000/api";
 
 const fallbackMission = {
   id: "sector-04",
@@ -89,6 +91,10 @@ export function resolveAssetUrl(url) {
 }
 
 function normalizeMission(rawMission = {}) {
+  const mId = rawMission.id || rawMission.mission_id || "";
+  const seeded = getSeededMission(mId);
+  const baseDefaults = seeded || fallbackMission;
+
   const videoUrl = rawMission.video?.url || rawMission.videoUrl || "";
 
   let duration = rawMission.duration;
@@ -96,51 +102,64 @@ function normalizeMission(rawMission = {}) {
     rawMission.video?.duration_seconds ??
     rawMission.video?.durationSeconds ??
     rawMission.durationSeconds;
-  if (!duration || duration === "00:00") {
+  if (!duration || duration === "00:00" || duration === "—") {
     if (typeof durationSec === "number" && durationSec > 0) {
       const mins = Math.floor(durationSec / 60);
       const secs = Math.round(durationSec % 60);
       duration = `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
     } else {
-      duration = "—";
+      duration = baseDefaults.duration || "—";
     }
   }
 
+  const frames =
+    rawMission.frames ||
+    rawMission.video?.total_frames ||
+    rawMission.video?.totalFrames ||
+    baseDefaults.frames ||
+    125;
+
   const mission = {
-    ...fallbackMission,
+    ...baseDefaults,
     ...rawMission,
+    frames,
     duration,
-    objects: { ...fallbackMission.objects, ...(rawMission.objects || {}) },
+    objects: { ...baseDefaults.objects, ...(rawMission.objects || {}) },
     telemetry: {
-      ...fallbackMission.telemetry,
+      ...baseDefaults.telemetry,
       ...(rawMission.telemetry || {}),
     },
-    quality: { ...fallbackMission.quality, ...(rawMission.quality || {}) },
+    quality: { ...baseDefaults.quality, ...(rawMission.quality || {}) },
     reconstruction: {
-      ...fallbackMission.reconstruction,
+      ...baseDefaults.reconstruction,
       ...(rawMission.reconstruction || {}),
     },
     measurements: {
-      ...fallbackMission.measurements,
+      ...baseDefaults.measurements,
       ...(rawMission.measurements || {}),
     },
-    findings: Array.isArray(rawMission.findings) ? rawMission.findings : [],
-    recommendations: Array.isArray(rawMission.recommendations)
+    findings: Array.isArray(rawMission.findings) && rawMission.findings.length > 0
+      ? rawMission.findings
+      : (baseDefaults.findings || []),
+    recommendations: Array.isArray(rawMission.recommendations) && rawMission.recommendations.length > 0
       ? rawMission.recommendations
-      : fallbackMission.recommendations,
+      : (baseDefaults.recommendations || fallbackMission.recommendations),
     assets: {
+      ...(baseDefaults.assets || {}),
       ...(rawMission.assets || {}),
-      video: videoUrl || rawMission.assets?.video || "",
+      video: resolveAssetUrl(videoUrl || rawMission.assets?.video || baseDefaults.assets?.video || ""),
       pointCloud: resolveAssetUrl(
         rawMission.reconstruction?.point_cloud_url ||
-        rawMission.assets?.pointCloud ||
-        rawMission.reconstruction?.pointCloud ||
-        ""
+          rawMission.assets?.pointCloud ||
+          rawMission.reconstruction?.pointCloud ||
+          baseDefaults.assets?.pointCloud ||
+          "",
       ),
       mesh: resolveAssetUrl(
         rawMission.reconstruction?.mesh_url ||
-        rawMission.assets?.mesh ||
-        ""
+          rawMission.assets?.mesh ||
+          baseDefaults.assets?.mesh ||
+          "",
       ),
     },
   };
@@ -251,7 +270,8 @@ export async function getMission(missionId) {
 
     const data = await parseResponse(response);
     if (data.success) {
-      const mission = normalizeMission(data.mission);
+      const seeded = getSeededMission(missionId);
+      const mission = normalizeMission({ ...(seeded || {}), ...(data.mission || {}) });
       missionCache.set(missionId, mission);
       console.log(`[Mission] Loaded mission ${missionId} from API`, {
         video: mission.video?.url || "no video",
@@ -370,11 +390,13 @@ export async function processVideo(
   inferenceResolution = 640,
   detectionConfidence = 0.35,
   reconstructionQuality = "medium",
+  sceneProfile = "road",
 ) {
   try {
     console.log(`[Process] Starting processing for mission ${missionId}`, {
       frameSampling,
       detectionConfidence,
+      sceneProfile,
     });
 
     const params = new URLSearchParams({
@@ -382,6 +404,7 @@ export async function processVideo(
       inference_resolution: inferenceResolution,
       detection_confidence: detectionConfidence,
       reconstruction_quality: reconstructionQuality,
+      scene_profile: sceneProfile,
     });
 
     const response = await fetch(
@@ -488,7 +511,10 @@ export async function downloadReportPdf(missionId) {
       try {
         const errJson = await response.json();
         if (errJson.detail) {
-          errorDetail = typeof errJson.detail === "string" ? errJson.detail : JSON.stringify(errJson.detail);
+          errorDetail =
+            typeof errJson.detail === "string"
+              ? errJson.detail
+              : JSON.stringify(errJson.detail);
         }
       } catch {
         // Not JSON
@@ -536,7 +562,9 @@ export function getExportPackageUrl(missionId) {
 
 export async function fetchGeoJsonStatus(missionId) {
   try {
-    const response = await fetch(`${API_BASE}/missions/${missionId}/export/geojson`);
+    const response = await fetch(
+      `${API_BASE}/missions/${missionId}/export/geojson`,
+    );
     return await response.json();
   } catch (error) {
     console.error("GeoJSON status error:", error);
@@ -554,9 +582,12 @@ export function getCachedMissions() {
 
 export async function fetchCalibrations(missionId) {
   try {
-    const response = await fetch(`${API_BASE}/missions/${missionId}/calibrations`, {
-      headers: getAuthHeaders(),
-    });
+    const response = await fetch(
+      `${API_BASE}/missions/${missionId}/calibrations`,
+      {
+        headers: getAuthHeaders(),
+      },
+    );
     return await response.json();
   } catch (error) {
     console.error("fetchCalibrations error:", error);
@@ -566,11 +597,14 @@ export async function fetchCalibrations(missionId) {
 
 export async function calibrateReferenceDistance(missionId, payload) {
   try {
-    const response = await fetch(`${API_BASE}/missions/${missionId}/calibrations/reference-distance`, {
-      method: "POST",
-      headers: getAuthHeaders({ "Content-Type": "application/json" }),
-      body: JSON.stringify(payload),
-    });
+    const response = await fetch(
+      `${API_BASE}/missions/${missionId}/calibrations/reference-distance`,
+      {
+        method: "POST",
+        headers: getAuthHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify(payload),
+      },
+    );
     return await response.json();
   } catch (error) {
     console.error("calibrateReferenceDistance error:", error);
@@ -580,10 +614,13 @@ export async function calibrateReferenceDistance(missionId, payload) {
 
 export async function deactivateCalibrations(missionId) {
   try {
-    const response = await fetch(`${API_BASE}/missions/${missionId}/calibrations/deactivate`, {
-      method: "POST",
-      headers: getAuthHeaders(),
-    });
+    const response = await fetch(
+      `${API_BASE}/missions/${missionId}/calibrations/deactivate`,
+      {
+        method: "POST",
+        headers: getAuthHeaders(),
+      },
+    );
     return await response.json();
   } catch (error) {
     console.error("deactivateCalibrations error:", error);
@@ -593,11 +630,14 @@ export async function deactivateCalibrations(missionId) {
 
 export async function measureDistance3D(missionId, payload) {
   try {
-    const response = await fetch(`${API_BASE}/missions/${missionId}/measurements/distance`, {
-      method: "POST",
-      headers: getAuthHeaders({ "Content-Type": "application/json" }),
-      body: JSON.stringify(payload),
-    });
+    const response = await fetch(
+      `${API_BASE}/missions/${missionId}/measurements/distance`,
+      {
+        method: "POST",
+        headers: getAuthHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify(payload),
+      },
+    );
     return await response.json();
   } catch (error) {
     console.error("measureDistance3D error:", error);
@@ -607,11 +647,14 @@ export async function measureDistance3D(missionId, payload) {
 
 export async function measurePolygon3D(missionId, payload) {
   try {
-    const response = await fetch(`${API_BASE}/missions/${missionId}/measurements/polygon`, {
-      method: "POST",
-      headers: getAuthHeaders({ "Content-Type": "application/json" }),
-      body: JSON.stringify(payload),
-    });
+    const response = await fetch(
+      `${API_BASE}/missions/${missionId}/measurements/polygon`,
+      {
+        method: "POST",
+        headers: getAuthHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify(payload),
+      },
+    );
     return await response.json();
   } catch (error) {
     console.error("measurePolygon3D error:", error);
@@ -621,11 +664,14 @@ export async function measurePolygon3D(missionId, payload) {
 
 export async function measureElevation3D(missionId, payload) {
   try {
-    const response = await fetch(`${API_BASE}/missions/${missionId}/measurements/elevation`, {
-      method: "POST",
-      headers: getAuthHeaders({ "Content-Type": "application/json" }),
-      body: JSON.stringify(payload),
-    });
+    const response = await fetch(
+      `${API_BASE}/missions/${missionId}/measurements/elevation`,
+      {
+        method: "POST",
+        headers: getAuthHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify(payload),
+      },
+    );
     return await response.json();
   } catch (error) {
     console.error("measureElevation3D error:", error);
@@ -635,11 +681,14 @@ export async function measureElevation3D(missionId, payload) {
 
 export async function measureObject3D(missionId, objectId, payload = {}) {
   try {
-    const response = await fetch(`${API_BASE}/missions/${missionId}/measurements/object/${objectId}`, {
-      method: "POST",
-      headers: getAuthHeaders({ "Content-Type": "application/json" }),
-      body: JSON.stringify(payload),
-    });
+    const response = await fetch(
+      `${API_BASE}/missions/${missionId}/measurements/object/${objectId}`,
+      {
+        method: "POST",
+        headers: getAuthHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify(payload),
+      },
+    );
     return await response.json();
   } catch (error) {
     console.error("measureObject3D error:", error);
@@ -649,11 +698,14 @@ export async function measureObject3D(missionId, objectId, payload = {}) {
 
 export async function measureVolume3D(missionId, payload = {}) {
   try {
-    const response = await fetch(`${API_BASE}/missions/${missionId}/measurements/volume`, {
-      method: "POST",
-      headers: getAuthHeaders({ "Content-Type": "application/json" }),
-      body: JSON.stringify(payload),
-    });
+    const response = await fetch(
+      `${API_BASE}/missions/${missionId}/measurements/volume`,
+      {
+        method: "POST",
+        headers: getAuthHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify(payload),
+      },
+    );
     return await response.json();
   } catch (error) {
     console.error("measureVolume3D error:", error);
@@ -663,9 +715,12 @@ export async function measureVolume3D(missionId, payload = {}) {
 
 export async function fetchSemanticScene(missionId) {
   try {
-    const response = await fetch(`${API_BASE}/missions/${missionId}/semantic-scene`, {
-      headers: getAuthHeaders(),
-    });
+    const response = await fetch(
+      `${API_BASE}/missions/${missionId}/semantic-scene`,
+      {
+        headers: getAuthHeaders(),
+      },
+    );
     return await response.json();
   } catch (error) {
     console.error("fetchSemanticScene error:", error);
@@ -675,9 +730,12 @@ export async function fetchSemanticScene(missionId) {
 
 export async function fetchObjects3D(missionId) {
   try {
-    const response = await fetch(`${API_BASE}/missions/${missionId}/objects-3d`, {
-      headers: getAuthHeaders(),
-    });
+    const response = await fetch(
+      `${API_BASE}/missions/${missionId}/objects-3d`,
+      {
+        headers: getAuthHeaders(),
+      },
+    );
     return await response.json();
   } catch (error) {
     console.error("fetchObjects3D error:", error);
@@ -687,9 +745,12 @@ export async function fetchObjects3D(missionId) {
 
 export async function fetchObjectEvidence(missionId, objectId) {
   try {
-    const response = await fetch(`${API_BASE}/missions/${missionId}/objects/${objectId}/evidence`, {
-      headers: getAuthHeaders(),
-    });
+    const response = await fetch(
+      `${API_BASE}/missions/${missionId}/objects/${objectId}/evidence`,
+      {
+        headers: getAuthHeaders(),
+      },
+    );
     return await response.json();
   } catch (error) {
     console.error("fetchObjectEvidence error:", error);
@@ -699,9 +760,12 @@ export async function fetchObjectEvidence(missionId, objectId) {
 
 export async function fetchReconstruction(missionId) {
   try {
-    const response = await fetch(`${API_BASE}/missions/${missionId}/reconstruction`, {
-      headers: getAuthHeaders(),
-    });
+    const response = await fetch(
+      `${API_BASE}/missions/${missionId}/reconstruction`,
+      {
+        headers: getAuthHeaders(),
+      },
+    );
     return await response.json();
   } catch (error) {
     console.error("fetchReconstruction error:", error);
@@ -809,5 +873,3 @@ export async function fetchDemoUsers() {
     return [];
   }
 }
-
-

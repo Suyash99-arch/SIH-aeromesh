@@ -341,32 +341,39 @@ def _run_pycolmap_sfm(
         progress_cb("Extracting SIFT features", 30)
 
     # 1. Feature extraction with memory-safe CPU options and single drone camera
-    extraction_options = pycolmap.FeatureExtractionOptions()
+    extraction_options = pycolmap.SiftExtractionOptions()
     extraction_options.max_image_size = 1920
     extraction_options.num_threads = min(os.cpu_count() or 4, 4)
-    extraction_options.use_gpu = False
+    extraction_options.gpu_index = "-1"
 
     reader_options = pycolmap.ImageReaderOptions()
-    reader_options.camera_model = "SIMPLE_PINHOLE"
 
     pycolmap.extract_features(
-        database_path=database_path,
-        image_path=frames_dir,
+        database_path=str(database_path),
+        image_path=str(frames_dir),
         camera_mode=pycolmap.CameraMode.SINGLE,
+        camera_model="SIMPLE_PINHOLE",
         reader_options=reader_options,
-        extraction_options=extraction_options,
+        sift_options=extraction_options,
+        device=pycolmap.Device.cpu,
     )
 
     if progress_cb:
         progress_cb("Matching visual features across frames", 55)
 
     # 2. Exhaustive feature matching with sequential fallback
-    matching_options = pycolmap.FeatureMatchingOptions()
+    matching_options = pycolmap.SiftMatchingOptions()
     matching_options.num_threads = min(os.cpu_count() or 4, 4)
-    matching_options.use_gpu = False
+    matching_options.gpu_index = "-1"
+    exhaustive_options = pycolmap.ExhaustiveMatchingOptions()
 
     try:
-        pycolmap.match_exhaustive(database_path=database_path, matching_options=matching_options)
+        pycolmap.match_exhaustive(
+            database_path=str(database_path),
+            sift_options=matching_options,
+            matching_options=exhaustive_options,
+            device=pycolmap.Device.cpu,
+        )
     except Exception as exc:
         logger.info("Exhaustive match notice, attempting sequential match: %s", exc)
         try:
@@ -384,7 +391,7 @@ def _run_pycolmap_sfm(
     inc_options.ba_refine_principal_point = False
     inc_options.mapper.init_min_tri_angle = 3.0
     inc_options.mapper.init_max_forward_motion = 0.99
-    inc_options.mapper.ba_local_min_tri_angle = 1.5
+    inc_options.mapper.local_ba_min_tri_angle = 1.5
     inc_options.mapper.abs_pose_min_num_inliers = 15
 
     reconstructions = pycolmap.incremental_mapping(
@@ -681,6 +688,7 @@ def run_reconstruction_pipeline(
     scale_info = evaluate_scale_and_georeference(has_gps=False)
 
     if not sfm_res.get("success"):
+        logger.error(f"[DEBUG] SfM FAILED for mission {mission_id}: {sfm_res.get('error')}")
         return {
             "success": False,
             "status": ReconstructionStatus.FAILED.value,
@@ -706,6 +714,16 @@ def run_reconstruction_pipeline(
         final_status = ReconstructionStatus.PARTIAL.value
 
     duration_s = round(time.time() - started, 2)
+
+    logger.info(
+        "[DEBUG RECONSTRUCTION] Mission %s: Sparse=%s points, Cameras=%s, "
+        "Reprojection error=%.2fpx, Final status=%s",
+        mission_id,
+        sfm_res["sparse_point_count"],
+        sfm_res["registered_cameras"],
+        sfm_res["mean_reprojection_error"],
+        final_status,
+    )
 
     return {
         "success": True,

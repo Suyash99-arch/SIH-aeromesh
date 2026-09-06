@@ -210,7 +210,18 @@ class TriangleMesh:
                     raw_verts = np.fromfile(f, dtype=dt_vertex, count=num_verts)
                     vertices = np.column_stack([raw_verts["x"], raw_verts["y"], raw_verts["z"]]).astype(np.float64)
 
-                    dt_face = np.dtype([("n", "<i4"), ("v0", "<i4"), ("v1", "<i4"), ("v2", "<i4")])
+                    # Determine face count type from header properties
+                    face_count_type = "u1"
+                    for line in header_lines:
+                        if line.startswith("property list"):
+                            parts = line.split()
+                            if len(parts) >= 3:
+                                if parts[2] in ["uchar", "uint8", "u1"]:
+                                    face_count_type = "u1"
+                                elif parts[2] in ["int", "int32", "uint", "uint32"]:
+                                    face_count_type = "<i4"
+
+                    dt_face = np.dtype([("n", face_count_type), ("v0", "<i4"), ("v1", "<i4"), ("v2", "<i4")])
                     raw_faces = np.fromfile(f, dtype=dt_face, count=num_faces)
                     faces = np.column_stack([raw_faces["v0"], raw_faces["v1"], raw_faces["v2"]]).astype(np.int32)
                     return cls(vertices, faces)
@@ -224,7 +235,9 @@ class TriangleMesh:
                         parts = f.readline().decode("latin-1").split()
                         faces_data.append([int(parts[1]), int(parts[2]), int(parts[3])])
                     return cls(np.array(verts_data, dtype=np.float64), np.array(faces_data, dtype=np.int32))
-        except Exception:
+        except Exception as exc:
+            import logging
+            logging.getLogger(__name__).warning("Failed to load PLY mesh %s: %s", ply_path, exc)
             return None
 
     def intersect_ray(self, ray: CameraRay, max_distance: float = 500.0) -> tuple[np.ndarray | None, float | None]:

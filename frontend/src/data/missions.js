@@ -31,7 +31,7 @@ const warnDuplicateAssetPaths = (items) => {
       const current = paths.get(assetPath);
       if (current) {
         console.warn(
-          `[AeroMesh] Duplicate asset path detected for missions "${current}" and "${item.id}": ${assetPath}`,
+          `[Hexa Spark] Duplicate asset path detected for missions "${current}" and "${item.id}": ${assetPath}`,
         );
       } else {
         paths.set(assetPath, item.id);

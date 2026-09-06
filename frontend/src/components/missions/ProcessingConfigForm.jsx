@@ -10,6 +10,7 @@ export default function ProcessingConfigForm({ videoFile, onSubmit, loading }) {
     inferenceResolution: 640,
     detectionConfidence: 0.35,
     reconstructionQuality: "medium",
+    sceneProfile: "road",
   });
 
   const handleChange = (e) => {
@@ -31,18 +32,21 @@ export default function ProcessingConfigForm({ videoFile, onSubmit, loading }) {
       inferenceResolution: 416,
       detectionConfidence: 0.4,
       reconstructionQuality: "low",
+      sceneProfile: "road",
     },
     balanced: {
       frameSampling: 2,
       inferenceResolution: 640,
       detectionConfidence: 0.35,
       reconstructionQuality: "medium",
+      sceneProfile: "road",
     },
     quality: {
       frameSampling: 4,
       inferenceResolution: 1024,
       detectionConfidence: 0.3,
       reconstructionQuality: "high",
+      sceneProfile: "road",
     },
   };
 
@@ -173,6 +177,32 @@ export default function ProcessingConfigForm({ videoFile, onSubmit, loading }) {
               <option value="low">Low - Faster processing</option>
               <option value="medium">Medium - Balanced</option>
               <option value="high">High - Best quality</option>
+            </select>
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="sceneProfile">
+              Detection Class Profile
+              <span className="hint">Filter objects by mission type</span>
+            </label>
+            <select
+              id="sceneProfile"
+              name="sceneProfile"
+              value={config.sceneProfile}
+              onChange={handleChange}
+              disabled={loading}
+            >
+              <option value="road">Road Scene (vehicles, people, bikes)</option>
+              <option value="terrestrial_road">
+                Terrestrial Road (enhanced road detection)
+              </option>
+              <option value="rail">
+                Rail Scene (trains, people, vehicles)
+              </option>
+              <option value="maritime">Maritime Scene (boats, people)</option>
+              <option value="aerial">Aerial Scene (airplanes)</option>
+              <option value="all">All Classes (no filtering)</option>
+              <option value="default">Default (model-dependent)</option>
             </select>
           </div>
         </div>

@@ -29,6 +29,7 @@ export default function CreateMissionModal({ onClose, onMissionCreated }) {
     inferenceResolution: 640,
     detectionConfidence: 0.35,
     reconstructionQuality: "medium",
+    sceneProfile: "road",
   });
 
   const handleStepOneSubmit = useCallback(async (formData) => {
@@ -77,6 +78,7 @@ export default function CreateMissionModal({ onClose, onMissionCreated }) {
         processingConfig.inferenceResolution,
         processingConfig.detectionConfidence,
         processingConfig.reconstructionQuality,
+        processingConfig.sceneProfile,
       );
       await generateReconstruction(mission.id);
 

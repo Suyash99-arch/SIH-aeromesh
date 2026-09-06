@@ -12,19 +12,22 @@ export default function VideoPlayer({
 }) {
   const videoRef = useRef(null);
   const seekingRef = useRef(false);
-  const videoSrc = mission?.assets?.video || "";
+  // Canonical video URL - single source of truth
+  const videoSrc = mission?.assets?.video || mission?.video?.url || "";
   const hasVideoAsset = Boolean(videoSrc);
   const [failed, setFailed] = useState(false);
   const [loading, setLoading] = useState(Boolean(videoSrc));
   const [duration, setDuration] = useState(0);
 
+  const totalFrames = Math.max(1, mission?.frames || mission?.video?.total_frames || 125);
+
   useEffect(() => {
     const video = videoRef.current;
     if (!video || !duration || seekingRef.current) return;
-    const nextTime = ((frame - 1) / mission.frames) * duration;
+    const nextTime = ((frame - 1) / totalFrames) * duration;
     if (Math.abs(video.currentTime - nextTime) > 0.35)
       video.currentTime = nextTime;
-  }, [duration, frame, mission.frames]);
+  }, [duration, frame, totalFrames]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -41,10 +44,10 @@ export default function VideoPlayer({
     seekingRef.current = true;
     setFrame(
       Math.min(
-        mission.frames,
+        totalFrames,
         Math.max(
           1,
-          Math.round((video.currentTime / video.duration) * mission.frames),
+          Math.round((video.currentTime / video.duration) * totalFrames),
         ),
       ),
     );

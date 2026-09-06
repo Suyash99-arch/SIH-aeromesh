@@ -354,6 +354,14 @@
   padding: 90px 32px;
   max-width: 1400px;
   margin: 0 auto;
+  opacity: 0;
+  transform: translateY(28px);
+  transition: opacity 700ms ease, transform 700ms ease;
+}
+
+.workflow-section.is-visible {
+  opacity: 1;
+  transform: translateY(0);
   display: flex;
   flex-direction: column;
   gap: 36px;
@@ -459,7 +467,71 @@
   display: grid;
   grid-template-columns: 1fr 1.3fr;
   min-height: 480px;
+  animation: workflow-card-in 500ms ease both;
 }
+
+@keyframes workflow-card-in {
+  from {
+    opacity: 0.2;
+    transform: translateY(12px) scale(0.99);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.stage-canvas-wrapper {
+  animation: stage-visual-in 450ms ease both;
+}
+
+@keyframes stage-visual-in {
+  from {
+    opacity: 0;
+    transform: translateX(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+.stage-video-preview {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 10;
+  overflow: hidden;
+  background: #050b14;
+  border: 1px solid rgba(56, 189, 248, 0.24);
+}
+
+.stage-video-preview video {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.stage-video-label {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  padding: 5px 8px;
+  background: rgba(4, 9, 18, 0.82);
+  border: 1px solid rgba(56, 189, 248, 0.38);
+  color: #7dd3fc;
+  font: 700 10px/1 monospace;
+  letter-spacing: 0.08em;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workflow-section,
+  .workflow-stage-card,
+  .stage-canvas-wrapper {
+    animation: none;
+    transition: none;
+    transform: none;
+  }
 
 @media (max-width: 1024px) {
   .workflow-stage-card {

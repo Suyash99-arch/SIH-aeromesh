@@ -37,7 +37,7 @@ export default function App() {
   const [missionId, setMissionId] = useState(DEFAULT_MISSION_ID);
   const [toast, setToast] = useState(null);
   const [theme, setTheme] = useState(
-    () => localStorage.getItem("aeromesh-theme") || "dark",
+    () => localStorage.getItem("hexaspark-theme") || "dark",
   );
   const [showCreateMission, setShowCreateMission] = useState(false);
   const [mission, setMission] = useState(() =>
@@ -46,7 +46,7 @@ export default function App() {
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
-    localStorage.setItem("aeromesh-theme", theme);
+    localStorage.setItem("hexaspark-theme", theme);
   }, [theme]);
 
   useEffect(() => {

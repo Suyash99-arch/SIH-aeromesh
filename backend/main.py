@@ -142,7 +142,7 @@ if configured_engine is not None:
 # ============================================================
 
 app = FastAPI(
-    title="AeroMesh Backend",
+    title="Hexa Spark Backend",
     description="Single-Pass Drone Video to 3D Reconstruction",
     version="1.0.0",
 )
@@ -920,17 +920,25 @@ async def get_mission(mission_id: str):
     if not mission.data:
         raise HTTPException(status_code=404, detail="Mission not found")
     mission_dict = dict(mission.data)
+    
+    # Ensure canonical video URL is available in assets
+    assets = dict(mission_dict.get("assets") or {})
+    
+    # Set video asset from mission.video.url (canonical source)
+    if not assets.get("video") and mission_dict.get("video", {}).get("url"):
+        assets["video"] = mission_dict["video"]["url"]
+    
     recon_meta = get_reconstruction_metadata(mission_id)
     if recon_meta:
         existing_recon = mission_dict.get("reconstruction")
         merged_recon = {**(existing_recon if isinstance(existing_recon, dict) else {}), **recon_meta}
         mission_dict["reconstruction"] = merged_recon
-        assets = dict(mission_dict.get("assets") or {})
         if "point_cloud_url" in recon_meta and not assets.get("pointCloud"):
             assets["pointCloud"] = recon_meta["point_cloud_url"]
         if "mesh_url" in recon_meta and not assets.get("mesh"):
             assets["mesh"] = recon_meta["mesh_url"]
-        mission_dict["assets"] = assets
+    
+    mission_dict["assets"] = assets
     return {
         "success": True,
         "mission": mission_dict
@@ -953,10 +961,23 @@ async def list_missions():
                 m = json.load(f)
                 m_id = m.get("id")
                 if m_id:
+                    # Ensure canonical video URL in assets
+                    assets = dict(m.get("assets") or {})
+                    if not assets.get("video") and m.get("video", {}).get("url"):
+                        assets["video"] = m["video"]["url"]
+                    if assets:
+                        m["assets"] = assets
+                    
                     recon_meta = get_reconstruction_metadata(m_id)
                     if recon_meta:
                         existing_recon = m.get("reconstruction")
                         m["reconstruction"] = {**(existing_recon if isinstance(existing_recon, dict) else {}), **recon_meta}
+                        assets = dict(m.get("assets") or {})
+                        if "point_cloud_url" in recon_meta and not assets.get("pointCloud"):
+                            assets["pointCloud"] = recon_meta["point_cloud_url"]
+                        if "mesh_url" in recon_meta and not assets.get("mesh"):
+                            assets["mesh"] = recon_meta["mesh_url"]
+                        m["assets"] = assets
                 missions.append(m)
         except Exception:
             continue
@@ -1074,6 +1095,16 @@ async def download_storage_object(storage_key: str):
         raise HTTPException(status_code=400, detail=str(exc))
 
 
+@app.get("/api/missions/{mission_id}/video")
+async def get_mission_video(mission_id: str):
+    """Serve the canonical video for seeded missions without copying the asset."""
+    if mission_id == "north-ridge":
+        video_path = BASE_DIR / "frontend" / "public" / "assets" / "missions" / mission_id / "flight-video.mp4"
+        if video_path.exists():
+            return FileResponse(str(video_path), media_type="video/mp4", filename=video_path.name)
+    raise HTTPException(status_code=404, detail="Mission video not found")
+
+
 @app.post("/api/jobs")
 async def create_processing_job(
     mission_id: str = Query(...),
@@ -1173,7 +1204,7 @@ async def process_video(
     try:
         update_job(job["id"], status="EXTRACTING_FRAMES", stage="EXTRACTING_FRAMES", progress_percent=15, message="Analyzing video frames")
         real_summary = summarize_uploaded_video(video_path)
-        result = _basic_process(video_path, frame_sampling, detection_confidence)
+        result = _basic_process(video_path, frame_sampling, detection_confidence, scene_profile)
         result["video"] = {**video_info, **result.get("video", {}), **real_summary}
         result["processing"]["status"] = "COMPLETE"
         result["processing"]["warning"] = "YOLO model not available or no valid detections were confirmed from the uploaded video."
@@ -1342,7 +1373,7 @@ async def process_video(
         logger.error(f"Processing failed: {e}")
         raise HTTPException(status_code=500, detail=f"Processing failed: {str(e)}")
 
-def _basic_process(video_path: Path, sample_fps: int, confidence: float):
+def _basic_process(video_path: Path, sample_fps: int, confidence: float, scene_profile: Optional[str] = None):
     """Basic evidence-only processing when direct detection is unavailable."""
     cap = cv2.VideoCapture(str(video_path))
     fps = cap.get(cv2.CAP_PROP_FPS) or 30
@@ -1753,10 +1784,20 @@ def _object_payload(mission_id: str) -> dict:
         raise HTTPException(status_code=404, detail="Mission not found")
     detections = mission.get("detections") or {}
     tracks = mission.get("tracks") or []
+    if not tracks:
+        fused = _get_mission_fused_objects(mission_id, mission)
+        if fused:
+            tracks = fused
     observations = detections.get("observations") if isinstance(detections, dict) else []
+    counts_by_class = detections.get("byClass", {}) if isinstance(detections, dict) else {}
+    if not counts_by_class and tracks:
+        counts_by_class = {}
+        for trk in tracks:
+            cls = trk.get("class") or trk.get("class_name") or "object"
+            counts_by_class[cls] = counts_by_class.get(cls, 0) + 1
     return {"mission_id": mission_id, "detections": observations or [], "tracks": tracks, "summary": {
         "total_unique_objects": len(tracks),
-        "counts_by_class": detections.get("byClass", {}) if isinstance(detections, dict) else {},
+        "counts_by_class": counts_by_class,
     }}
 
 
@@ -1904,7 +1945,10 @@ async def get_mission_object_evidence(mission_id: str, object_id: str):
         overlay_path = obs.get("overlay_path", "")
         overlay_name = Path(overlay_path).name if overlay_path else f"overlay_{match.get('object_id')}_{frame_id}"
         
-        overlay_exists = (DATA_DIR / "validation" / "phase6" / overlay_name).exists()
+        overlay_exists = (
+            (DATA_DIR / "validation" / "phase6" / overlay_name).exists()
+            or (DATA_DIR / "missions" / mission_id / "evidence" / overlay_name).exists()
+        )
         overlay_url = f"/api/missions/{mission_id}/evidence/overlays/{overlay_name}" if overlay_exists else None
         frame_exists = (DATA_DIR / "missions" / mission_id / "reconstruction" / "frames" / frame_id).exists()
         frame_url = f"/api/missions/{mission_id}/evidence/frames/{frame_id}" if frame_exists else None
