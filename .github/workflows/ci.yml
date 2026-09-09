@@ -47,6 +47,11 @@ jobs:
         run: |
           python -m alembic heads
 
+      - name: Download Canonical Detection Weights for CI Test Suite
+        run: |
+          mkdir -p backend/models
+          python -c "import urllib.request; urllib.request.urlretrieve('https://github.com/ultralytics/assets/releases/download/v8.3.0/yolo11n.pt', 'backend/models/yolo11n.pt')"
+
       - name: Execute Security & Regression Test Suite
         run: |
           pytest backend/tests -v

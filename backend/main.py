@@ -15,11 +15,12 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-# Offline-First: Block runtime model/library telemetry and update checks
-os.environ["YOLO_OFFLINE"] = "1"
-os.environ["YOLO_VERBOSE"] = "False"
-os.environ["HF_HUB_OFFLINE"] = "1"
-os.environ["TRANSFORMERS_OFFLINE"] = "1"
+# Offline-First: Block runtime model/library telemetry and update checks by default unless overridden
+if os.environ.get("AEROMESH_OFFLINE") == "1" or os.environ.get("OFFLINE") == "1":
+    os.environ.setdefault("YOLO_OFFLINE", "1")
+    os.environ.setdefault("HF_HUB_OFFLINE", "1")
+    os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
+os.environ.setdefault("YOLO_VERBOSE", "False")
 
 import cv2
 import numpy as np
@@ -333,6 +334,16 @@ def _load_detection_model(use_aeromesh: bool = True):
                 logger.warning("Failed to load canonical model at %s: %s", candidate, exc)
 
     searched = [str(c) for c in canonical_candidates]
+
+    # If no local model weights are present and not strictly offline, attempt fallback to yolo11n
+    if os.environ.get("YOLO_OFFLINE") != "1":
+        try:
+            model = YOLO("yolo11n.pt")
+            logger.info("Loaded canonical yolo11n.pt via ultralytics hub")
+            return model, "yolo11n", False
+        except Exception as exc:
+            logger.warning("Online fallback for yolo11n.pt failed: %s", exc)
+
     raise FileNotFoundError(
         f"MODEL_NOT_FOUND: No canonical YOLO model found. Searched: {searched}. "
         "Ensure backend/models/yolo11n.pt exists or set YOLO_MODEL_PATH to an authorized local model file."

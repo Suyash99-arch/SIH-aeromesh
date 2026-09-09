@@ -379,13 +379,16 @@ def sanitize_filename(filename: str) -> str:
     if not filename:
         return f"upload_{int(time.time())}.mp4"
 
+    # Normalize separators so Windows paths are handled properly across POSIX and Windows
+    normalized = filename.replace("\\", "/")
+
     # Reject traversal patterns
-    if ".." in filename or "/" in filename or "\\" in filename:
+    if ".." in normalized or "/" in normalized:
         # Extract base name only
-        clean_name = Path(filename).name
-        clean_name = clean_name.replace("..", "").replace("/", "").replace("\\", "")
+        clean_name = Path(normalized).name
+        clean_name = clean_name.replace("..", "").replace("/", "")
     else:
-        clean_name = filename
+        clean_name = normalized
 
     # Remove dangerous characters
     clean_name = re.sub(r"[^a-zA-Z0-9._-]", "_", clean_name)

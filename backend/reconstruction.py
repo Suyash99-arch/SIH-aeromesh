@@ -522,11 +522,15 @@ def _compute_mesh_bounding_box(mesh_path: Path) -> Optional[Dict[str, List[float
         with open(mesh_path, "rb") as f:
             v_count = 0
             properties = []
+            in_vertex = False
             while True:
                 line = f.readline().decode("latin1").strip()
                 if line.startswith("element vertex"):
                     v_count = int(line.split()[-1])
-                elif line.startswith("property"):
+                    in_vertex = True
+                elif line.startswith("element"):
+                    in_vertex = False
+                elif line.startswith("property") and in_vertex:
                     parts = line.split()
                     properties.append((parts[1], parts[2]))
                 elif line == "end_header":
