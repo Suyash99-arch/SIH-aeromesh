@@ -17,6 +17,7 @@ jobs:
     env:
       AEROMESH_AUTH_OPTIONAL: "1"
       SECRET_KEY: "ci-secret-key-testing-environment-purposes-only-32bytes"
+      PYTHONPATH: "."
     steps:
       - name: Checkout Source Code
         uses: actions/checkout@v4
@@ -75,15 +76,13 @@ jobs:
   container-checks:
     name: Container Compose Configuration Validation
     runs-on: ubuntu-latest
+    env:
+      POSTGRES_PASSWORD: "ci-dummy-postgres-password"
+      SECRET_KEY: "ci-dummy-secret-key-for-validation-purposes-32b"
     steps:
       - name: Checkout Source Code
         uses: actions/checkout@v4
 
-      - name: Set up Python 3.12
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.12"
-
       - name: Validate Docker Compose Configuration Syntax
         run: |
-          python -c "import yaml; open('docker-compose.yml')"
+          docker compose config

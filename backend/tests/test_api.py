@@ -99,7 +99,7 @@ def test_processing_contract_without_model(client, monkeypatch, tmp_path):
         "error": "model unavailable",
     })
 
-    response = client.post(f"/api/missions/{mission['id']}/process")
+    response = client.post(f"/api/missions/{mission['id']}/process?sync=true")
 
     assert response.status_code == 200
     body = response.json()
