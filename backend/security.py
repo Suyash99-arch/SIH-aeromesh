@@ -32,14 +32,25 @@ from starlette.middleware.base import BaseHTTPMiddleware
 
 # ============================================================================
 # Configuration & Environment Variables
-# ============================================================================
+try:
+    from dotenv import load_dotenv
+    load_dotenv(Path(__file__).resolve().parent.parent / ".env")
+    load_dotenv(Path(__file__).resolve().parent / ".env")
+except ImportError:
+    pass
 
-SECRET_KEY = os.getenv("SECRET_KEY", "aeromesh-production-secret-key-replace-in-env-2026")
+SECRET_KEY = os.getenv("SECRET_KEY") or "aeromesh-dev-insecure-secret-key-change-in-env"
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
-JWT_EXPIRATION_MINUTES = int(os.getenv("JWT_EXPIRATION_MINUTES", "1440"))  # 24 hours
+JWT_EXPIRATION_MINUTES = int(os.getenv("JWT_EXPIRATION_MINUTES", "720"))  # 12 hours (operational shift duration)
 MAX_UPLOAD_SIZE_BYTES = int(os.getenv("MAX_UPLOAD_SIZE_BYTES", str(1024 * 1024 * 1024)))  # 1 GB
+
 RATE_LIMIT_PER_MINUTE = int(os.getenv("RATE_LIMIT_PER_MINUTE", "120"))
 AUTH_OPTIONAL_MODE = os.getenv("AEROMESH_AUTH_OPTIONAL", "1").lower() in ("1", "true", "yes")
+
+# Supported Seed User Passwords (configurable via environment variables)
+AEROMESH_ADMIN_PASSWORD = os.getenv("AEROMESH_DEMO_ADMIN_PASSWORD", "Admin123!")
+AEROMESH_ANALYST_PASSWORD = os.getenv("AEROMESH_DEMO_ANALYST_PASSWORD", "Analyst123!")
+AEROMESH_OPERATOR_PASSWORD = os.getenv("AEROMESH_DEMO_OPERATOR_PASSWORD", "Operator123!")
 
 # Allowed Video Extensions and MIME types
 ALLOWED_VIDEO_EXTENSIONS: Set[str] = {".mp4", ".mov", ".avi", ".mkv"}
@@ -129,23 +140,98 @@ DEMO_USERS: Dict[str, UserRecord] = {
         email="admin@aeromesh.internal",
         full_name="System Administrator",
         role=ROLE_ADMIN,
-        hashed_password=hash_password("Admin123!"),
+        hashed_password=hash_password(AEROMESH_ADMIN_PASSWORD),
     ),
     "analyst@aeromesh.internal": UserRecord(
         id="usr_analyst_002",
         email="analyst@aeromesh.internal",
         full_name="Mission Analyst",
         role=ROLE_ANALYST,
-        hashed_password=hash_password("Analyst123!"),
+        hashed_password=hash_password(AEROMESH_ANALYST_PASSWORD),
     ),
     "operator@aeromesh.internal": UserRecord(
         id="usr_operator_003",
         email="operator@aeromesh.internal",
         full_name="Drone Operator",
         role=ROLE_OPERATOR,
-        hashed_password=hash_password("Operator123!"),
+        hashed_password=hash_password(AEROMESH_OPERATOR_PASSWORD),
     ),
 }
+
+USERS_FILE: Path = Path(__file__).resolve().parent.parent / "data" / "users.json"
+_USERS_LOCK = Lock()
+
+
+def load_persistent_users() -> Dict[str, UserRecord]:
+    """Load persistent users from data/users.json if present."""
+    users: Dict[str, UserRecord] = {}
+    if USERS_FILE.exists():
+        try:
+            import json
+            with open(USERS_FILE, "r", encoding="utf-8") as f:
+                data = json.load(f)
+            for item in data:
+                u = UserRecord(
+                    id=item["id"],
+                    email=item["email"].strip().lower(),
+                    full_name=item.get("full_name", item["email"].split("@")[0].title()),
+                    role=item.get("role", ROLE_OPERATOR),
+                    hashed_password=item["hashed_password"],
+                    is_active=item.get("is_active", True),
+                    created_at=item.get("created_at", "2026-09-01T00:00:00Z"),
+                )
+                users[u.email] = u
+        except Exception:
+            pass
+    return users
+
+
+def save_persistent_user(user: UserRecord) -> None:
+    """Save a user record to data/users.json for restart durability."""
+    with _USERS_LOCK:
+        try:
+            import json
+            USERS_FILE.parent.mkdir(parents=True, exist_ok=True)
+            existing = load_persistent_users()
+            existing[user.email] = user
+            serializable = [
+                {
+                    "id": u.id,
+                    "email": u.email,
+                    "full_name": u.full_name,
+                    "role": u.role,
+                    "hashed_password": u.hashed_password,
+                    "is_active": u.is_active,
+                    "created_at": u.created_at,
+                }
+                for u in existing.values()
+            ]
+            with open(USERS_FILE, "w", encoding="utf-8") as f:
+                json.dump(serializable, f, indent=2)
+            # Sync to in-memory map
+            DEMO_USERS[user.email] = user
+        except Exception as exc:
+            import logging
+            logging.getLogger(__name__).warning("Failed to save user to %s: %s", USERS_FILE, exc)
+
+
+# Initialize any existing persistent users into DEMO_USERS map
+for _email, _usr in load_persistent_users().items():
+    DEMO_USERS[_email] = _usr
+
+
+def find_user_by_email(email: str) -> Optional[UserRecord]:
+    """Look up a user record by email across persistent storage and demo accounts."""
+    if not email:
+        return None
+    normalized = email.strip().lower()
+    if normalized in DEMO_USERS:
+        return DEMO_USERS[normalized]
+    disk_users = load_persistent_users()
+    if normalized in disk_users:
+        DEMO_USERS[normalized] = disk_users[normalized]
+        return disk_users[normalized]
+    return None
 
 
 # ============================================================================
@@ -205,8 +291,8 @@ def get_current_user_optional(credentials: Optional[HTTPAuthorizationCredentials
     if not email:
         return None
 
-    # Check in-memory demo users first
-    user = DEMO_USERS.get(email)
+    # Check in-memory and persistent users
+    user = find_user_by_email(email)
     if user:
         return user
 

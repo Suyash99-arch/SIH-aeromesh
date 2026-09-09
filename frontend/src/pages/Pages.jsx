@@ -9,6 +9,7 @@ import {
   fetchCalibrations,
   calibrateReferenceDistance,
   deactivateCalibrations,
+  listMissions,
   measureDistance3D,
   measurePolygon3D,
   measureElevation3D,
@@ -22,6 +23,20 @@ import {
   getExportPackageUrl,
   fetchGeoJsonStatus,
 } from "../api/missions";
+import ErrorBoundary from "../components/common/ErrorBoundary";
+
+export const formatResolution = (res, fallback = "1920 × 1080") => {
+  if (!res) return fallback;
+  if (typeof res === "string") {
+    return res.includes("x") ? res.replace(/x/gi, " × ") : res;
+  }
+  if (typeof res === "object") {
+    const w = res.width ?? res.w;
+    const h = res.height ?? res.h;
+    if (w != null && h != null) return `${w} × ${h}`;
+  }
+  return String(res);
+};
 
 const Header = ({ kicker, title, copy, children }) => (
   <div className="page-header">
@@ -138,16 +153,34 @@ function Findings({ mission, onAction }) {
   );
 }
 
-function StagePipeline({ navigate }) {
+function StagePipeline({ navigate, mission }) {
+  const isProcessing = mission?.status === "processing";
+  const isComplete = mission?.status === "complete" || mission?.status === "reconstruction_ready" || (!isProcessing && (mission?.progress === 100 || !mission?.status));
+
   return (
     <div className="command-pipeline">
-      {pipelineStages.map(([label, page], i) => (
-        <button key={label} onClick={() => navigate(page)}>
-          <b>{String(i + 1).padStart(2, "0")}</b>
-          <span>{label}</span>
-          <Icon name="ArrowRight" size={12} />
-        </button>
-      ))}
+      {pipelineStages.map(([label, page], i) => {
+        const stageIndex = i + 1;
+        const currentStageNum = Math.min(8, Math.max(1, Math.ceil(((mission?.progress || 0) / 100) * 8)));
+        const stageStatus = isComplete ? "completed" : isProcessing ? (stageIndex < currentStageNum ? "completed" : stageIndex === currentStageNum ? "in_progress" : "pending") : "completed";
+
+        return (
+          <button
+            key={label}
+            onClick={() => navigate(page)}
+            className={`stage-btn ${stageStatus}`}
+            style={{
+              position: "relative",
+              border: stageStatus === "in_progress" ? "1px solid #38bdf8" : undefined,
+              background: stageStatus === "in_progress" ? "rgba(14, 165, 233, 0.15)" : undefined,
+            }}
+          >
+            <b>{stageStatus === "completed" ? "✓" : String(stageIndex).padStart(2, "0")}</b>
+            <span>{label}</span>
+            <Icon name="ArrowRight" size={12} />
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -165,23 +198,127 @@ export function OverviewPage({ mission, navigate }) {
       : { total: 0, people: 0, vehicles: 0, structures: 0, hazards: 0 };
   const safeFrames = Number.isFinite(Number(safeMission.frames))
     ? Number(safeMission.frames)
-    : 0;
+    : Number(safeMission?.video?.total_frames || 0);
 
-  const objectsCount =
-    safeMission?.objects_3d?.length || safeObjects.total || 23;
-  const isMetricCalibrated = safeMission?.scale_status === "METRIC_CALIBRATED";
+  const validObjectsCount = safeMission?.objects_3d
+    ? safeMission.objects_3d.filter(
+        (o) => o.association_status === "VALID" || (o.evidence_count || 1) >= 2,
+      ).length
+    : safeMission?.objects?.valid || safeObjects.total || 23;
+
+  const lowConfCount = safeMission?.objects_3d
+    ? safeMission.objects_3d.filter(
+        (o) =>
+          o.association_status === "LOW_CONFIDENCE" ||
+          (o.evidence_count || 1) < 2,
+      ).length
+    : safeMission?.objects?.low_confidence || 0;
+
+  const isMetricCalibrated = (safeMission?.scale_status || safeMission?.measurements?.scale_status) === "METRIC_CALIBRATED";
+  const isProcessing = safeMission.status === "processing";
+  const isMissionFailed = safeMission.status === "failed";
 
   return (
     <div className="executive-overview">
       <Header
-        kicker="HEXA SPARK / MISSION COMMAND"
+        kicker="AEROMESH / MISSION COMMAND"
         title={`${safeMission.name || "Mission"} — ${safeMission.sector || "Overview"}`}
         copy="Executive aerial intelligence mission summary and dispatch status."
       >
-        <Status tone={safeMission.status === "processing" ? "info" : "success"}>
+        <Status tone={isMissionFailed ? "critical" : isProcessing ? "info" : "success"}>
           {(safeMission.status || "READY").toUpperCase()}
         </Status>
       </Header>
+
+      {/* Live Pipeline Failure Notification Banner if Failed */}
+      {isMissionFailed && (
+        <div
+          style={{
+            background: "linear-gradient(135deg, rgba(239, 68, 68, 0.18), rgba(15, 23, 42, 0.95))",
+            border: "1px solid rgba(239, 68, 68, 0.5)",
+            borderRadius: "10px",
+            padding: "16px 20px",
+            marginBottom: "20px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: "16px",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+            <div style={{ width: 14, height: 14, borderRadius: "50%", background: "#ef4444", boxShadow: "0 0 10px #ef4444" }} />
+            <div>
+              <strong style={{ color: "#f87171", fontSize: "0.95rem" }}>
+                Pipeline Execution Failed at Stage: {(safeMission.failed_stage || "Processing").toUpperCase()}
+              </strong>
+              <div style={{ color: "#cbd5e1", fontSize: "0.82rem", marginTop: "2px" }}>
+                {safeMission.error || safeMission.error_message || "The pipeline encountered a terminal processing error."}
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={() => navigate("pipeline")}
+            style={{
+              background: "#ef4444",
+              color: "#fff",
+              border: "none",
+              padding: "8px 16px",
+              borderRadius: "6px",
+              fontWeight: 600,
+              fontSize: "0.82rem",
+              cursor: "pointer",
+              whiteSpace: "nowrap",
+            }}
+          >
+            Inspect Failure Diagnostics →
+          </button>
+        </div>
+      )}
+
+      {/* Live Pipeline Notification Banner if Processing */}
+      {isProcessing && (
+        <div
+          style={{
+            background: "linear-gradient(135deg, rgba(14, 165, 233, 0.18), rgba(15, 23, 42, 0.95))",
+            border: "1px solid rgba(14, 165, 233, 0.45)",
+            borderRadius: "10px",
+            padding: "16px 20px",
+            marginBottom: "20px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            gap: "16px",
+          }}
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+            <div style={{ width: 14, height: 14, borderRadius: "50%", background: "#38bdf8", boxShadow: "0 0 10px #38bdf8" }} />
+            <div>
+              <strong style={{ color: "#38bdf8", fontSize: "0.95rem" }}>
+                Autonomous Pipeline Running: {safeMission.current_stage || "3D Feature Extraction"} ({safeMission.progress || 0}%)
+              </strong>
+              <div style={{ color: "#94a3b8", fontSize: "0.82rem", marginTop: "2px" }}>
+                COLMAP SfM reconstruction and YOLO11m spatial object triangulation in background.
+              </div>
+            </div>
+          </div>
+          <button
+            onClick={() => navigate("pipeline")}
+            style={{
+              background: "#0ea5e9",
+              color: "#fff",
+              border: "none",
+              padding: "8px 16px",
+              borderRadius: "6px",
+              fontWeight: 600,
+              fontSize: "0.82rem",
+              cursor: "pointer",
+              whiteSpace: "nowrap",
+            }}
+          >
+            Monitor Pipeline →
+          </button>
+        </div>
+      )}
 
       {/* 4 Executive Summary Action Cards with Direct Navigation */}
       <div className="executive-summary-grid">
@@ -195,12 +332,16 @@ export function OverviewPage({ mission, navigate }) {
               <Icon name="Box" size={18} />
             </div>
             <span className="dispatch-domain">3D Photogrammetry</span>
-            <span className="badge-tag valid">SURFACE MESH</span>
+            <span className="badge-tag valid">
+              {isProcessing ? "PROCESSING" : "SURFACE MESH"}
+            </span>
           </div>
-          <strong className="dispatch-title">3D Reconstruction Complete</strong>
+          <strong className="dispatch-title">
+            {isProcessing ? "Reconstruction In Progress" : "3D Reconstruction Ready"}
+          </strong>
           <p className="dispatch-meta">
-            Surface mesh generated from 20 registered keyframe cameras · 12,916
-            sparse points
+            Surface mesh generated from {safeMission.reconstruction?.camera_count || 20} registered keyframe cameras ·{" "}
+            {(safeMission.reconstruction?.point_count || safeMission.reconstruction?.points || "12,916").toLocaleString()} sparse points
           </p>
           <div className="dispatch-action-link">
             <span>Open 3D Reconstruction</span>
@@ -218,14 +359,14 @@ export function OverviewPage({ mission, navigate }) {
               <Icon name="Radar" size={18} />
             </div>
             <span className="dispatch-domain">Spatial Intelligence</span>
-            <span className="badge-tag static">YOLOv11 3D</span>
+            <span className="badge-tag valid">VALID (≥2 VIEWS)</span>
           </div>
           <strong className="dispatch-title">
-            {objectsCount} Objects Detected
+            {validObjectsCount} Valid 3D Objects
           </strong>
           <p className="dispatch-meta">
-            Ground vehicles & tracks localized in 3D scene coordinates with
-            multi-view evidence
+            Multi-view triangulated (≥2 views)
+            {lowConfCount > 0 ? ` · ${lowConfCount} flagged low-confidence` : ""}
           </p>
           <div className="dispatch-action-link">
             <span>View 3D Objects</span>
@@ -287,7 +428,7 @@ export function OverviewPage({ mission, navigate }) {
       <Panel className="pipeline-panel">
         <span className="eyebrow">MISSION PROGRESSION</span>
         <h3>Video → quality → trajectory → reconstruction → intelligence</h3>
-        <StagePipeline navigate={navigate} />
+        <StagePipeline navigate={navigate} mission={safeMission} />
         <div className="progress-head">
           <span>Mission processing</span>
           <b>{safeMission.progress ?? 100}%</b>
@@ -337,15 +478,79 @@ export function OverviewPage({ mission, navigate }) {
   );
 }
 
-export function MissionsPage({ mission, setMission, navigate, notice }) {
+export function MissionsPage({ mission, setMission, navigate, notice, onCreateMission }) {
   const shouldReduceMotion = useReducedMotion();
   const [q, setQ] = useState("");
+  const [missionsList, setMissionsList] = useState(missions);
+
+  useEffect(() => {
+    let mounted = true;
+    let pollTimer = null;
+
+    const loadMissions = async () => {
+      try {
+        const backendItems = await listMissions();
+        if (!mounted || !backendItems || !backendItems.length) return;
+
+        const backendMap = new Map(backendItems.map((m) => [m.id, m]));
+        const mergedSeeded = missions.map((s) => {
+          const b = backendMap.get(s.id);
+          if (b) {
+            return {
+              ...s,
+              ...b,
+              status: b.status || s.status,
+              progress: b.progress ?? s.progress,
+            };
+          }
+          return s;
+        });
+
+        const seededIds = new Set(missions.map((s) => s.id));
+        const additional = backendItems
+          .filter((b) => b && b.id && !seededIds.has(b.id))
+          .map((b) => ({
+            id: b.id,
+            name: b.name || `Mission ${b.id}`,
+            sector: b.sector || "Sector Recon",
+            status: b.status || "ready",
+            type: b.type || "Single-Pass Aerial Reconnaissance",
+            drone: b.drone || "AERO-X4",
+            duration: b.duration || "00:45",
+            coverage: b.coverage || "0.45 km²",
+            frames: b.frames || 0,
+            progress: b.progress || 0,
+            confidence: b.confidence || 92,
+            objects: b.objects || { total: 0 },
+            findings: b.findings || [],
+          }));
+
+        const fullList = [...mergedSeeded, ...additional];
+        setMissionsList(fullList);
+
+        const hasProcessing = fullList.some((m) => m.status === "processing");
+        if (hasProcessing && mounted) {
+          pollTimer = setTimeout(loadMissions, 2500);
+        }
+      } catch (err) {
+        console.warn("[MissionsPage] Failed to fetch missions list:", err);
+      }
+    };
+
+    loadMissions();
+
+    return () => {
+      mounted = false;
+      if (pollTimer) clearTimeout(pollTimer);
+    };
+  }, []);
+
   const list = useMemo(
     () =>
-      missions.filter((m) =>
+      missionsList.filter((m) =>
         `${m.name} ${m.sector}`.toLowerCase().includes(q.toLowerCase()),
       ),
-    [q],
+    [missionsList, q],
   );
 
   return (
@@ -353,87 +558,121 @@ export function MissionsPage({ mission, setMission, navigate, notice }) {
       <Header
         kicker="MISSION"
         title="Mission Switcher"
-        copy="Choose a complete demo mission. Every intelligence screen synchronizes to the selected flight."
-      />
+        copy="Select any flight context. Every intelligence, reconstruction, and telemetry view synchronizes app-wide to the chosen flight."
+      >
+        {onCreateMission && (
+          <Button variant="primary" icon="Plus" onClick={onCreateMission}>
+            + New Mission Upload
+          </Button>
+        )}
+      </Header>
 
       <Panel className="mission-list">
         <header className="table-tools">
           <div>
-            <h3>Demonstration missions</h3>
-            <span>Shared mission context</span>
+            <h3>All Registered Missions ({list.length})</h3>
+            <span>Live status synced with backend background runner</span>
           </div>
           <input
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="Search mission"
+            placeholder="Search mission by name or sector..."
           />
         </header>
-        {list.map((m, index) => (
-          <motion.button
-            className={`mission-row ${mission.id === m.id ? "selected" : ""}`}
-            key={m.id}
-            onClick={() => {
-              setMission(m.id);
-              notice(`${m.name} is now active`);
-            }}
-            initial={shouldReduceMotion ? false : { opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{
-              duration: 0.2,
-              delay: index * 0.05,
-              ease: [0.22, 1, 0.36, 1],
-            }}
-            whileHover={
-              shouldReduceMotion
-                ? undefined
-                : { y: -3, boxShadow: "0 8px 20px rgba(76, 29, 149, 0.12)" }
-            }
-            whileTap={shouldReduceMotion ? undefined : { scale: 0.995 }}
-          >
-            <span className={`mission-dot ${m.status}`} />
-            <section>
-              <strong>
-                {m.name} <em>— {m.sector}</em>
-              </strong>
-              <small>
-                {m.type} · {m.drone} · {m.duration} flight
-              </small>
-            </section>
-            <span>
-              {m.coverage}
-              <small>Coverage</small>
-            </span>
-            <span>
-              {m.objects.total}
-              <small>Objects</small>
-            </span>
-            <div>
-              <Status tone={m.status === "processing" ? "info" : "success"}>
-                {m.status}
-              </Status>
-              <Progress value={m.progress} />
-            </div>
-          </motion.button>
-        ))}
+        {list.map((m, index) => {
+          const isSelected = mission.id === m.id;
+          const isProcessing = m.status === "processing";
+          const statusText = isProcessing ? `PROCESSING (${m.progress || 0}%)` : (m.status || "READY").toUpperCase();
+
+          return (
+            <motion.button
+              className={`mission-row ${isSelected ? "selected" : ""}`}
+              key={m.id}
+              onClick={() => {
+                setMission(m.id);
+                notice(`${m.name} is now active app-wide`);
+              }}
+              initial={shouldReduceMotion ? false : { opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{
+                duration: 0.2,
+                delay: index * 0.04,
+                ease: [0.22, 1, 0.36, 1],
+              }}
+              whileHover={
+                shouldReduceMotion
+                  ? undefined
+                  : { y: -2, boxShadow: "0 8px 20px rgba(14, 165, 233, 0.12)" }
+              }
+              whileTap={shouldReduceMotion ? undefined : { scale: 0.995 }}
+            >
+              <span className={`mission-dot ${m.status}`} />
+              <section>
+                <strong>
+                  {m.name} <em>— {m.sector}</em>
+                </strong>
+                <small>
+                  {m.type} · {m.drone || "AERO-X4"} · {m.duration || "00:30"} flight
+                </small>
+              </section>
+              <span>
+                {m.coverage || "0.45 km²"}
+                <small>Coverage</small>
+              </span>
+              <span>
+                {m.objects?.total ?? 0}
+                <small>Objects</small>
+              </span>
+              <div>
+                <Status tone={isProcessing ? "info" : "success"}>
+                  {statusText}
+                </Status>
+                {isProcessing && <Progress value={m.progress || 0} />}
+              </div>
+            </motion.button>
+          );
+        })}
       </Panel>
 
       <Panel className="selected-mission">
-        <span className="eyebrow">ACTIVE MISSION</span>
+        <span className="eyebrow">ACTIVE MISSION CONTEXT</span>
         <h2>
           {mission.name} — {mission.sector}
         </h2>
-        <div className="command-stats">
+        <div className="command-stats" style={{ margin: "16px 0" }}>
           {[
-            ["3D confidence", `${mission.confidence}%`],
-            ["Frames", mission.frames],
-            ["Findings", mission.findings.length],
+            ["3D Confidence", `${mission.confidence || 92}%`],
+            ["Frames", mission.frames || mission.video?.total_frames || 0],
+            ["Findings", mission.findings?.length || 0],
+            ["Objects Tracked", mission.objects?.total || 0],
+            ["Pipeline Status", (mission.status || "READY").toUpperCase()],
           ].map((x) => (
             <Stat key={x[0]} label={x[0]} value={x[1]} />
           ))}
         </div>
-        <Button variant="primary" onClick={() => navigate("drone")}>
-          Continue to flight processing
-        </Button>
+
+        <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", marginTop: "16px" }}>
+          {mission.status === "processing" ? (
+            <Button variant="primary" icon="Activity" onClick={() => navigate("pipeline")}>
+              Monitor Live Pipeline Execution
+            </Button>
+          ) : (
+            <>
+              <Button variant="primary" icon="Box" onClick={() => navigate("reconstruction")}>
+                Open 3D Reconstruction
+              </Button>
+              <Button variant="secondary" icon="Film" onClick={() => navigate("drone")}>
+                View Flight Footage
+              </Button>
+              <Button variant="secondary" icon="Ruler" onClick={() => navigate("measurements")}>
+                Scale & Measurements
+              </Button>
+              <Button variant="secondary" icon="FileText" onClick={() => navigate("reports")}>
+                Deliverables & Reports
+              </Button>
+            </>
+          )}
+        </div>
       </Panel>
     </>
   );
@@ -1115,7 +1354,14 @@ export function IntelligencePage({ kind, mission, navigate, notice }) {
   }
 
   if (kind === "reports") {
-    return <Reports mission={mission} notice={notice} />;
+    return (
+      <ErrorBoundary
+        sectionName="Mission Reports"
+        fallbackTitle="Something went wrong displaying this section"
+      >
+        <Reports mission={mission} notice={notice} />
+      </ErrorBoundary>
+    );
   }
 
   if (kind === "measurements") {
@@ -1367,20 +1613,23 @@ function Reports({ mission, notice }) {
         if (active) {
           setReport({
             missionId: missionId,
-            missionName: mission?.name || "AeroMesh Mission",
+            missionName: mission?.name || "AEROMESH Mission",
             status: mission?.status || "COMPLETED",
             generatedAt: new Date().toISOString(),
             mission: {
               id: missionId,
-              name: mission?.name || "AeroMesh Mission",
+              name: mission?.name || "AEROMESH Mission",
               type: mission?.type || "infrastructure",
               location: mission?.sector || "Operational Flight Zone",
-              operator: "AeroMesh Inspection Team",
+              operator: "AEROMESH Inspection Team",
               status: mission?.status || "COMPLETED",
             },
             video: {
               filename: mission?.video?.filename || "mission_capture.mp4",
-              resolution: mission?.video?.resolution || "3840x2160",
+              resolution: formatResolution(
+                mission?.video?.resolution,
+                "3840 × 2160",
+              ),
               fps: 24.0,
               duration_seconds: 30.0,
               total_frames: mission?.frames || 720,
@@ -1549,7 +1798,11 @@ function Reports({ mission, notice }) {
   }
 
   return (
-    <div className="reports-workspace">
+    <ErrorBoundary
+      sectionName="Mission Reports Workspace"
+      fallbackTitle="Something went wrong displaying this section"
+    >
+      <div className="reports-workspace">
       <Header
         kicker="PHASE 9 OUTPUT"
         title="Mission Reports & Exports"
@@ -1902,7 +2155,9 @@ function Reports({ mission, notice }) {
                     <td>
                       <b>Resolution</b>
                     </td>
-                    <td>{repVideo.resolution || "3840x2160"}</td>
+                    <td>
+                      {formatResolution(repVideo.resolution, "3840 × 2160")}
+                    </td>
                   </tr>
                   <tr>
                     <td>
@@ -2218,8 +2473,10 @@ function Reports({ mission, notice }) {
                       <td>
                         {m.type === "object_dimensions"
                           ? `L: ${m.length?.toFixed(2)} W: ${m.width?.toFixed(2)} H: ${m.height?.toFixed(2)}`
-                          : m.value !== null
-                            ? `${m.value} ${m.unit || ""}`
+                          : m.value !== null && m.value !== undefined
+                            ? typeof m.value === "object"
+                              ? JSON.stringify(m.value)
+                              : `${m.value} ${m.unit || ""}`
                             : m.reason || "N/A"}
                       </td>
                       <td>{m.unit || "N/A"}</td>
@@ -2442,7 +2699,8 @@ function Reports({ mission, notice }) {
           </article>
         </div>
       )}
-    </div>
+      </div>
+    </ErrorBoundary>
   );
 }
 
@@ -2526,7 +2784,7 @@ export function ChallengePage({ mission }) {
     <>
       <Header
         kicker="SIH DEMONSTRATION"
-        title="SIH Challenge → Aeromesh Solution"
+        title="SIH Challenge → AEROMESH Solution"
         copy="A transparent mapping from field constraints to demonstrable product capabilities."
       />
       <div className="challenge-grid">
@@ -2535,7 +2793,7 @@ export function ChallengePage({ mission }) {
             <span className="eyebrow">CHALLENGE</span>
             <h3>{p}</h3>
             <p>
-              <b>Aeromesh feature:</b> {f}
+              <b>AEROMESH feature:</b> {f}
             </p>
             <p>
               <b>Evidence/demo:</b> {e}

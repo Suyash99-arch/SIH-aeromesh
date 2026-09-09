@@ -50,6 +50,7 @@ class Mission(Base):
     reference_location: Mapped[str | None] = mapped_column(PortableGeometry("POINT"))
     operator: Mapped[str | None] = mapped_column(String(255))
     created_by: Mapped[str | None] = mapped_column(String(120), nullable=True)
+    owner_id: Mapped[str | None] = mapped_column(String(64), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     status: Mapped[str] = mapped_column(String(80), default="created", nullable=False)
     payload: Mapped[dict[str, Any]] = mapped_column(JSON, default=dict, nullable=False)

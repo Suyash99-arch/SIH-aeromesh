@@ -8,7 +8,6 @@ import cv2
 import numpy as np
 import torch
 from PIL import Image
-from transformers import AutoImageProcessor, AutoModelForDepthEstimation
 
 
 MODEL_CANDIDATES = [
@@ -42,6 +41,7 @@ class DepthAnythingV2Runner:
 
     def _load_model(self):
         os.makedirs(self.cache_dir, exist_ok=True)
+        from transformers import AutoImageProcessor, AutoModelForDepthEstimation
         self.processor = AutoImageProcessor.from_pretrained(self.model_name, cache_dir=self.cache_dir)
         self.model = AutoModelForDepthEstimation.from_pretrained(self.model_name, cache_dir=self.cache_dir)
         self.model.to(self.device)

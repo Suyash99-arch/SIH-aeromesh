@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 
-test.describe("AeroMesh Mission & Analysis Workflows", () => {
+test.describe("AEROMESH Mission & Analysis Workflows", () => {
   // 1. Application loads and reaches backend
   test("1. application loads and reaches the backend mission API", async ({ page }) => {
     await page.goto("/");
@@ -174,7 +174,7 @@ test.describe("AeroMesh Mission & Analysis Workflows", () => {
     await operatorBtn.click();
     const modal = page.locator(".auth-modal-content");
     await expect(modal).toBeVisible();
-    await expect(modal.getByText(/AeroMesh Security & Access Control/i)).toBeVisible();
+    await expect(modal.getByText(/AEROMESH Security & Access Control/i)).toBeVisible();
     await expect(modal.getByText(/1-Click Demo Evaluation Profiles/i)).toBeVisible();
 
     // Switch to ANALYST

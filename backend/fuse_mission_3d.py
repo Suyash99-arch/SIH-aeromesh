@@ -29,20 +29,56 @@ logger = logging.getLogger(__name__)
 BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE_DIR / "data"
 
-# Target classes for aerial infrastructure & disaster response
+# Target classes for aerial infrastructure, maritime, and disaster response
 TARGET_CLASSES = {
+    # Terrestrial Vehicles
     "car": "vehicle",
     "truck": "vehicle",
     "bus": "vehicle",
     "van": "vehicle",
     "vehicle": "vehicle",
+    "motor": "vehicle",
+    "motorcycle": "vehicle",
+    "bicycle": "vehicle",
+    "tricycle": "vehicle",
+    "awning-tricycle": "vehicle",
+    # Maritime Vessels
+    "boat": "maritime",
+    "ship": "maritime",
+    "vessel": "maritime",
+    # Aircraft
+    "airplane": "aircraft",
+    # People
     "person": "people",
+    "people": "people",
     "pedestrian": "people",
 }
 
 
+def are_classes_compatible(c1: str, c2: str) -> bool:
+    """Return True if two classes refer to compatible object types in aerial imagery."""
+    if c1 == c2:
+        return True
+    vehicles = {"car", "van", "truck", "bus", "vehicle"}
+    if c1 in vehicles and c2 in vehicles:
+        return True
+    people = {"person", "pedestrian", "people"}
+    if c1 in people and c2 in people:
+        return True
+    cycles = {"bicycle", "motorcycle", "tricycle", "awning-tricycle"}
+    if c1 in cycles and c2 in cycles:
+        return True
+    maritime = {"boat", "ship", "vessel"}
+    if c1 in maritime and c2 in maritime:
+        return True
+    aircraft = {"airplane", "aircraft"}
+    if c1 in aircraft and c2 in aircraft:
+        return True
+    return False
+
+
 def run_3d_fusion_for_mission(
-    mission_id: str = "north-ridge",
+    mission_id: str,
     yolo_model_path: Optional[str] = None,
     confidence_threshold: float = 0.25,
     reprojection_threshold_px: float = 25.0,
@@ -94,20 +130,72 @@ def run_3d_fusion_for_mission(
         sparse_points = np.array([p.xyz for p in colmap_recon.points3D.values()], dtype=np.float64)
         logger.info(f"Loaded {len(sparse_points)} sparse points for depth fallback")
 
-    # 3. Load YOLO Model
-    if yolo_model_path is None:
-        cand_paths = [
-            BASE_DIR / "yolo11n.pt",
-            BASE_DIR / "backend" / "models" / "yolo11n.pt",
-            BASE_DIR / "backend" / "models" / "aeromesh_yolo.pt",
-        ]
-        for p in cand_paths:
-            if p.exists():
-                yolo_model_path = str(p)
-                break
+    # 3. Model Selection: Scene-Adaptive Routing
+    # Aerial surveillance (VisDrone-trained) vs Maritime / General COCO (YOLO11m)
+    yolo_m_path = BASE_DIR / "backend" / "models" / "yolo11m.pt"
+    if not yolo_m_path.exists():
+        yolo_m_path = BASE_DIR / "yolo11m.pt"
+    yolo_aero_path = BASE_DIR / "backend" / "models" / "aeromesh_yolo.pt"
 
-    if not yolo_model_path or not Path(yolo_model_path).exists():
-        raise FileNotFoundError("YOLO weights not found. Ensure yolo11n.pt exists.")
+    if yolo_model_path is None:
+        import os
+        env_forced = os.getenv("FORCE_YOLO_MODEL", "").strip()
+        if env_forced and Path(env_forced).exists():
+            yolo_model_path = env_forced
+        elif yolo_m_path.exists() and yolo_aero_path.exists():
+            # Run scene survey across keyframes spread uniformly across the ENTIRE flight duration
+            # (prevents an unrepresentative opening takeoff/landing shot from misrouting the mission)
+            all_kfs = sorted(frames_dir.glob("*.jpg"))
+            if not all_kfs:
+                alt_frames = mission_dir / "frames"
+                if alt_frames.exists():
+                    all_kfs = sorted(alt_frames.glob("*.jpg"))
+            
+            n_total = len(all_kfs)
+            if n_total == 0:
+                raise FileNotFoundError(f"No keyframe images found for scene survey in {frames_dir}")
+
+            # Sample up to 8 keyframes evenly spaced across the entire timeline [0% -> 100%]
+            num_samples = min(n_total, 8)
+            sample_indices = np.linspace(0, n_total - 1, num=num_samples, dtype=int).tolist()
+            sample_indices = sorted(list(dict.fromkeys(sample_indices)))
+            kf_sample = [all_kfs[i] for i in sample_indices]
+
+            from ultralytics import YOLO
+            probe_model = YOLO(str(yolo_m_path))
+            boat_votes = 0
+            boat_detections = []
+            terrestrial_votes = 0
+
+            for s_idx, kfp in zip(sample_indices, kf_sample):
+                res = probe_model(str(kfp), conf=0.25, verbose=False)[0]
+                for b in res.boxes:
+                    cls_name = probe_model.names[int(b.cls.item())]
+                    conf = float(b.conf.item())
+                    if cls_name in ("boat", "ship", "vessel", "airplane"):
+                        boat_votes += 1
+                        boat_detections.append((s_idx, kfp.name, cls_name, round(conf, 2)))
+                    elif cls_name in ("car", "truck", "bus", "van", "person", "pedestrian", "bicycle", "motorcycle"):
+                        terrestrial_votes += 1
+
+            if boat_votes > 0:
+                logger.info(
+                    f"Scene survey across full timeline ({len(kf_sample)} distributed frames at indices {sample_indices} of {n_total}) "
+                    f"detected maritime/coastal features ({boat_votes} detections, e.g. {boat_detections[:3]}) -> Routed to YOLO11m (COCO)"
+                )
+                yolo_model_path = str(yolo_m_path)
+            else:
+                logger.info(
+                    f"Scene survey across full timeline ({len(kf_sample)} distributed frames at indices {sample_indices} of {n_total}) "
+                    f"detected aerial terrestrial domain ({terrestrial_votes} terrestrial detections, 0 maritime) -> Routed to aeromesh_yolo (VisDrone)"
+                )
+                yolo_model_path = str(yolo_aero_path)
+        elif yolo_m_path.exists():
+            yolo_model_path = str(yolo_m_path)
+        elif yolo_aero_path.exists():
+            yolo_model_path = str(yolo_aero_path)
+        else:
+            raise FileNotFoundError("YOLO weights not found. Ensure yolo11m.pt or aeromesh_yolo.pt exists.")
 
     from ultralytics import YOLO
     model = YOLO(yolo_model_path)
@@ -195,8 +283,17 @@ def run_3d_fusion_for_mission(
 
     logger.info(f"Extracted {len(detections_raw)} validated 3D back-projected detections")
 
+    # Estimate scene spatial scale from sparse points or mesh (typical aerial survey extent ~45m)
+    scene_extent = 50.0
+    if sparse_points is not None and len(sparse_points) > 0:
+        scene_extent = float(np.linalg.norm(sparse_points.max(axis=0) - sparse_points.min(axis=0)))
+    elif mesh is not None and len(mesh.vertices) > 0:
+        scene_extent = float(np.linalg.norm(mesh.bounds_max - mesh.bounds_min))
+    scale_ratio = max(0.12, min(1.0, scene_extent / 45.0))
+    logger.info(f"Scene extent: {scene_extent:.2f}m -> spatial scale ratio: {scale_ratio:.3f}")
+
     # 5. Spatio-Temporal Association into 3D Object Tracks
-    # Group observations across keyframes by 3D spatial proximity and class
+    # Group observations across keyframes by 3D spatial proximity and class compatibility
     tracks: List[List[Dict[str, Any]]] = []
 
     # Sort detections by timestamp / frame index
@@ -208,8 +305,10 @@ def run_3d_fusion_for_mission(
         best_dist = float("inf")
 
         for t_idx, track in enumerate(tracks):
+            c_track = track[0]["class"]
+            c_det = det["class"]
             # Check class compatibility
-            if track[0]["class"] != det["class"]:
+            if not are_classes_compatible(c_track, c_det):
                 continue
             # Check frame separation (avoid grouping two detections from same frame)
             if any(obs["frame_id"] == det["frame_id"] for obs in track):
@@ -218,7 +317,15 @@ def run_3d_fusion_for_mission(
             track_pts = np.array([obs["point_3d"] for obs in track])
             track_center = np.median(track_pts, axis=0)
             d = float(np.linalg.norm(track_center - det_p))
-            if d < spatial_association_dist and d < best_dist:
+            # Require slightly tighter association if classes are compatible rather than identical
+            assoc_thresh = (spatial_association_dist * scale_ratio) if c_track == c_det else (spatial_association_dist * scale_ratio * 0.8)
+            if d < assoc_thresh and d < best_dist:
+                # Multi-view 2D projection consistency check
+                if det["frame_id"] in camera_map:
+                    intr, ps, _ = camera_map[det["frame_id"]]
+                    e, _, _ = compute_reprojection_error(track_center, (det["pixel_center"][0], det["pixel_center"][1]), intr, ps)
+                    if e is not None and e > (reprojection_threshold_px * 1.8):
+                        continue
                 best_dist = d
                 best_track_idx = t_idx
 
@@ -227,17 +334,94 @@ def run_3d_fusion_for_mission(
         else:
             tracks.append([det])
 
+    # 5b. Multi-Frame Spatial-Temporal Deduplication Pass
+    # Merges tracks representing the same physical object seen across non-overlapping frames
+    changed = True
+    while changed:
+        changed = False
+        for i in range(len(tracks)):
+            if tracks[i] is None:
+                continue
+            for j in range(i + 1, len(tracks)):
+                if tracks[j] is None:
+                    continue
+                t1, t2 = tracks[i], tracks[j]
+                # Cannot merge if both tracks share an observation from the same camera frame
+                f1 = set(obs["frame_id"] for obs in t1)
+                f2 = set(obs["frame_id"] for obs in t2)
+                if not f1.isdisjoint(f2):
+                    continue
+                c1 = t1[0]["class"]
+                c2 = t2[0]["class"]
+                if not are_classes_compatible(c1, c2):
+                    continue
+                cat = t1[0].get("category", "vehicle")
+                base_thresh = 3.5 if cat in ("maritime", "aircraft") else (2.5 if cat == "vehicle" else (1.2 if cat == "people" else 1.5))
+                thresh = base_thresh * scale_ratio
+
+                p1 = np.median([obs["point_3d"] for obs in t1], axis=0)
+                p2 = np.median([obs["point_3d"] for obs in t2], axis=0)
+                if float(np.linalg.norm(p1 - p2)) <= thresh:
+                    # Multi-view geometric consistency check before merging
+                    merged_pts = [obs["point_3d"] for obs in (t1 + t2)]
+                    cand_pos = np.median(merged_pts, axis=0)
+                    consistent = True
+                    for obs in (t1 + t2)[:6]:
+                        if obs["frame_id"] in camera_map:
+                            intr, ps, _ = camera_map[obs["frame_id"]]
+                            e, _, zc = compute_reprojection_error(cand_pos, obs["pixel_center"], intr, ps)
+                            if e is not None and e > reprojection_threshold_px * 1.5:
+                                consistent = False
+                                break
+                    if not consistent:
+                        continue
+
+                    tracks[i].extend(tracks[j])
+                    tracks[j] = None
+                    changed = True
+                    break
+            if changed:
+                break
+
+    tracks = [t for t in tracks if t is not None]
+    logger.info(f"Formed {len(tracks)} deduplicated 3D object tracks")
+
     # 6. Build Structured 3D Objects with Motion Classification
     fused_objects: List[Dict[str, Any]] = []
 
     for t_idx, obs_list in enumerate(tracks, start=1):
         track_id = f"T{t_idx:04d}"
         object_id = f"OBJ_{track_id}"
-        cls_name = obs_list[0]["class"]
-        category = obs_list[0]["category"]
+        
+        # Determine canonical class name: class of the observation with highest detection confidence
+        best_obs = max(obs_list, key=lambda o: o.get("confidence", 0.0))
+        cls_name = best_obs["class"]
+        category = best_obs["category"]
 
         pts = np.array([obs["point_3d"] for obs in obs_list], dtype=np.float64)
         rep_pos = [round(float(v), 3) for v in np.median(pts, axis=0)]
+
+        # Compute true multi-view reprojection error for each camera view observing this 3D entity
+        real_obs_errors = []
+        for obs in obs_list:
+            frame_id = obs["frame_id"]
+            if frame_id in camera_map:
+                cam_intrinsics, cam_pose, _ = camera_map[frame_id]
+                cx, cy = obs["pixel_center"]
+                r_err, proj_uv, zc = compute_reprojection_error(rep_pos, (cx, cy), cam_intrinsics, cam_pose)
+                if r_err is not None:
+                    obs["reprojection_error_px"] = round(r_err, 2)
+                    if proj_uv:
+                        obs["reprojected_point_2d"] = [round(proj_uv[0], 1), round(proj_uv[1], 1)]
+                    real_obs_errors.append(r_err)
+                else:
+                    real_obs_errors.append(obs.get("reprojection_error_px", 0.0))
+            else:
+                real_obs_errors.append(obs.get("reprojection_error_px", 0.0))
+
+        mean_err = round(float(np.mean(real_obs_errors)), 2) if real_obs_errors else 0.0
+        avg_conf = float(np.mean([obs["confidence"] for obs in obs_list]))
+        evidence_count = len(obs_list)
 
         # Trajectory & motion state
         trajectory: List[Dict[str, Any]] = []
@@ -254,17 +438,12 @@ def run_3d_fusion_for_mission(
         motion_state = "STATIC"
         if len(obs_list) >= 2:
             net_disp = float(np.linalg.norm(pts[-1] - pts[0]))
-            if net_disp > 1.8:
+            if net_disp > (1.8 * scale_ratio):
                 motion_state = "MOVING"
             else:
                 motion_state = "STATIC"
 
         # Evidence count & Association status
-        evidence_count = len(obs_list)
-        errors = [obs["reprojection_error_px"] for obs in obs_list]
-        mean_err = round(float(np.mean(errors)), 2)
-        avg_conf = float(np.mean([obs["confidence"] for obs in obs_list]))
-
         if evidence_count >= 2 and avg_conf >= 0.35 and mean_err <= reprojection_threshold_px:
             association_status = "VALID"
         elif evidence_count >= 1:
@@ -274,7 +453,7 @@ def run_3d_fusion_for_mission(
 
         # Confidence score (0.0 - 1.0)
         c_evidence = min(1.0, evidence_count / 3.0)
-        c_reproj = max(0.0, 1.0 - mean_err / reprojection_threshold_px)
+        c_reproj = max(0.0, 1.0 - min(mean_err, reprojection_threshold_px) / reprojection_threshold_px)
         assoc_confidence = round(0.40 * c_evidence + 0.35 * c_reproj + 0.25 * avg_conf, 3)
 
         # 7. Generate Reprojection Overlay Images for Evidence Modal
@@ -338,20 +517,23 @@ def run_3d_fusion_for_mission(
             "observations": enriched_observations,
         })
 
-    # Summary statistics
-    total_objects = len(fused_objects)
+    # Summary statistics (headline metrics reflect verified >=2 view detections)
+    all_candidates_count = len(fused_objects)
     valid_count = sum(1 for o in fused_objects if o["association_status"] == "VALID")
     low_conf_count = sum(1 for o in fused_objects if o["association_status"] == "LOW_CONFIDENCE")
-    moving_count = sum(1 for o in fused_objects if o["motion_state"] == "MOVING")
-    static_count = sum(1 for o in fused_objects if o["motion_state"] == "STATIC")
-    vehicles_count = sum(1 for o in fused_objects if o["category"] == "vehicle")
-    people_count = sum(1 for o in fused_objects if o["category"] == "people")
+    moving_count = sum(1 for o in fused_objects if o["association_status"] == "VALID" and o["motion_state"] == "MOVING")
+    static_count = sum(1 for o in fused_objects if o["association_status"] == "VALID" and o["motion_state"] == "STATIC")
+    vehicles_count = sum(1 for o in fused_objects if o["association_status"] == "VALID" and o["category"] == "vehicle")
+    people_count = sum(1 for o in fused_objects if o["association_status"] == "VALID" and o["category"] == "people")
+    maritime_count = sum(1 for o in fused_objects if o["association_status"] == "VALID" and o["category"] == "maritime")
+    aircraft_count = sum(1 for o in fused_objects if o["association_status"] == "VALID" and o["category"] == "aircraft")
 
     semantic_scene = {
         "coordinate_system": "LOCAL_ARBITRARY",
         "scale_status": "RELATIVE_SCALE",
         "georeferencing_status": "UNREFERENCED",
-        "total_objects": total_objects,
+        "total_objects": valid_count,
+        "all_candidates_count": all_candidates_count,
         "valid_objects": valid_count,
         "low_confidence_objects": low_conf_count,
         "insufficient_evidence_objects": 0,
@@ -359,6 +541,8 @@ def run_3d_fusion_for_mission(
         "static_objects": static_count,
         "vehicles": vehicles_count,
         "people": people_count,
+        "maritime": maritime_count,
+        "aircraft": aircraft_count,
         "reprojection_threshold_px": reprojection_threshold_px,
         "objects": fused_objects,
     }
@@ -379,9 +563,14 @@ def run_3d_fusion_for_mission(
             mission_data["objects_3d"] = fused_objects
             mission_data["semantic_scene"] = semantic_scene
             mission_data["objects"] = {
-                "total": total_objects,
+                "total": valid_count,
+                "valid": valid_count,
+                "low_confidence": low_conf_count,
+                "all_candidates": all_candidates_count,
                 "people": people_count,
                 "vehicles": vehicles_count,
+                "maritime": maritime_count,
+                "aircraft": aircraft_count,
                 "structures": 0,
                 "hazards": 0,
             }
@@ -394,9 +583,12 @@ def run_3d_fusion_for_mission(
     return {
         "success": True,
         "mission_id": mission_id,
-        "total_objects": total_objects,
+        "total_objects": valid_count,
+        "all_candidates_count": all_candidates_count,
         "vehicles": vehicles_count,
         "people": people_count,
+        "maritime": maritime_count,
+        "aircraft": aircraft_count,
         "moving": moving_count,
         "static": static_count,
         "valid": valid_count,
@@ -408,12 +600,15 @@ def run_3d_fusion_for_mission(
 if __name__ == "__main__":
     import sys
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
-    res = run_3d_fusion_for_mission("north-ridge")
+    target_mission = sys.argv[1] if len(sys.argv) > 1 else "north-ridge"
+    res = run_3d_fusion_for_mission(target_mission)
     print("\n" + "=" * 60)
-    print("3D FUSION RESULTS:")
+    print(f"3D FUSION RESULTS FOR {target_mission}:")
     print(f"Total 3D Objects:  {res['total_objects']}")
     print(f"Vehicles:          {res['vehicles']}")
     print(f"People:            {res['people']}")
+    print(f"Maritime:          {res['maritime']}")
+    print(f"Aircraft:          {res['aircraft']}")
     print(f"Static Objects:    {res['static']}")
     print(f"Moving Objects:    {res['moving']}")
     print(f"Valid Objects:     {res['valid']}")

@@ -481,6 +481,7 @@ class UltralyticsTracker:
         tile_cols: int = 2,
         tile_overlap: float = 0.15,
         tile_iou: float = 0.5,
+        raw_frame_callback: Any = None,
     ) -> list[DetectionRecord]:
         import cv2
         capture = cv2.VideoCapture(str(video_path))
@@ -505,11 +506,13 @@ class UltralyticsTracker:
 
         records = []
         frame_number = 0
+        sampled_frame_seq = 0
         while True:
             ok, frame = capture.read()
             if not ok:
                 break
             if frame_number % interval == 0:
+                sampled_frame_seq += 1
                 motion = None
                 if motion_estimator is not None:
                     motion = motion_estimator.estimate(frame)
@@ -523,9 +526,16 @@ class UltralyticsTracker:
                     raw_frame_records = []
                     for tx1, ty1, tx2, ty2 in tiles:
                         tile = frame[ty1:ty2, tx1:tx2]
-                        result = self.model(tile, conf=confidence, iou=iou, verbose=False)[0]
+                        try:
+                            result = self.model(tile, conf=confidence, iou=iou, verbose=False)[0]
+                        except Exception as exc:
+                            if raw_frame_callback:
+                                raw_frame_callback(sampled_frame_seq, frame_number, frame_number / fps, None, getattr(self.model, "names", {}), exc)
+                            raise
                         names = getattr(result, "names", {})
                         boxes = getattr(result, "boxes", [])
+                        if raw_frame_callback:
+                            raw_frame_callback(sampled_frame_seq, frame_number, frame_number / fps, boxes, names, None)
                         for box in boxes:
                             class_id = int(_scalar(box.cls[0]))
                             class_name = str(names[class_id] if isinstance(names, dict) else names[class_id])
@@ -555,9 +565,16 @@ class UltralyticsTracker:
                     assigned = online_tracker.update_frame(kept_records, camera_motion=motion)
                     records.extend(assigned)
                 else:
-                    result = self.model.track(frame, persist=True, tracker=f"{self.tracker_type}.yaml", conf=confidence, iou=iou, verbose=False)[0]
+                    try:
+                        result = self.model.track(frame, persist=True, tracker=f"{self.tracker_type}.yaml", conf=confidence, iou=iou, verbose=False)[0]
+                    except Exception as exc:
+                        if raw_frame_callback:
+                            raw_frame_callback(sampled_frame_seq, frame_number, frame_number / fps, None, getattr(self.model, "names", {}), exc)
+                        raise
                     names = getattr(result, "names", {})
                     boxes = getattr(result, "boxes", [])
+                    if raw_frame_callback:
+                        raw_frame_callback(sampled_frame_seq, frame_number, frame_number / fps, boxes, names, None)
                     for box in boxes:
                         class_id = int(_scalar(box.cls[0]))
                         class_name = str(names[class_id] if isinstance(names, dict) else names[class_id])

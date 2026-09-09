@@ -1,6 +1,11 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import ReconstructionViewer from "../reconstruction/ReconstructionViewer";
+import Icon from "../ui/Icon";
 import "../../styles/analysis.css";
+import ViewFiltersSidebar from "./ViewFiltersSidebar";
+import BottomStatStrip from "./BottomStatStrip";
+import VideoFramesTab from "./VideoFramesTab";
+import AddMarkerModal from "./AddMarkerModal";
 import {
   fetchSemanticScene,
   fetchObjectEvidence,
@@ -12,6 +17,10 @@ import {
   measureObject3D,
   getExportGeoJsonUrl,
   resolveAssetUrl,
+  fetchMissionMarkings,
+  createMissionMarking,
+  deleteMissionMarking,
+  fetchMissionKeyframes,
 } from "../../api/missions";
 
 export default function MissionAnalysisWorkspace({ mission, notice }) {
@@ -19,6 +28,17 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
 
   const workspaceRef = useRef(null);
   const viewerRef = useRef(null);
+
+  // Primary Incident Tab: "3d_model" | "video_frames"
+  const [primaryTab, setPrimaryTab] = useState("3d_model");
+
+  // Custom Markings & Keyframes state
+  const [customMarkings, setCustomMarkings] = useState([]);
+  const [selectedMarkingId, setSelectedMarkingId] = useState(null);
+  const [showAddMarkerModal, setShowAddMarkerModal] = useState(false);
+  const [clickedSceneCoords, setClickedSceneCoords] = useState([0.0, 1.5, 0.0]);
+  const [keyframes, setKeyframes] = useState([]);
+  const [selectedKeyframe, setSelectedKeyframe] = useState(null);
 
   // Fullscreen state
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -55,10 +75,16 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
       cameraTrajectory: true,
       vehicles: true,
       people: true,
+      humans: true,
+      fireSmoke: true,
+      damage: true,
+      entryExit: true,
+      customMarkings: true,
       animals: true,
       otherObjects: true,
       grid: true,
       labels: true,
+      lowConfidence: false,
     };
   });
 
@@ -86,9 +112,21 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
 
   // Real Mission Reconstruction & Objects Data
   const [objects, setObjects] = useState(() => mission?.objects_3d || []);
-  const [reconstructionMeta, setReconstructionMeta] = useState(null);
+  const [reconstructionMeta, setReconstructionMeta] = useState(
+    () => mission?.reconstruction || null,
+  );
   const [calibrationsData, setCalibrationsData] = useState(null);
   const [activeCalibration, setActiveCalibration] = useState(null);
+
+  // Sync state when mission prop changes
+  useEffect(() => {
+    if (mission?.reconstruction) {
+      setReconstructionMeta(mission.reconstruction);
+    }
+    if (mission?.objects_3d) {
+      setObjects(mission.objects_3d);
+    }
+  }, [mission]);
 
   // Interaction State: Selected Object & Evidence
   const [selectedObject, setSelectedObject] = useState(null);
@@ -96,9 +134,9 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
   const [evidenceLoading, setEvidenceLoading] = useState(false);
   const [showEvidenceModal, setShowEvidenceModal] = useState(false);
 
-  // Search & Filter within Objects tab
+  // Search & Filter within Objects tab (defaults to verified >=2 views detections)
   const [searchQuery, setSearchQuery] = useState("");
-  const [activeFilter, setActiveFilter] = useState("all");
+  const [activeFilter, setActiveFilter] = useState("valid");
 
   // Measurement State
   const [measurementResult, setMeasurementResult] = useState(null);
@@ -106,7 +144,7 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
   const [knownDistanceInput, setKnownDistanceInput] = useState("15.0");
   const [showCalibrateConfirm, setShowCalibrateConfirm] = useState(false);
 
-  // Fetch real data on mount or mission change
+  // Fetch fresh real data on mount or mission change
   useEffect(() => {
     let active = true;
 
@@ -132,10 +170,92 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
       }
     });
 
+    fetchMissionMarkings(missionId).then((marks) => {
+      if (!active) return;
+      if (Array.isArray(marks)) setCustomMarkings(marks);
+    });
+
+    fetchMissionKeyframes(missionId).then((kfs) => {
+      if (!active) return;
+      if (Array.isArray(kfs)) {
+        setKeyframes(kfs);
+        if (kfs.length > 0) setSelectedKeyframe(kfs[0]);
+      }
+    });
+
     return () => {
       active = false;
     };
   }, [missionId]);
+
+  const handleOpenAddMarkerModal = useCallback(() => {
+    setShowAddMarkerModal(true);
+  }, []);
+
+  const handleSceneClick = useCallback((coords) => {
+    setClickedSceneCoords(coords);
+    setShowAddMarkerModal(true);
+  }, []);
+
+  const handleSaveMarker = useCallback(async (markerData) => {
+    try {
+      const created = await createMissionMarking(missionId, markerData);
+      if (created) {
+        setCustomMarkings((prev) => [...prev, created]);
+        if (notice) notice(`Marker "${created.name}" saved to 3D scene.`, "success");
+      }
+    } catch (err) {
+      if (notice) notice("Failed to save marker: " + err.message, "error");
+    }
+  }, [missionId, notice]);
+
+  const handleDeleteMarker = useCallback(async (markerId) => {
+    try {
+      const ok = await deleteMissionMarking(missionId, markerId);
+      if (ok) {
+        setCustomMarkings((prev) => prev.filter((m) => m.id !== markerId));
+        if (selectedMarkingId === markerId) setSelectedMarkingId(null);
+        if (notice) notice("Marker removed.", "info");
+      }
+    } catch (err) {
+      if (notice) notice("Failed to delete marker: " + err.message, "error");
+    }
+  }, [missionId, selectedMarkingId, notice]);
+
+  const handleToggleMarkingVisible = useCallback((markerId) => {
+    setCustomMarkings((prev) =>
+      prev.map((m) => (m.id === markerId ? { ...m, visible: m.visible === false } : m))
+    );
+  }, []);
+
+  const totalPeople = useMemo(() => {
+    return objects.filter((o) => {
+      const cls = (o.class || o.class_name || "").toLowerCase();
+      return cls === "person" || cls === "pedestrian" || cls === "people" || cls === "human";
+    }).length;
+  }, [objects]);
+
+  const totalVehicles = useMemo(() => {
+    return objects.filter((o) => {
+      const cls = (o.class || o.class_name || "").toLowerCase();
+      return (
+        cls === "car" ||
+        cls === "truck" ||
+        cls === "bus" ||
+        cls === "van" ||
+        cls === "bicycle" ||
+        cls === "motorcycle" ||
+        cls === "vehicle"
+      );
+    }).length;
+  }, [objects]);
+
+  const entryExitPointsCount = useMemo(() => {
+    return customMarkings.filter((m) => {
+      const t = (m.type || "").toLowerCase();
+      return t.includes("entry") || t.includes("exit") || t.includes("door");
+    }).length;
+  }, [customMarkings]);
 
   // Load evidence whenever selectedObject changes
   useEffect(() => {
@@ -204,6 +324,11 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
 
       if (!idMatch) return false;
 
+      if (activeFilter === "maritime") {
+        const cls = (obj.class || obj.class_name || "").toLowerCase();
+        const cat = (obj.category || "").toLowerCase();
+        return cls === "boat" || cls === "ship" || cls === "vessel" || cat === "maritime";
+      }
       if (activeFilter === "vehicles") {
         const cls = (obj.class || obj.class_name || "").toLowerCase();
         return (
@@ -215,7 +340,11 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
         return cls === "person" || cls === "pedestrian";
       }
       if (activeFilter === "valid") {
-        return obj.association_status === "VALID";
+        const ev = obj.evidence_count || (obj.observations ? obj.observations.length : 1);
+        return (
+          obj.association_status === "VALID" ||
+          (ev >= 2 && obj.association_status !== "LOW_CONFIDENCE" && obj.association_status !== "INSUFFICIENT_EVIDENCE")
+        );
       }
       if (activeFilter === "moving") {
         return obj.motion_state === "MOVING";
@@ -224,9 +353,11 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
         return obj.motion_state === "STATIC";
       }
       if (activeFilter === "low_conf") {
+        const ev = obj.evidence_count || (obj.observations ? obj.observations.length : 1);
         return (
           obj.association_status === "LOW_CONFIDENCE" ||
-          obj.association_status === "INSUFFICIENT_EVIDENCE"
+          obj.association_status === "INSUFFICIENT_EVIDENCE" ||
+          ev < 2
         );
       }
       return true;
@@ -236,15 +367,29 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
   // Analytics summary counts
   const analytics = useMemo(() => {
     const total = objects.length;
-    const valid = objects.filter(
-      (o) => o.association_status === "VALID",
-    ).length;
-    const lowConf = objects.filter(
-      (o) => o.association_status === "LOW_CONFIDENCE",
-    ).length;
+    const valid = objects.filter((o) => {
+      const ev = o.evidence_count || (o.observations ? o.observations.length : 1);
+      return (
+        o.association_status === "VALID" ||
+        (ev >= 2 && o.association_status !== "LOW_CONFIDENCE" && o.association_status !== "INSUFFICIENT_EVIDENCE")
+      );
+    }).length;
+    const lowConf = objects.filter((o) => {
+      const ev = o.evidence_count || (o.observations ? o.observations.length : 1);
+      return (
+        o.association_status === "LOW_CONFIDENCE" ||
+        o.association_status === "INSUFFICIENT_EVIDENCE" ||
+        ev < 2
+      );
+    }).length;
     const insufficient = objects.filter(
       (o) => o.association_status === "INSUFFICIENT_EVIDENCE",
     ).length;
+    const maritime = objects.filter((o) => {
+      const cls = (o.class || o.class_name || "").toLowerCase();
+      const cat = (o.category || "").toLowerCase();
+      return cls === "boat" || cls === "ship" || cls === "vessel" || cat === "maritime";
+    }).length;
     const vehicles = objects.filter((o) => {
       const cls = (o.class || o.class_name || "").toLowerCase();
       return (
@@ -265,12 +410,134 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
       valid,
       lowConf,
       insufficient,
+      maritime,
       vehicles,
       people,
       moving,
       staticCount,
     };
   }, [objects]);
+
+  // Dynamically classify structure / scene entity type from real photogrammetry & detected objects
+  const detectedSceneType = useMemo(() => {
+    const rawType = `${mission?.type || ""} ${mission?.sector || ""} ${mission?.name || ""}`.toLowerCase();
+    
+    // Count class frequencies among detected objects
+    const classCounts = {};
+    objects.forEach((obj) => {
+      const cls = (obj.class || obj.class_name || "").toLowerCase();
+      const cat = (obj.category || "").toLowerCase();
+      if (cls === "boat" || cls === "ship" || cls === "vessel" || cat === "maritime") {
+        classCounts["maritime"] = (classCounts["maritime"] || 0) + 1;
+      } else if (cls === "car" || cls === "truck" || cls === "bus" || cls === "van" || cat === "vehicle") {
+        classCounts["vehicle"] = (classCounts["vehicle"] || 0) + 1;
+      } else if (cls === "person" || cls === "pedestrian" || cat === "people") {
+        classCounts["people"] = (classCounts["people"] || 0) + 1;
+      } else if (cls === "airplane" || cat === "aircraft") {
+        classCounts["aircraft"] = (classCounts["aircraft"] || 0) + 1;
+      }
+    });
+
+    const boats = classCounts["maritime"] || 0;
+    const vehicles = classCounts["vehicle"] || 0;
+    const people = classCounts["people"] || 0;
+    const aircraft = classCounts["aircraft"] || 0;
+
+    if (boats > 0 && boats >= vehicles) {
+      return {
+        label: "Harbor / Maritime Marina",
+        tag: "MARITIME FACILITY",
+        category: "Port & Marine Infrastructure",
+        detail: `${boats} maritime vessel${boats > 1 ? "s" : ""} localized on water basin surface`,
+        icon: "Anchor",
+        accent: "#0ea5e9",
+        confidence: Math.min(99, 78 + boats * 4),
+        primaryClass: "boat",
+      };
+    }
+    if (vehicles > 0 && vehicles >= people) {
+      if (rawType.includes("bridge") || rawType.includes("overpass") || rawType.includes("span")) {
+        return {
+          label: "Bridge / Elevated Span",
+          tag: "ELEVATED CORRIDOR",
+          category: "Transportation Infrastructure",
+          detail: `${vehicles} vehicles along elevated roadway corridor`,
+          icon: "Layers",
+          accent: "#f59e0b",
+          confidence: Math.min(99, 80 + vehicles * 3),
+          primaryClass: "vehicle",
+        };
+      }
+      return {
+        label: "Urban Street / Transit Corridor",
+        tag: "CIVIL ROADWAY",
+        category: "Urban Transportation",
+        detail: `${vehicles} vehicles along roadway surface envelope`,
+        icon: "Navigation",
+        accent: "#38bdf8",
+        confidence: Math.min(99, 75 + vehicles * 3),
+        primaryClass: "vehicle",
+      };
+    }
+    if (people > 2) {
+      return {
+        label: "Pedestrian Zone / Public Plaza",
+        tag: "ASSEMBLY PLAZA",
+        category: "Urban Pedestrian Space",
+        detail: `${people} individuals localized across surface plane`,
+        icon: "Users",
+        accent: "#10b981",
+        confidence: 88,
+        primaryClass: "person",
+      };
+    }
+    if (aircraft > 0) {
+      return {
+        label: "Airfield / Runway Facility",
+        tag: "AVIATION SITE",
+        category: "Aviation Infrastructure",
+        detail: `${aircraft} aircraft localized along runway grid`,
+        icon: "Compass",
+        accent: "#8b5cf6",
+        confidence: 92,
+        primaryClass: "airplane",
+      };
+    }
+    if (rawType.includes("building") || rawType.includes("facility") || rawType.includes("industrial")) {
+      return {
+        label: "Industrial / Commercial Facility",
+        tag: "BUILT STRUCTURE",
+        category: "Commercial Infrastructure",
+        detail: "Volumetric surface envelope reconstructed",
+        icon: "Box",
+        accent: "#6366f1",
+        confidence: 85,
+        primaryClass: "structure",
+      };
+    }
+    if (rawType.includes("harbor") || rawType.includes("port") || rawType.includes("marina")) {
+      return {
+        label: "Harbor / Port District",
+        tag: "MARITIME FACILITY",
+        category: "Port & Marine Infrastructure",
+        detail: "Coastal harbor basin photogrammetric geometry",
+        icon: "Anchor",
+        accent: "#0ea5e9",
+        confidence: 86,
+        primaryClass: "boat",
+      };
+    }
+    return {
+      label: "Urban Infrastructure / Terrain",
+      tag: "CIVIL ENVELOPE",
+      category: "Photogrammetric Scene",
+      detail: "Multi-view surface geometry reconstructed",
+      icon: "MapPin",
+      accent: "#38bdf8",
+      confidence: 80,
+      primaryClass: "terrain",
+    };
+  }, [objects, mission]);
 
   const isMetricCalibrated = Boolean(
     activeCalibration ||
@@ -378,7 +645,13 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
     }
   };
 
-  const cameraPoses = reconstructionMeta?.camera_poses || [];
+  const poseStatus =
+    reconstructionMeta?.pose_status ||
+    mission?.reconstruction?.pose_status;
+  const isPoseUnavailable =
+    poseStatus === "UNAVAILABLE_NO_TELEMETRY" ||
+    (!reconstructionMeta?.camera_poses && !mission?.reconstruction?.camera_poses);
+  const cameraPoses = isPoseUnavailable ? [] : (reconstructionMeta?.camera_poses || []);
 
   return (
     <div
@@ -402,7 +675,7 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
             >
               <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5" />
             </svg>
-            {mission?.name || "AeroMesh Mission"}
+            {mission?.name || "AEROMESH Mission"}
           </span>
 
           <span className="top-bar-sector-tag">
@@ -426,6 +699,47 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
               <>▲ RELATIVE SCALE</>
             )}
           </span>
+
+          {isPoseUnavailable && (
+            <span
+              className="top-bar-telemetry-pill"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "5px",
+                padding: "3px 9px",
+                borderRadius: "4px",
+                fontSize: "11px",
+                fontWeight: 600,
+                background: "rgba(245, 158, 11, 0.15)",
+                color: "#fbbf24",
+                border: "1px solid rgba(245, 158, 11, 0.3)",
+              }}
+              title="Per-frame GPS/IMU telemetry was not provided for this mission. Trajectory rendering is disabled."
+            >
+              ● Camera trajectory not available (no telemetry for this flight)
+            </span>
+          )}
+        </div>
+
+        {/* Primary Incident Workspace Tabs */}
+        <div className="incident-primary-tabs">
+          <button
+            type="button"
+            className={`incident-tab-btn ${primaryTab === "3d_model" ? "active" : ""}`}
+            onClick={() => setPrimaryTab("3d_model")}
+          >
+            <Icon name="Box" size={14} />
+            3D Model View
+          </button>
+          <button
+            type="button"
+            className={`incident-tab-btn ${primaryTab === "video_frames" ? "active" : ""}`}
+            onClick={() => setPrimaryTab("video_frames")}
+          >
+            <Icon name="Film" size={14} />
+            Video Frames
+          </button>
         </div>
 
         <div className="top-bar-actions">
@@ -489,181 +803,31 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
         </div>
       </header>
 
-      {/* ==================================================================== */}
-      {/* 2. COMPACT LEFT TOOL & NAVIGATION RAIL (54px)                        */}
-      {/* ==================================================================== */}
-      <nav className="analysis-tool-rail" aria-label="3D Controls">
-        <button
-          className={`tool-rail-btn ${activeTool === "select" ? "active" : ""}`}
-          onClick={() => {
-            setActiveTool("select");
-            setShowLayerPopover(false);
-          }}
-          title="Select 3D Objects"
-        >
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-          >
-            <path d="M3 3l7.07 16.97 2.51-7.39 7.39-2.51L3 3z" />
-          </svg>
-          <span className="tool-rail-btn-label">Select</span>
-        </button>
+      {primaryTab === "video_frames" ? (
+        <VideoFramesTab
+          missionId={missionId}
+          mission={mission}
+          keyframes={keyframes}
+          selectedKeyframe={selectedKeyframe}
+          onSelectKeyframe={setSelectedKeyframe}
+          onSwitchTo3D={() => setPrimaryTab("3d_model")}
+        />
+      ) : (
+        <>
+          <ViewFiltersSidebar
+            layers={layers}
+            onToggleLayer={toggleLayer}
+            customMarkings={customMarkings}
+            selectedMarkingId={selectedMarkingId}
+            onSelectMarking={setSelectedMarkingId}
+            onToggleMarkingVisible={handleToggleMarkingVisible}
+            onDeleteMarking={handleDeleteMarker}
+            onOpenAddMarkerModal={handleOpenAddMarkerModal}
+            totalPeople={totalPeople}
+            totalVehicles={totalVehicles}
+            entryExitCount={entryExitPointsCount}
+          />
 
-        <button
-          className={`tool-rail-btn ${activeTool === "measure" ? "active" : ""}`}
-          onClick={handleActivateMeasure}
-          title="Geometric 3D Measurement Tools"
-        >
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-          >
-            <path d="M2 12h20M7 8l-5 4 5 4M17 8l5 4-5 4" />
-          </svg>
-          <span className="tool-rail-btn-label">Measure</span>
-        </button>
-
-        <button
-          className={`tool-rail-btn ${activeTool === "orbit" ? "active" : ""}`}
-          onClick={() => {
-            setActiveTool("orbit");
-            setShowLayerPopover(false);
-          }}
-          title="Orbit Camera View (Rotate)"
-        >
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-          >
-            <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67" />
-          </svg>
-          <span className="tool-rail-btn-label">Orbit</span>
-        </button>
-
-        <button
-          className={`tool-rail-btn ${activeTool === "pan" ? "active" : ""}`}
-          onClick={() => {
-            setActiveTool("pan");
-            setShowLayerPopover(false);
-          }}
-          title="Pan Camera View (Translate)"
-        >
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-          >
-            <path d="M5 9l-3 3 3 3M9 5l3-3 3 3M15 19l-3 3-3-3M19 9l3 3-3 3M2 12h20M12 2v20" />
-          </svg>
-          <span className="tool-rail-btn-label">Pan</span>
-        </button>
-
-        <button
-          className={`tool-rail-btn ${showLayerPopover ? "active" : ""}`}
-          onClick={() => setShowLayerPopover((prev) => !prev)}
-          title="Layer Visibility System"
-        >
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-          >
-            <polygon points="12 2 2 7 12 12 22 7 12 2" />
-            <polyline points="2 17 12 22 22 17" />
-            <polyline points="2 12 12 17 22 12" />
-          </svg>
-          <span className="tool-rail-btn-label">Layers</span>
-        </button>
-
-        <div className="tool-rail-divider" />
-
-        <button
-          className="tool-rail-btn"
-          onClick={() => {
-            viewerRef.current?.fit?.();
-            if (notice)
-              notice("Camera framed to reconstruction bounds", "info");
-          }}
-          title="Fit Model to Viewport"
-        >
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-          >
-            <path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3" />
-          </svg>
-          <span className="tool-rail-btn-label">Fit</span>
-        </button>
-
-        <button
-          className="tool-rail-btn"
-          onClick={() => {
-            viewerRef.current?.reset?.();
-            if (notice) notice("Camera view reset to scene overview", "info");
-          }}
-          title="Reset Camera Overview"
-        >
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-          >
-            <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-            <path d="M3 3v5h5" />
-          </svg>
-          <span className="tool-rail-btn-label">Reset</span>
-        </button>
-
-        <div className="tool-rail-spacer" />
-
-        <button
-          className="tool-rail-btn"
-          onClick={toggleFullscreen}
-          title={isFullscreen ? "Exit Fullscreen" : "Fullscreen 3D View"}
-        >
-          <svg
-            width="16"
-            height="16"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-          >
-            {isFullscreen ? (
-              <path d="M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7" />
-            ) : (
-              <path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
-            )}
-          </svg>
-          <span className="tool-rail-btn-label">Full</span>
-        </button>
-      </nav>
 
       {/* ==================================================================== */}
       {/* 3. HERO CENTRAL 3D VIEWPORT                                          */}
@@ -689,6 +853,15 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
               </span>
             </>
           )}
+        </div>
+
+        {/* Floating Structure & Scene Classification Pill (Top-Left) */}
+        <div className="scene-classification-pill" title="Dynamic Photogrammetric Scene Classification">
+          <span className="scene-pill-dot" style={{ background: detectedSceneType.accent }} />
+          <span className="scene-pill-text">{detectedSceneType.label}</span>
+          <span className="scene-pill-tag" style={{ color: detectedSceneType.accent, borderColor: `${detectedSceneType.accent}50` }}>
+            {detectedSceneType.tag}
+          </span>
         </div>
 
         {/* Floating Layers Popover */}
@@ -727,6 +900,7 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
                 ["people", "People"],
                 ["grid", "Reference Grid"],
                 ["labels", "Object Labels"],
+                ["lowConfidence", "Low-Confidence (<2 views)"],
               ].map(([key, label]) => (
                 <label className="layers-popover-item" key={key}>
                   <span>{label}</span>
@@ -747,16 +921,26 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
           meshUrl={
             reconstructionMeta?.mesh_url
               ? resolveAssetUrl(reconstructionMeta.mesh_url)
-              : mission?.assets?.mesh
-                ? resolveAssetUrl(mission.assets.mesh)
-                : null
+              : mission?.reconstruction?.mesh_url
+                ? resolveAssetUrl(mission.reconstruction.mesh_url)
+                : mission?.assets?.mesh
+                  ? resolveAssetUrl(mission.assets.mesh)
+                  : missionId
+                    ? resolveAssetUrl(`/api/missions/${missionId}/reconstruction/mesh`)
+                    : mission?.assets?.model
+                      ? resolveAssetUrl(mission.assets.model)
+                      : null
           }
           pointCloudUrl={
             reconstructionMeta?.point_cloud_url
               ? resolveAssetUrl(reconstructionMeta.point_cloud_url)
-              : mission?.assets?.pointCloud
-                ? resolveAssetUrl(mission.assets.pointCloud)
-                : null
+              : mission?.reconstruction?.point_cloud_url
+                ? resolveAssetUrl(mission.reconstruction.point_cloud_url)
+                : mission?.assets?.pointCloud
+                  ? resolveAssetUrl(mission.assets.pointCloud)
+                  : missionId
+                    ? resolveAssetUrl(`/api/missions/${missionId}/reconstruction/pointcloud`)
+                    : null
           }
           reconstructionMeta={reconstructionMeta}
           layers={layers}
@@ -768,7 +952,12 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
           cameraTarget={cameraTarget}
           activeTool={activeTool}
           viewerRef={viewerRef}
-          hideEmbeddedControls={true}
+          sceneType={detectedSceneType.label}
+          sceneTypeTag={detectedSceneType.tag}
+          customMarkings={customMarkings}
+          selectedMarkingId={selectedMarkingId}
+          onSelectMarking={setSelectedMarkingId}
+          onSceneClick={handleSceneClick}
         />
 
         {/* Floating Selected Object HUD Badge */}
@@ -826,7 +1015,7 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
             className={`inspector-tab-btn ${activeTab === "objects" ? "active" : ""}`}
             onClick={() => setActiveTab("objects")}
           >
-            Objects {objects.length > 0 && `(${objects.length})`}
+            Objects {analytics.valid > 0 ? `(${analytics.valid})` : (objects.length > 0 ? `(${objects.length})` : "")}
           </button>
           <button
             className={`inspector-tab-btn ${activeTab === "measurements" ? "active" : ""}`}
@@ -846,6 +1035,44 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
           {/* TAB 1: MODEL OVERVIEW (DEFAULT WHEN NOTHING SELECTED) */}
           {activeTab === "overview" && (
             <>
+              {/* Dynamic Structure / Scene Classification Card */}
+              <div className="inspector-scene-card">
+                <div className="scene-card-top">
+                  <span
+                    className="scene-badge"
+                    style={{
+                      borderColor: `${detectedSceneType.accent}60`,
+                      color: detectedSceneType.accent,
+                      background: `${detectedSceneType.accent}15`,
+                    }}
+                  >
+                    {detectedSceneType.tag}
+                  </span>
+                  <span className="scene-confidence">
+                    {detectedSceneType.confidence}% confidence
+                  </span>
+                </div>
+                <div className="scene-card-heading">
+                  <span
+                    className="scene-icon-wrap"
+                    style={{
+                      background: `${detectedSceneType.accent}20`,
+                      color: detectedSceneType.accent,
+                      border: `1px solid ${detectedSceneType.accent}40`,
+                    }}
+                  >
+                    <Icon name={detectedSceneType.icon} size={18} />
+                  </span>
+                  <div>
+                    <h3 className="scene-card-title">{detectedSceneType.label}</h3>
+                    <span className="scene-card-category">{detectedSceneType.category}</span>
+                  </div>
+                </div>
+                <p className="scene-card-detail">
+                  {detectedSceneType.detail}
+                </p>
+              </div>
+
               <div className="inspector-section-title">
                 <span>Model Architecture</span>
                 <span className="badge-tag valid">SURFACE MESH</span>
@@ -953,7 +1180,7 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
                     <circle cx="11" cy="11" r="8" />
                     <line x1="21" y1="21" x2="16.65" y2="16.65" />
                   </svg>
-                  Explore {objects.length} 3D Detections
+                  Explore {analytics.valid > 0 ? analytics.valid : objects.length} 3D Detections
                 </button>
 
                 <button
@@ -1202,10 +1429,12 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
 
                   <div className="filter-pills">
                     {[
-                      ["all", "All"],
-                      ["vehicles", "Vehicles"],
-                      ["people", "People"],
-                      ["valid", "Valid"],
+                      ["valid", `Valid (${analytics.valid})`],
+                      ["all", `All (${analytics.total})`],
+                      ...(analytics.maritime > 0 ? [["maritime", `Maritime (${analytics.maritime})`]] : []),
+                      ["vehicles", `Vehicles (${analytics.vehicles})`],
+                      ["people", `People (${analytics.people})`],
+                      ["low_conf", `Low Conf (${analytics.lowConf})`],
                       ["moving", "Moving"],
                       ["static", "Static"],
                     ].map(([fKey, fLabel]) => (
@@ -1257,6 +1486,9 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
                                   .replace("_", "-")}`}
                               >
                                 {obj.association_status || "VALID"}
+                              </span>
+                              <span style={{ fontSize: "10px", color: "#94a3b8" }}>
+                                {obj.evidence_count || 1} {(obj.evidence_count || 1) === 1 ? "view" : "views"}
                               </span>
                             </div>
                           </div>
@@ -1469,15 +1701,15 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
 
               <div className="inspector-stat-grid">
                 <div className="inspector-stat-cell">
-                  <span className="inspector-stat-label">Total 3D Objects</span>
-                  <span className="inspector-stat-val highlight">
-                    {analytics.total}
-                  </span>
-                </div>
-                <div className="inspector-stat-cell">
                   <span className="inspector-stat-label">Valid (≥2 Views)</span>
                   <span className="inspector-stat-val highlight">
                     {analytics.valid}
+                  </span>
+                </div>
+                <div className="inspector-stat-cell">
+                  <span className="inspector-stat-label">Low Confidence</span>
+                  <span className="inspector-stat-val" style={{ color: "#f59e0b" }}>
+                    {analytics.lowConf}
                   </span>
                 </div>
                 <div className="inspector-stat-cell">
@@ -1553,6 +1785,18 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
           )}
         </div>
       </aside>
+
+      {/* Bottom Stat Strip summarizing real pipeline detection counts */}
+      <BottomStatStrip
+        totalPeople={totalPeople}
+        totalVehicles={totalVehicles}
+        entryExitCount={entryExitPointsCount}
+        pointCount={reconstructionMeta?.dense_point_count || reconstructionMeta?.sparse_point_count}
+        meshVertices={reconstructionMeta?.vertex_count}
+        scaleStatus={isMetricCalibrated ? "METRIC" : "RELATIVE_SCALE"}
+      />
+    </>
+  )}
 
       {/* ==================================================================== */}
       {/* 5. VIDEO ↔ 3D EVIDENCE MODAL                                         */}
@@ -1724,6 +1968,14 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
           </div>
         </div>
       )}
+
+      {/* Add Custom 3D Marker Modal */}
+      <AddMarkerModal
+        isOpen={showAddMarkerModal}
+        onClose={() => setShowAddMarkerModal(false)}
+        onSave={handleSaveMarker}
+        initialCoords={clickedSceneCoords}
+      />
     </div>
   );
 }

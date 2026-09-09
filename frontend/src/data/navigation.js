@@ -7,5 +7,14 @@ export const intelligenceNavigation = [
   ["measurements", "Measurements", "Ruler"], ["findings", "AI Findings", "BrainCircuit", "06"], ["reports", "Reports", "FileText"],
 ];
 export const outputNavigation = [["challenge", "Challenge Coverage", "ShieldCheck"]];
-export const systemNavigation = [["settings", "Settings", "Settings"]];
-export const pageTitles = Object.fromEntries([...missionNavigation, ...intelligenceNavigation, ...outputNavigation, ...systemNavigation].map(([id, label]) => [id, label]));
+export const systemNavigation = [
+  ["profile", "Profile & Security", "User"],
+  ["settings", "Settings", "Settings"],
+];
+export const pageTitles = {
+  ...Object.fromEntries([...missionNavigation, ...intelligenceNavigation, ...outputNavigation, ...systemNavigation].map(([id, label]) => [id, label])),
+  pipeline: "Autonomous Pipeline Progression",
+  processing: "Autonomous Pipeline Progression",
+  profile: "User Profile & Security",
+  auth: "Operator Authentication",
+};

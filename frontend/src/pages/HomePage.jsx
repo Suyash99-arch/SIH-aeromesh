@@ -1,25 +1,34 @@
 import { useState, useEffect, useRef } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import Icon from "../components/ui/Icon";
+import ReconstructionViewer from "../components/reconstruction/ReconstructionViewer";
+import HeroCompassReconstruction from "../components/hero/HeroCompassReconstruction";
+import FloatingWord from "../components/hero/FloatingWord";
+import NarrativePipelineSequence from "../components/narrative/NarrativePipelineSequence";
 import { listMissions, BACKEND_URL, resolveAssetUrl } from "../api/missions";
 import { missions as seedMissions } from "../data/missions";
 import "../styles/homepage.css";
 
-// 11 Operational Workflow Stages
+// 11 Operational Workflow Stages with Rigorous Technical Architecture
 const WORKFLOW_STAGES = [
   {
     id: "survey",
     number: "01",
     phase: "PHASE 01 / 11",
-    tag: "AUTONOMOUS FLIGHT",
-    title: "1. Drone Survey Flight",
+    tag: "FLIGHT PLANNING",
+    title: "1. Autonomous Corridor & Sensor Path Planning",
     subtitle:
-      "UAV executes pre-planned flight corridor over inspection zone with stabilized oblique and nadir gimbal angles.",
-    tech: ["Autonomous Waypoints", "45m AGL Altitude", "4K Sensor", "GPS Sync"],
+      "UAV executes pre-programmed corridor waypoints over the inspection zone with stabilized oblique and nadir optical configurations.",
+    technicalExplanation:
+      "Computes flight geometry based on desired Ground Sampling Distance (GSD ≤ 2.5 cm/px), terrain elevation models, and camera FOV. Enforces ≥75% longitudinal overlap and ≥65% lateral sidelap to ensure multi-view ray intersection baseline geometry for photogrammetry.",
+    mathSpecs: "GSD = (Sensor Width × Altitude × 100) / (Focal Length × Image Width) · Nadir/Oblique -45° to -90°",
+    inputsOutputs: "Input: Mission Boundary Polygon · Output: Waypoint Trajectory & RTK Base Sync",
+    tech: ["Autonomous Waypoints", "45m AGL Altitude", "RTK-GPS Sync", "GSD ≤ 2.5 cm/px"],
     targetPage: "drone",
     telemetry: {
       label: "Flight Altitude",
       value: "45.2 m AGL",
-      sub: "Speed: 6.2 m/s · Heading: 042°",
+      sub: "Speed: 6.2 m/s · Heading: 042° · RTK Fixed",
     },
   },
   {
@@ -27,78 +36,79 @@ const WORKFLOW_STAGES = [
     number: "02",
     phase: "PHASE 02 / 11",
     tag: "SENSOR STREAM",
-    title: "2. Aerial Footage Capture",
+    title: "2. Aerial Video & Telemetry Capture",
     subtitle:
-      "Drone camera captures high-resolution 24 FPS footage with synchronized barometric and spatial telemetry.",
-    tech: ["3840x2160 UHD", "24.0 FPS", "H.264 / ProRes", "Hardware Gimbal"],
+      "High-resolution 4K optical feed captured with millisecond-accurate hardware timestamp synchronization and spatial IMU attitude.",
+    technicalExplanation:
+      "Streams uncompressed 4K video frames encoded in H.264/H.265. Synchronously logs 100Hz IMU attitude (pitch, roll, yaw), barometric altitude, and dual-frequency GNSS position tags directly into the video container metadata stream.",
+    mathSpecs: "3840×2160 UHD @ 24.0 FPS · PTS/DTS Millisecond Timestamp Alignment · 45 Mbps Stream",
+    inputsOutputs: "Input: CMOS 1-inch Optical Sensor · Output: 4K MP4 Stream with Synchronized Telemetry",
+    tech: ["4K UHD Optical", "24.0 Native FPS", "100Hz IMU Logging", "Gimbal Stabilization"],
     targetPage: "drone",
     telemetry: {
       label: "Sensor Stream",
       value: "24.0 FPS UHD",
-      sub: "Bitrate: 45 Mbps · Exp: 1/500s",
+      sub: "Bitrate: 45 Mbps · Exp: 1/500s · ISO 100",
     },
   },
   {
     id: "ingest",
     number: "03",
     phase: "PHASE 03 / 11",
-    tag: "QUALITY GATEWAY",
-    title: "3. Video Ingest & Quality Gate",
+    tag: "QUALITY GATE",
+    title: "3. Laplacian Blur Filtering & Keyframe Culling",
     subtitle:
-      "Video enters Hexa Spark pipeline. Frame extraction filters motion blur via Laplacian variance and removes duplicate views.",
-    tech: [
-      "Laplacian Variance",
-      "61 Keyframes Extracted",
-      "Sharpness > 85%",
-      "Duplicate Removal",
-    ],
+      "Automated quality gateway filters motion blur, rotor wash vibration, and eliminates redundant spatial frames before reconstruction.",
+    technicalExplanation:
+      "Computes the Variance of Laplacian operator across every extracted video frame to quantify high-frequency edge sharpness. Suppresses motion-blurred frames below threshold σ² < 100 and computes inter-frame spatial baseline to prune 900+ raw video frames into ~20 high-information keyframes.",
+    mathSpecs: "Sharpness Score = Var(∇² I) = E[(∇² I - μ)²] · Baseline Filter: Δpos > 0.8m or Δangle > 4.5°",
+    inputsOutputs: "Input: 960 Video Frames · Output: 20 Optimal Inlier Keyframes for Bundle Adjustment",
+    tech: ["Variance of Laplacian", "Edge Gradient Filter", "Redundancy Culling", "Sharpness > 88%"],
     targetPage: "drone",
     telemetry: {
       label: "Quality Score",
       value: "94.2% Sharpness",
-      sub: "720 frames → 61 keyframes",
+      sub: "960 raw frames → 20 optimal keyframes",
     },
   },
   {
     id: "ai_detect",
     number: "04",
     phase: "PHASE 04 / 11",
-    tag: "NEURAL TRACKING",
-    title: "4. YOLOv11 Frame Analysis",
+    tag: "NEURAL DETECTION",
+    title: "4. YOLOv11 Neural Object Detection & Tracking",
     subtitle:
-      "Deep neural network detects vehicles, pedestrians, and infrastructure. ByteTrack preserves persistent track IDs across frames.",
-    tech: [
-      "YOLOv11n",
-      "ByteTrack Persistence",
-      "14ms Inference",
-      "Multi-Class Bounding",
-    ],
+      "Deep convolutional neural network detects vehicles, maritime vessels, aircraft, and personnel with persistent multi-frame tracking.",
+    technicalExplanation:
+      "Runs YOLOv11 deep neural network on selected keyframes with FP16 acceleration. Associates 2D detections across sequential frames using ByteTrack Kalman filtering to establish immutable track IDs, preventing duplicate counts across camera perspectives.",
+    mathSpecs: "mAP@50: 89.4% · ByteTrack Spatio-Temporal Kalman Filtering · Spatial IOU Association ≥ 0.70",
+    inputsOutputs: "Input: Keyframe Images · Output: Class Probabilities & Tracked 2D Bounding Bboxes",
+    tech: ["YOLOv11 Architecture", "ByteTrack Tracker", "Multi-Class Classifier", "14ms GPU Latency"],
     targetPage: "reconstruction",
     telemetry: {
       label: "AI Detections",
-      value: "399 Instances",
-      sub: "23 unique persistent tracks",
+      value: "Validated Tracks",
+      sub: "Vehicles, Vessels & Personnel localized",
     },
   },
   {
     id: "sfm_reconstruct",
     number: "05",
     phase: "PHASE 05 / 11",
-    tag: "SPARSE GEOMETRY",
-    title: "5. COLMAP SfM 3D Reconstruction",
+    tag: "SPARSE SfM",
+    title: "5. PyCOLMAP Structure-from-Motion (SfM)",
     subtitle:
-      "Structure-from-Motion bundle adjustment calculates exact intrinsic camera matrices, camera poses, and sparse 3D point cloud.",
-    tech: [
-      "COLMAP Bundle Adj",
-      "20 Registered Cameras",
-      "12,916 Points",
-      "0.98 px Error",
-    ],
+      "Calculates camera poses, optical center intrinsics, and constructs a high-precision sparse 3D point cloud via bundle adjustment.",
+    technicalExplanation:
+      "PyCOLMAP extracts Scale-Invariant Feature Transform (SIFT) descriptors across keyframe image pairs, verifies epipolar two-view geometry with RANSAC, and optimizes non-linear Levenberg-Marquardt bundle adjustment to estimate full 6-DoF camera poses and inlier 3D world points.",
+    mathSpecs: "min_{R,t,X} ∑ || x_{ij} - π(K, R_i X_j + t_i) ||² · Mean Reprojection Error < 0.50 px",
+    inputsOutputs: "Input: Keyframe Pair Matches · Output: 6-DoF Camera Extrinsics & 2,357 Inlier 3D Points",
+    tech: ["PyCOLMAP Bundle Adj", "SIFT Feature Matching", "RANSAC Verification", "6-DoF Poses"],
     targetPage: "reconstruction",
     telemetry: {
-      label: "Sparse Inliers",
-      value: "12,916 Points",
-      sub: "Mean reprojection error: 0.98 px",
+      label: "Sparse Geometry",
+      value: "20 / 20 Cameras",
+      sub: "2,357 points · Reprojection error: 0.493 px",
     },
   },
   {
@@ -106,83 +116,79 @@ const WORKFLOW_STAGES = [
     number: "06",
     phase: "PHASE 06 / 11",
     tag: "POISSON MESH",
-    title: "6. Dense Surface Mesh Generation",
+    title: "6. Dense Poisson Surface Mesh Generation",
     subtitle:
-      "Depth Anything V2 depth maps are backprojected into world coordinates; Screened Poisson reconstruction generates dense 3D terrain.",
-    tech: [
-      "Poisson Surface Reconstruction",
-      "Depth Anything V2",
-      "56,120 Faces",
-      "Road Plane Z≈7.16m",
-    ],
+      "Reconstructs continuous watertight triangle surface geometry from oriented point normals for realistic geometric inspection.",
+    technicalExplanation:
+      "Calculates oriented 3D normal vectors from sparse surface points and camera ray directions. Solves the screened Poisson equation to find an indicator function whose gradient best matches the vector field, triangulating a continuous polygon surface with 24,000+ faces.",
+    mathSpecs: "Poisson Equation: ∇² χ = ∇ · V · Iso-surface Extraction via Dual Marching Cubes",
+    inputsOutputs: "Input: Oriented 3D Point Normals · Output: Standard .PLY Triangle Surface Mesh",
+    tech: ["Screened Poisson", "Normal Estimation", "Dual Marching Cubes", "Three.js Surface Mesh"],
     targetPage: "reconstruction",
     telemetry: {
-      label: "Surface Geometry",
-      value: "56,120 Faces",
-      sub: "28,139 vertices · Solid terrain",
+      label: "Surface Mesh",
+      value: "24,229 Faces",
+      sub: "12,366 vertices · Watertight triangle topology",
     },
   },
   {
     id: "spatial_fusion",
     number: "07",
     phase: "PHASE 07 / 11",
-    tag: "MULTI-VIEW FUSION",
-    title: "7. 3D Spatial Fusion & Triangulation",
+    tag: "3D SPATIAL FUSION",
+    title: "7. AI-to-3D Camera Ray Back-Projection",
     subtitle:
-      "2D track detections from multiple camera viewpoints are triangulated through optical centers into authoritative 3D spatial world objects.",
-    tech: [
-      "Multi-View Triangulation",
-      "Ray Unprojection",
-      "Reprojection < 25px",
-      "3D Bounding Boxes",
-    ],
+      "Unprojects 2D neural detections into 3D world space, intersecting rays with the surface mesh to create authoritative 3D objects.",
+    technicalExplanation:
+      "Casts 3D rays from 2D YOLO bounding box centers through camera intrinsics K and pose (R,t). Performs Möller-Trumbore ray-triangle intersection against the 3D surface mesh to find exact 3D coordinates. Multi-view validation requires ≥2 agreeing camera views with reprojection error ≤ 25 px.",
+    mathSpecs: "Ray: r(t) = C + t · (R^T K^{-1} x) · Multi-View Reprojection Verification: err < 25.0 px",
+    inputsOutputs: "Input: 2D BBoxes + 3D Mesh · Output: Fused 3D Coordinates & Reprojection Overlays",
+    tech: ["Möller-Trumbore Rays", "Ray Back-Projection", "Multi-View Validation", "Verified 3D Objects"],
     targetPage: "reconstruction",
     telemetry: {
-      label: "Fused 3D Objects",
-      value: "4 Valid Road Vehicles",
-      sub: "OBJ_T0011 at [53.06, 50.45, 7.16]",
+      label: "Spatial Fusion",
+      value: "Authoritative 3D",
+      sub: "Multi-view confirmed 3D centroids",
     },
   },
   {
     id: "orbit_zoom",
     number: "08",
     phase: "PHASE 08 / 11",
-    tag: "WEBGL HERO",
-    title: "8. Interactive 3D WebGL Navigation",
+    tag: "WEBGL DIGITAL TWIN",
+    title: "8. Interactive 3D WebGL Digital Twin Navigation",
     subtitle:
-      "Users freely orbit, pan, and zoom the digital twin with Three.js OrbitControls, layer visibility toggles, and auto-framing.",
-    tech: [
-      "Three.js WebGL",
-      "Auto-Framing Bounds",
-      "Layer Toggles",
-      "60 FPS Render",
-    ],
+      "GPU-accelerated 60 FPS 3D viewport enables orbital navigation, camera frustum inspection, and multi-layer toggles.",
+    technicalExplanation:
+      "Three.js WebGL rendering engine presents the complete reconstructed environment with real-time dynamic lighting, wireframe overlay modes, camera flight path frustums, and localized 3D bounding markers. Supports smooth auto-framing, point cloud overlays, and object inspection.",
+    mathSpecs: "WebGL 2.0 Shader Pipeline · Perspective Camera Fov 45° · OrbitControls 60 FPS",
+    inputsOutputs: "Input: Mesh PLY + 3D Objects · Output: Interactive Real-Time 3D Digital Twin",
+    tech: ["Three.js WebGL", "Interactive Controls", "Camera Frustums", "60 FPS Hardware Render"],
     targetPage: "reconstruction",
     telemetry: {
-      label: "Interactive Viewport",
-      value: "60 FPS WebGL",
-      sub: "Free Orbit · Pan · Zoom · Layers",
+      label: "Interactive Twin",
+      value: "60 FPS GPU View",
+      sub: "Full orbit, pan, zoom & layer isolation",
     },
   },
   {
     id: "measurements",
     number: "09",
     phase: "PHASE 09 / 11",
-    tag: "SCIENTIFIC SCALE",
-    title: "9. Photogrammetric Scale & Measurements",
+    tag: "SCALE CALIBRATION",
+    title: "9. Ground Baseline & Metric Scale Calibration",
     subtitle:
-      "Reference ground distance calibrates scale ambiguity, transforming relative units into certified metric meters for distance and height.",
-    tech: [
-      "15.00m Survey Baseline",
-      "Scale Factor 1.0000 m/u",
-      "3D Distance Vector",
-      "Elevation Delta",
-    ],
+      "Resolves monocular Structure-from-Motion scale ambiguity to convert arbitrary coordinates into certified metric meters.",
+    technicalExplanation:
+      "Pure monocular photogrammetry is inherently scale-ambiguous. By specifying a known physical reference distance (e.g. 10m road lane or survey marker), AEROMESH computes the exact metric scaling tensor S, upgrading unreferenced coordinates into certified meters with formal uncertainty bounds.",
+    mathSpecs: "Scale Factor: S = d_{known} / ||P_A - P_B||₂ · Metric Distance: D = S · ||P_1 - P_2||₂",
+    inputsOutputs: "Input: Known Baseline Distance · Output: Metric Calibrated Spatial Geometry (m)",
+    tech: ["Baseline Calibration", "Scale Ambiguity Solver", "Certified Meters", "Uncertainty Bounds"],
     targetPage: "reconstruction",
     telemetry: {
-      label: "Scale Calibration",
-      value: "METRIC CALIBRATED",
-      sub: "Baseline: 15.00m (±0.04m)",
+      label: "Scale Status",
+      value: "Certified Metric",
+      sub: "Relative units converted to meters (m)",
     },
   },
   {
@@ -190,41 +196,39 @@ const WORKFLOW_STAGES = [
     number: "10",
     phase: "PHASE 10 / 11",
     tag: "OPERATIONAL INTEL",
-    title: "10. AI Operational Findings & Anomalies",
+    title: "10. 3D Spatial Anomaly & Motion Disambiguation",
     subtitle:
-      "Spatial rules engine flags stationary vehicles in restricted lanes, structural clearance issues, and high-priority anomalies.",
-    tech: [
-      "Spatial Anomaly Rules",
-      "Speed Vector Estimation",
-      "Severity Classification",
-      "Decision Support",
-    ],
+      "Separates moving dynamic objects from stationary infrastructure and evaluates operational safety clearance rules.",
+    technicalExplanation:
+      "Analyzes temporal displacement vectors of localized 3D centroids across successive camera exposures. Disambiguates moving targets (Δd > 1.8m) from stationary elements, checking spatial proximity against safety buffers to trigger automated operational findings.",
+    mathSpecs: "Motion: ||P(t₂) - P(t₁)||₂ > 1.8m → MOVING · Spatial Buffer Anomaly Detection",
+    inputsOutputs: "Input: 3D Object Trajectories · Output: Motion Classification & Operational Findings",
+    tech: ["Motion Disambiguation", "Proximity Buffers", "Severity Classification", "Decision Engine"],
     targetPage: "findings",
     telemetry: {
-      label: "AI Findings",
-      value: "1 Critical · 2 Warnings",
-      sub: "Lane obstruction localized in 3D",
+      label: "Operational Intel",
+      value: "Automated Rules",
+      sub: "Moving vs Static separation active",
     },
   },
   {
     id: "report",
     number: "11",
     phase: "PHASE 11 / 11",
-    tag: "DELIVERABLES",
-    title: "11. Certified Mission Report Generation",
+    tag: "AUDIT EXPORT",
+    title: "11. Certified Engineering Report & GIS Package",
     subtitle:
-      "Automated compilation of executive PDF engineering reports, GeoJSON GIS layers, CSV object logs, and complete evidence packages.",
-    tech: [
-      "ReportLab PDF Engine",
-      "GeoJSON Features",
-      "CSV Metadata",
-      "Evidence ZIP Package",
-    ],
+      "Compiles certified executive PDF engineering reports, GeoJSON GIS layers, and complete cryptographic evidence packages.",
+    technicalExplanation:
+      "Compiles complete multi-phase pipeline audit trail into publication-ready deliverables: ReportLab-generated engineering PDF, GeoJSON GIS vector layers with refusal disclosures for unreferenced datasets, CSV object tables, and a ZIP evidence archive with visual reprojection overlays.",
+    mathSpecs: "SHA-256 Package Checksum · GeoJSON RFC 7946 Standard · Executive PDF Vector Layout",
+    inputsOutputs: "Input: Complete Mission Database · Output: Certified PDF, GeoJSON, CSV & ZIP",
+    tech: ["ReportLab PDF Engine", "GeoJSON Vector Layers", "Visual Overlays", "Audit ZIP Archive"],
     targetPage: "reports",
     telemetry: {
-      label: "Report Package",
-      value: "Certified PDF & GeoJSON",
-      sub: "Export ready with cryptographic hash",
+      label: "Mission Deliverable",
+      value: "Certified Audit Pack",
+      sub: "PDF, GeoJSON, CSV & ZIP export ready",
     },
   },
 ];
@@ -1155,7 +1159,7 @@ function StageVisualCanvas({ stageIndex }) {
   }
 }
 
-export default function HomePage({ onNavigateDashboard, onStartMission }) {
+export default function HomePage({ onNavigateDashboard, onStartMission, currentUser, onOpenAuth }) {
   const [activeStep, setActiveStep] = useState(0);
   const [isPlaying, setIsPlaying] = useState(true);
   const [workflowVisible, setWorkflowVisible] = useState(false);
@@ -1264,8 +1268,8 @@ export default function HomePage({ onNavigateDashboard, onStartMission }) {
           className="nav-brand"
           onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
         >
-          <div className="logo-icon">
-            <Icon name="Radar" size={20} />
+          <div className="glowing-icon-circle sm">
+            <Icon name="Radar" size={18} />
           </div>
           <div className="logo-text">
             <strong>HEXA SPARK</strong>
@@ -1274,20 +1278,86 @@ export default function HomePage({ onNavigateDashboard, onStartMission }) {
         </div>
 
         <div className="nav-menu">
-          <a href="#hero">Overview</a>
+          <a href="#top">Home</a>
+          <a
+            href="#mission-command"
+            onClick={(e) => {
+              e.preventDefault();
+              onNavigateDashboard("overview");
+            }}
+          >
+            Mission Command
+          </a>
+          <a
+            href="#history"
+            onClick={(e) => {
+              e.preventDefault();
+              onNavigateDashboard("missions");
+            }}
+          >
+            History
+          </a>
+          <a href="#pipeline-narrative">Pipeline Motion</a>
           <a href="#workflow">11-Step Workflow</a>
-          <a href="#capabilities">Capabilities</a>
-          <a href="#missions">Missions</a>
-          <a href="#architecture">Architecture</a>
         </div>
 
         <div className="nav-actions">
-          <button className="nav-btn secondary" onClick={onNavigateDashboard}>
-            Dashboard
+          {currentUser ? (
+            <button
+              onClick={() => onNavigateDashboard("profile")}
+              className="status-badge valid"
+              style={{
+                fontSize: 11,
+                padding: "4px 12px",
+                cursor: "pointer",
+                background: "rgba(14,165,233,0.15)",
+                border: "1px solid rgba(14,165,233,0.3)",
+                color: "#38bdf8",
+              }}
+              title="View your Operator Profile"
+            >
+              <span className="pulse-dot-cyan" />
+              <span>{currentUser.full_name} ({currentUser.role})</span>
+            </button>
+          ) : (
+            <button
+              onClick={onOpenAuth}
+              id="btn-nav-login"
+              style={{
+                background: "rgba(56, 189, 248, 0.12)",
+                border: "1px solid rgba(56, 189, 248, 0.3)",
+                color: "#38bdf8",
+                padding: "6px 14px",
+                borderRadius: "20px",
+                fontSize: "12px",
+                fontWeight: 600,
+                cursor: "pointer",
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+              }}
+            >
+              <span>🔒</span>
+              <span>Operator Login</span>
+            </button>
+          )}
+          <button
+            className="hero-btn-pill hero-btn-pill-secondary"
+            style={{ height: 36, padding: "0 16px", fontSize: 12 }}
+            onClick={() => onNavigateDashboard("missions")}
+            id="btn-nav-history"
+          >
+            <Icon name="Clock" size={13} />
+            History
           </button>
-          <button className="nav-btn primary" onClick={onStartMission}>
-            <Icon name="Plus" size={14} />
-            New Mission
+          <button
+            className="hero-btn-pill hero-btn-pill-primary"
+            style={{ height: 36, padding: "0 18px", fontSize: 12 }}
+            onClick={onStartMission}
+            id="btn-nav-new-analysis"
+          >
+            <Icon name="Plus" size={13} />
+            New Analysis
           </button>
         </div>
       </nav>
@@ -1297,42 +1367,56 @@ export default function HomePage({ onNavigateDashboard, onStartMission }) {
         <div className="hero-content">
           <div className="hero-text">
             <span className="hero-badge">
-              <Icon name="Radar" size={13} />
-              Commercial Aerial Intelligence & GIS
+              <span className="pulse-dot-cyan" />
+              COMMERCIAL AERIAL INTELLIGENCE & GIS
             </span>
 
-            <h1>
-              From Drone Footage
-              <span>to 3D Intelligence</span>
-            </h1>
+            {/* Glowing HEXA SPARK Wordmark with Shimmer Sweep */}
+            <div className="hero-wordmark-container">
+              <h1 className="hero-wordmark-title" data-text="HEXA SPARK">
+                <FloatingWord sparkColor="cyan">HEXA SPARK</FloatingWord>
+              </h1>
+              <div className="hero-wordmark-tagline">
+                From Drone Footage <FloatingWord sparkColor="violet"><span>to 3D Intelligence</span></FloatingWord>
+              </div>
+            </div>
 
             <p className="hero-subtitle">
-              Transform aerial imagery into interactive 3D environments, object
-              intelligence, spatial measurements and actionable mission
-              insights.
+              Transform single-pass UAV video footage into millimeter-calibrated 3D point clouds,
+              photogrammetric meshes, neural object tracks, and survey-grade GIS intelligence.
             </p>
 
-            <div className="hero-buttons">
+            {/* Reference-Style Glowing Pill Buttons */}
+            <div className="hero-pill-buttons">
               <button
-                className="hero-btn-primary"
+                className="hero-btn-pill hero-btn-pill-primary"
                 onClick={onStartMission}
-                id="btn-hero-start-mission"
+                id="btn-hero-new-analysis"
               >
                 <Icon name="Plus" size={16} />
-                Start New Mission
+                New Analysis
               </button>
 
               <button
-                className="hero-btn-secondary"
-                onClick={onNavigateDashboard}
-                id="btn-hero-explore-demo"
+                className="hero-btn-pill hero-btn-pill-secondary"
+                onClick={() => onNavigateDashboard("missions")}
+                id="btn-hero-history"
               >
-                <Icon name="Box" size={16} />
-                Explore Demo
+                <Icon name="Clock" size={15} />
+                History (Missions)
+              </button>
+
+              <button
+                className="hero-btn-pill hero-btn-pill-secondary"
+                onClick={() => onNavigateDashboard("overview")}
+                id="btn-hero-command"
+              >
+                <Icon name="Radio" size={15} />
+                Mission Command
               </button>
             </div>
 
-            {/* Live Metrics Ticker */}
+            {/* Live Metrics Strip */}
             <div className="hero-metrics-strip">
               <div className="hero-stat-item">
                 <span className="hero-stat-val">20 / 20</span>
@@ -1349,157 +1433,76 @@ export default function HomePage({ onNavigateDashboard, onStartMission }) {
               <div className="hero-stat-item">
                 <span
                   className="hero-stat-val"
-                  style={{ color: systemHealth.online ? "#10b981" : "#f59e0b" }}
+                  style={{ color: systemHealth.online ? "var(--status-active)" : "#f59e0b" }}
                 >
                   {systemHealth.online ? "ONLINE" : "OFFLINE"}
                 </span>
-                <span className="hero-stat-label">Backend Ready</span>
+                <span className="hero-stat-label">Hardware Engine</span>
               </div>
             </div>
           </div>
 
-          {/* Right Console Card */}
-          <div className="hero-console">
-            <div className="console-header">
-              <div className="console-title">
-                <Icon name="Radar" size={14} />
-                <span>MISSION COMMAND TELEMETRY</span>
-              </div>
-              <span className="badge-tag valid">SURFACE MESH ACTIVE</span>
-            </div>
+          {/* Central Hero Visual: Auto-rotating 3D Model in Concentric Compass Rings */}
+          <div className="hero-visual-staging">
+            <HeroCompassReconstruction />
+          </div>
+        </div>
+      </section>
 
-            <div className="console-display">
-              <svg viewBox="0 0 500 320" className="console-svg-canvas">
-                <defs>
-                  <linearGradient
-                    id="meshGrad"
-                    x1="0%"
-                    y1="0%"
-                    x2="100%"
-                    y2="100%"
-                  >
-                    <stop offset="0%" stopColor="#0ea5e9" stopOpacity="0.4" />
-                    <stop offset="100%" stopColor="#2563eb" stopOpacity="0.1" />
-                  </linearGradient>
-                </defs>
-                {/* 3D Wireframe Mesh Simulation */}
-                <polygon
-                  points="100,240 250,140 400,240 250,290"
-                  fill="url(#meshGrad)"
-                  stroke="#38bdf8"
-                  strokeWidth="1.5"
-                />
-                <line
-                  x1="100"
-                  y1="240"
-                  x2="250"
-                  y2="240"
-                  stroke="#38bdf8"
-                  strokeWidth="1"
-                  strokeOpacity="0.5"
-                />
-                <line
-                  x1="400"
-                  y1="240"
-                  x2="250"
-                  y2="240"
-                  stroke="#38bdf8"
-                  strokeWidth="1"
-                  strokeOpacity="0.5"
-                />
-                <line
-                  x1="250"
-                  y1="140"
-                  x2="250"
-                  y2="290"
-                  stroke="#38bdf8"
-                  strokeWidth="1.2"
-                  strokeOpacity="0.6"
-                />
-                <line
-                  x1="175"
-                  y1="190"
-                  x2="325"
-                  y2="190"
-                  stroke="#38bdf8"
-                  strokeWidth="1"
-                  strokeOpacity="0.4"
-                />
-                {/* Localized 3D Object Box */}
-                <polygon
-                  points="210,210 240,195 270,205 240,220"
-                  fill="rgba(245,158,11,0.4)"
-                  stroke="#f59e0b"
-                  strokeWidth="1.5"
-                />
-                <polygon
-                  points="210,195 240,180 270,190 240,205"
-                  fill="rgba(245,158,11,0.6)"
-                  stroke="#f59e0b"
-                  strokeWidth="1.5"
-                />
-                <line
-                  x1="210"
-                  y1="210"
-                  x2="210"
-                  y2="195"
-                  stroke="#f59e0b"
-                  strokeWidth="1.5"
-                />
-                <line
-                  x1="270"
-                  y1="205"
-                  x2="270"
-                  y2="190"
-                  stroke="#f59e0b"
-                  strokeWidth="1.5"
-                />
-                {/* HUD Overlay Tags */}
-                <rect
-                  x="20"
-                  y="20"
-                  width="160"
-                  height="26"
-                  rx="4"
-                  fill="#0f1624"
-                  stroke="rgba(255,255,255,0.1)"
-                />
-                <text
-                  x="28"
-                  y="37"
-                  fill="#38bdf8"
-                  fontSize="11"
-                  fontWeight="bold"
-                  fontFamily="monospace"
-                >
-                  OBJ_T0011 · car · 94%
-                </text>
-                <text
-                  x="20"
-                  y="300"
-                  fill="#94a3b8"
-                  fontSize="10"
-                  fontFamily="monospace"
-                >
-                  Z ≈ 7.16m Road Plane · Reproj 1.95px
-                </text>
-              </svg>
-            </div>
+      {/* 3. NARRATIVE PIPELINE ANIMATION — THE "WOW" SEQUENCE */}
+      <section className="narrative-pipeline-section" id="pipeline-narrative">
+        <NarrativePipelineSequence />
+      </section>
 
-            <div className="console-footer">
-              <div className="console-foot-item">
-                <span>Photogrammetry</span>
-                <strong>COLMAP + Poisson</strong>
-              </div>
-              <div className="console-foot-item">
-                <span>Object Tracking</span>
-                <strong>YOLOv11 + ByteTrack</strong>
-              </div>
-              <div className="console-foot-item">
-                <span>Scale Status</span>
-                <strong>Metric Calibrated (m)</strong>
-              </div>
+      {/* 4. REFERENCE BOTTOM FEATURE CARDS GRID */}
+      <section className="feature-card-section" id="capabilities-grid">
+        <div className="feature-grid-4col">
+          <div className="feature-glass-card glass" id="card-feature-reconstruction">
+            <div className="glass-sheen" aria-hidden="true" />
+            <div className="glowing-icon-circle lg">
+              <Icon name="Box" size={24} />
             </div>
+            <h4>3D Reconstruction</h4>
+            <p>
+              Autonomous single-pass Structure-from-Motion and dense multi-view stereo generating
+              survey-grade 3D point clouds and Poisson surface meshes.
+            </p>
+          </div>
+
+          <div className="feature-glass-card glass" id="card-feature-360">
+            <div className="glass-sheen" aria-hidden="true" />
+            <div className="glowing-icon-circle lg">
+              <Icon name="Compass" size={24} />
+            </div>
+            <h4>Explore in 360°</h4>
+            <p>
+              Full 6-DoF spatial orbit navigation, orthographic nadir clipping planes, and real-time
+              camera frustum station inspection in high precision.
+            </p>
+          </div>
+
+          <div className="feature-glass-card glass" id="card-feature-analysis">
+            <div className="glass-sheen" aria-hidden="true" />
+            <div className="glowing-icon-circle lg">
+              <Icon name="Radar" size={24} />
+            </div>
+            <h4>Detailed Analysis</h4>
+            <p>
+              Deep YOLO11 convolutional neural detection coupled with ByteTrack spatio-temporal Kalman
+              filtering and ground sampling distance calibration.
+            </p>
+          </div>
+
+          <div className="feature-glass-card glass" id="card-feature-future">
+            <div className="glass-sheen" aria-hidden="true" />
+            <div className="glowing-icon-circle lg">
+              <Icon name="Shield" size={24} />
+            </div>
+            <h4>Future Ready</h4>
+            <p>
+              Certified deliverables pipeline auto-compiling executive PDF engineering reports,
+              GeoJSON spatial layers, CSV telemetry, and zipped audit packages.
+            </p>
           </div>
         </div>
       </section>
@@ -1541,99 +1544,137 @@ export default function HomePage({ onNavigateDashboard, onStartMission }) {
           ))}
         </div>
 
-        {/* Dynamic Split Showcase Card */}
+        {/* Dynamic Split Showcase Card with Smooth Transitions */}
         <div className="workflow-stage-card">
-          {/* Left Column: Information & Pipeline Telemetry */}
-          <div className="stage-info-column">
-            <div className="stage-header-meta">
-              <span className="stage-phase-tag">
-                <i
-                  style={{
-                    width: 6,
-                    height: 6,
-                    borderRadius: "50%",
-                    background: "#38bdf8",
-                    display: "inline-block",
-                  }}
-                />
-                {currentStage.phase} · {currentStage.tag}
-              </span>
-              <h3 className="stage-title">{currentStage.title}</h3>
-              <p className="stage-description">{currentStage.subtitle}</p>
-
-              <div className="stage-tech-tags">
-                {currentStage.tech.map((t, i) => (
-                  <span
-                    key={i}
-                    className={`stage-tech-pill ${i === 0 ? "highlight" : ""}`}
-                  >
-                    {t}
-                  </span>
-                ))}
-              </div>
-            </div>
-
-            {/* Stage Navigation & Workspace Trigger */}
-            <div className="stage-nav-controls">
-              <div className="stage-player-controls">
-                <button
-                  className="player-btn"
-                  onClick={handlePrevStep}
-                  title="Previous Stage"
-                >
-                  ←
-                </button>
-                <button
-                  className="player-btn"
-                  onClick={() => setIsPlaying((p) => !p)}
-                  title={isPlaying ? "Pause Auto-Advance" : "Play Auto-Advance"}
-                >
-                  {isPlaying ? "❚❚" : "▶"}
-                </button>
-                <button
-                  className="player-btn"
-                  onClick={handleNextStep}
-                  title="Next Stage"
-                >
-                  →
-                </button>
-              </div>
-
-              <button
-                className="stage-action-link"
-                onClick={onNavigateDashboard}
-              >
-                <span>Launch in Workspace</span>
-                <Icon name="ArrowRight" size={14} />
-              </button>
-            </div>
-          </div>
-
-          {/* Right Column: Visual Graphic for this Step */}
-          <div className="stage-visual-column">
-            <div
-              className="stage-canvas-wrapper"
+          <AnimatePresence mode="wait">
+            <motion.div
               key={currentStage.id}
-              aria-live="polite"
+              className="workflow-stage-inner"
+              initial={{ opacity: 0, y: 14 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -14 }}
+              transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
             >
-              {activeStep === 1 && demoVideoUrl ? (
-                <div className="stage-video-preview">
-                  <video
-                    src={demoVideoUrl}
-                    muted
-                    loop
-                    autoPlay
-                    playsInline
-                    controls
-                    aria-label="Mission drone footage preview"
-                  />
-                  <span className="stage-video-label">LIVE MISSION SOURCE</span>
+              {/* Left Column: Technical In-Depth Architecture */}
+              <div className="stage-info-column">
+                <div className="stage-header-meta">
+                  <div className="stage-phase-row">
+                    <span className="stage-phase-tag">
+                      <i className="pulse-dot" />
+                      {currentStage.phase} · {currentStage.tag}
+                    </span>
+                    <span className="stage-step-indicator">
+                      Step {currentStage.number} / 11
+                    </span>
+                  </div>
+
+                  <h3 className="stage-title">{currentStage.title}</h3>
+                  <p className="stage-description">{currentStage.subtitle}</p>
+
+                  {/* Technical Deep Dive Panel */}
+                  <div className="stage-technical-panel">
+                    <div className="tech-panel-header">
+                      <Icon name="Cpu" size={13} />
+                      <span>HOW IT WORKS TECHNICALLY</span>
+                    </div>
+                    <p className="tech-panel-explanation">
+                      {currentStage.technicalExplanation}
+                    </p>
+
+                    <div className="tech-panel-specs">
+                      <div className="tech-spec-row">
+                        <span className="tech-spec-label">Formulation / Specs:</span>
+                        <code className="tech-spec-code">{currentStage.mathSpecs}</code>
+                      </div>
+                      <div className="tech-spec-row">
+                        <span className="tech-spec-label">I/O Pipeline:</span>
+                        <span className="tech-spec-val">{currentStage.inputsOutputs}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="stage-tech-tags">
+                    {currentStage.tech.map((t, i) => (
+                      <span
+                        key={i}
+                        className={`stage-tech-pill ${i === 0 ? "highlight" : ""}`}
+                      >
+                        {t}
+                      </span>
+                    ))}
+                  </div>
                 </div>
-              ) : (
-                <StageVisualCanvas stageIndex={activeStep} />
-              )}
-            </div>
-          </div>
+
+                {/* Stage Navigation & Workspace Trigger */}
+                <div className="stage-nav-controls">
+                  <div className="stage-player-controls">
+                    <button
+                      className="player-btn"
+                      onClick={handlePrevStep}
+                      title="Previous Stage"
+                    >
+                      ←
+                    </button>
+                    <button
+                      className={`player-btn ${isPlaying ? "playing" : ""}`}
+                      onClick={() => setIsPlaying((p) => !p)}
+                      title={isPlaying ? "Pause Auto-Advance" : "Play Auto-Advance"}
+                    >
+                      {isPlaying ? "❚❚" : "▶"}
+                    </button>
+                    <button
+                      className="player-btn"
+                      onClick={handleNextStep}
+                      title="Next Stage"
+                    >
+                      →
+                    </button>
+                    <span className="player-timer-hint">
+                      {isPlaying ? "Auto-advancing" : "Paused"}
+                    </span>
+                  </div>
+
+                  <button
+                    className="stage-action-link"
+                    onClick={onNavigateDashboard}
+                  >
+                    <span>Launch in Workspace</span>
+                    <Icon name="ArrowRight" size={14} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Right Column: Visual Graphic, Real Drone Video, or Real 3D Mesh */}
+              <div className="stage-visual-column">
+                <div className="stage-canvas-wrapper" aria-live="polite">
+                  {activeStep === 1 && demoVideoUrl ? (
+                    <div className="stage-video-preview">
+                      <video
+                        src={demoVideoUrl}
+                        muted
+                        loop
+                        autoPlay
+                        playsInline
+                        controls
+                        aria-label="Mission drone footage preview"
+                      />
+                      <span className="stage-video-label">LIVE MISSION SOURCE VIDEO</span>
+                    </div>
+                  ) : (activeStep === 4 || activeStep === 5) && missionsList[0] ? (
+                    <div className="stage-recon-preview">
+                      <ReconstructionViewer
+                        mission={missionsList[0]}
+                        hideEmbeddedControls={true}
+                      />
+                      <span className="stage-video-label">LIVE 3D RECONSTRUCTION PREVIEW</span>
+                    </div>
+                  ) : (
+                    <StageVisualCanvas stageIndex={activeStep} />
+                  )}
+                </div>
+              </div>
+            </motion.div>
+          </AnimatePresence>
         </div>
       </section>
 
@@ -1701,7 +1742,7 @@ export default function HomePage({ onNavigateDashboard, onStartMission }) {
       {/* 6. CALL TO ACTION BANNER */}
       <section className="cta-banner" id="architecture">
         <div className="cta-banner-content">
-          <span className="hero-badge">HEXA SPARK SIH DEMONSTRATION READY</span>
+          <span className="hero-badge">AEROMESH SIH DEMONSTRATION READY</span>
           <h2>Transform Aerial Footage into 3D Intelligence</h2>
           <p>
             Experience the complete end-to-end pipeline: video ingestion, neural
@@ -1728,7 +1769,7 @@ export default function HomePage({ onNavigateDashboard, onStartMission }) {
       <footer className="homepage-footer">
         <div>
           <strong style={{ color: "#ffffff", letterSpacing: "0.08em" }}>
-            HEXA SPARK
+            AEROMESH
           </strong>
           <span style={{ marginLeft: "8px", color: "#64748b" }}>
             Single-Pass Drone Video to 3D Reconstruction Platform

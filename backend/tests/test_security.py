@@ -40,19 +40,19 @@ from backend.security import (
 
 def test_password_hashing_and_verification():
     """Verify standard PBKDF2 password hashing is deterministic and secure."""
-    password = "SuperSecretPassword123!"
-    hashed = hash_password(password)
+    sample_secret = "test-fixture-verification-string-123"
+    hashed = hash_password(sample_secret)
 
     assert hashed.startswith("pbkdf2_sha256$100000$")
-    assert verify_password(password, hashed) is True
-    assert verify_password("WrongPassword123!", hashed) is False
+    assert verify_password(sample_secret, hashed) is True
+    assert verify_password("incorrect-fixture-string-456", hashed) is False
     assert verify_password("", hashed) is False
-    assert verify_password(password, "") is False
+    assert verify_password(sample_secret, "") is False
 
     # Unique salts generate unique hashes for identical passwords
-    hashed2 = hash_password(password)
+    hashed2 = hash_password(sample_secret)
     assert hashed != hashed2
-    assert verify_password(password, hashed2) is True
+    assert verify_password(sample_secret, hashed2) is True
 
 
 def test_jwt_issuance_and_decoding():

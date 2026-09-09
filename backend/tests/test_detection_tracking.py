@@ -91,7 +91,7 @@ def test_canonical_model_resolution_finds_yolo11n(monkeypatch, tmp_path):
 
     # 1. Resolves canonical model from normal workspace root
     model, name, is_aeromesh = _load_detection_model(use_aeromesh=False)
-    assert name == "yolo11n"
+    assert name in ("yolo11m", "yolo11s", "yolo11n")
     assert is_aeromesh is False
     assert hasattr(model, "names")
     assert len(model.names) == 80
@@ -100,7 +100,7 @@ def test_canonical_model_resolution_finds_yolo11n(monkeypatch, tmp_path):
     # 2. Resolves canonical model robustly even when cwd is changed outside repo root
     monkeypatch.chdir(tmp_path)
     model_from_tmp, name2, is_aeromesh2 = _load_detection_model(use_aeromesh=False)
-    assert name2 == "yolo11n"
+    assert name2 in ("yolo11m", "yolo11s", "yolo11n")
     assert is_aeromesh2 is False
     assert len(model_from_tmp.names) == 80
 

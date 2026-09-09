@@ -741,7 +741,7 @@ function ModulePage({ id, onBack, onAction }) {
             <strong>Intelligence workspace ready</strong>
 
             <span>
-              This module is connected to the AeroMesh processing pipeline. Live
+              This module is connected to the AEROMESH processing pipeline. Live
               processing, visualization and export services can be connected
               here.
             </span>
@@ -1012,7 +1012,7 @@ export default function App() {
                   <h1>{currentPage.label}</h1>
 
                   <p>
-                    Operational workspace for the AeroMesh intelligence
+                    Operational workspace for the AEROMESH intelligence
                     pipeline.
                   </p>
                 </div>

@@ -84,6 +84,10 @@ export function resolveAssetUrl(url) {
   ) {
     return url;
   }
+  // Static frontend assets served by Vite directly
+  if (url.startsWith("/assets/")) {
+    return url;
+  }
   if (url.startsWith("/")) {
     return `${BACKEND_URL}${url}`;
   }
@@ -147,9 +151,10 @@ function normalizeMission(rawMission = {}) {
     assets: {
       ...(baseDefaults.assets || {}),
       ...(rawMission.assets || {}),
-      video: resolveAssetUrl(videoUrl || rawMission.assets?.video || baseDefaults.assets?.video || ""),
+      video: resolveAssetUrl(videoUrl || (mId ? `/api/missions/${mId}/video` : "") || rawMission.assets?.video || baseDefaults.assets?.video || ""),
       pointCloud: resolveAssetUrl(
         rawMission.reconstruction?.point_cloud_url ||
+          (mId ? `/api/missions/${mId}/reconstruction/pointcloud` : "") ||
           rawMission.assets?.pointCloud ||
           rawMission.reconstruction?.pointCloud ||
           baseDefaults.assets?.pointCloud ||
@@ -157,6 +162,7 @@ function normalizeMission(rawMission = {}) {
       ),
       mesh: resolveAssetUrl(
         rawMission.reconstruction?.mesh_url ||
+          (mId ? `/api/missions/${mId}/reconstruction/mesh` : "") ||
           rawMission.assets?.mesh ||
           baseDefaults.assets?.mesh ||
           "",
@@ -201,6 +207,35 @@ async function parseResponse(response) {
   return response.text();
 }
 
+export async function listMissions() {
+  try {
+    const response = await fetch(`${API_BASE}/missions`, {
+      headers: getAuthHeaders(),
+    });
+    if (!response.ok) {
+      console.warn(`[API] listMissions returned HTTP ${response.status}`);
+      return [];
+    }
+    const data = await response.json();
+    const rawItems = Array.isArray(data)
+      ? data
+      : Array.isArray(data?.missions)
+      ? data.missions
+      : typeof data === "object" && data !== null
+      ? Object.values(data.missions || data)
+      : [];
+
+    const normalized = rawItems.map((m) => normalizeMission(m));
+    normalized.forEach((m) => {
+      if (m && m.id) missionCache.set(m.id, m);
+    });
+    return normalized;
+  } catch (error) {
+    console.warn("[API] listMissions network error:", error);
+    return [];
+  }
+}
+
 export async function createMission({ name, missionType, location, operator }) {
   try {
     const params = new URLSearchParams({
@@ -234,15 +269,19 @@ export async function createMission({ name, missionType, location, operator }) {
   }
 }
 
-export async function getMission(missionId) {
-  if (missionCache.has(missionId)) {
+export async function getMission(missionId, forceRefresh = false) {
+  if (!forceRefresh && missionCache.has(missionId)) {
     const cached = missionCache.get(missionId);
-    console.log(`[Mission] Cache hit for mission ${missionId}`);
-    return cached;
+    if (cached && cached.status !== "processing") {
+      console.log(`[Mission] Cache hit for mission ${missionId}`);
+      return cached;
+    }
   }
 
   try {
-    const response = await fetch(`${API_BASE}/missions/${missionId}`);
+    const response = await fetch(`${API_BASE}/missions/${missionId}`, {
+      headers: getAuthHeaders(),
+    });
 
     if (response.status === 404) {
       // Mission not found on backend
@@ -337,22 +376,6 @@ export async function getMission(missionId) {
   }
 }
 
-export async function listMissions() {
-  try {
-    const response = await fetch(`${API_BASE}/missions`);
-    const data = await parseResponse(response);
-    if (data.success) {
-      const missions = (data.missions || []).map(normalizeMission);
-      missions.forEach((m) => missionCache.set(m.id, m));
-      return missions;
-    }
-    return [];
-  } catch (error) {
-    console.error("List missions error:", error);
-    return [];
-  }
-}
-
 export async function uploadVideo(missionId, file) {
   try {
     console.log(`[Upload] Starting video upload for mission ${missionId}`);
@@ -384,6 +407,25 @@ export async function uploadVideo(missionId, file) {
   }
 }
 
+export async function getProcessingStatus(missionId) {
+  try {
+    const response = await fetch(
+      `${API_BASE}/missions/${missionId}/processing-status`,
+      {
+        headers: getAuthHeaders(),
+      },
+    );
+    if (!response.ok) {
+      throw new Error(`Failed to fetch status: ${response.status}`);
+    }
+    const data = await response.json();
+    return data;
+  } catch (err) {
+    console.warn(`[ProcessStatus] Error fetching status for ${missionId}:`, err);
+    return null;
+  }
+}
+
 export async function processVideo(
   missionId,
   frameSampling = 2,
@@ -393,7 +435,7 @@ export async function processVideo(
   sceneProfile = "road",
 ) {
   try {
-    console.log(`[Process] Starting processing for mission ${missionId}`, {
+    console.log(`[Process] Starting pipeline processing for mission ${missionId}`, {
       frameSampling,
       detectionConfidence,
       sceneProfile,
@@ -429,13 +471,23 @@ export async function processVideo(
     }
 
     if (data.success) {
-      console.log(`[Process] Processing completed for mission ${missionId}`, {
-        tracks: data.detections?.uniqueTracks || 0,
-        status: data.processing?.status,
-      });
+      console.log(`[Process] Pipeline initiated for mission ${missionId}:`, data);
       missionCache.delete(missionId);
-      const mission = await getMission(missionId);
-      missionCache.set(missionId, mission);
+
+      // Persist active job in localStorage for resume-after-reload capability
+      try {
+        const stored = JSON.parse(localStorage.getItem("hexaspark_active_jobs") || "{}");
+        stored[missionId] = {
+          jobId: data.job_id,
+          missionId,
+          startedAt: new Date().toISOString(),
+          status: data.status || "PROCESSING",
+        };
+        localStorage.setItem("hexaspark_active_jobs", JSON.stringify(stored));
+      } catch (storageErr) {
+        console.warn("[Process] LocalStorage persistence error:", storageErr);
+      }
+
       return data;
     }
 
@@ -443,7 +495,7 @@ export async function processVideo(
       `[Process] Processing failed for mission ${missionId}:`,
       data,
     );
-    throw new Error(data.message || "Processing failed");
+    throw new Error(data.message || data.detail || "Processing failed");
   } catch (error) {
     console.error(
       `[Process] Processing error for mission ${missionId}:`,
@@ -766,7 +818,8 @@ export async function fetchReconstruction(missionId) {
         headers: getAuthHeaders(),
       },
     );
-    return await response.json();
+    const data = await response.json();
+    return data;
   } catch (error) {
     console.error("fetchReconstruction error:", error);
     return { success: false, reconstruction: null };
@@ -820,6 +873,26 @@ export function getAuthHeaders(customHeaders = {}) {
   return headers;
 }
 
+export async function registerUser(email, password, fullName = "", role = "OPERATOR") {
+  try {
+    const response = await fetch(`${API_BASE}/auth/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password, full_name: fullName, role }),
+    });
+    const data = await response.json();
+    if (response.ok && data.access_token) {
+      setAuthToken(data.access_token);
+      setStoredUser(data.user);
+      return { success: true, user: data.user, token: data.access_token };
+    }
+    return { success: false, error: data.detail || "Registration failed" };
+  } catch (error) {
+    console.error("registerUser error:", error);
+    return { success: false, error: error.message };
+  }
+}
+
 export async function loginUser(email, password) {
   try {
     const response = await fetch(`${API_BASE}/auth/login`, {
@@ -838,6 +911,10 @@ export async function loginUser(email, password) {
     console.error("loginUser error:", error);
     return { success: false, error: error.message };
   }
+}
+
+export function logoutUser() {
+  clearAuthToken();
 }
 
 export async function fetchCurrentUser() {
@@ -872,4 +949,96 @@ export async function fetchDemoUsers() {
     console.error("fetchDemoUsers error:", error);
     return [];
   }
+}
+
+export async function getComputeDevice() {
+  try {
+    const response = await fetch(`${API_BASE}/system/compute-device`, {
+      headers: getAuthHeaders(),
+    });
+    if (response.ok) {
+      const data = await response.json();
+      if (data.success && data.device) {
+        return data.device;
+      }
+    }
+  } catch (error) {
+    console.warn("[ComputeDevice] Error fetching compute device info:", error);
+  }
+  return {
+    execution_device: "cpu",
+    cuda_available: false,
+    device_name: "Intel(R) UHD Graphics",
+    vram_mb: 0,
+    compute_path: "CPU inference — Intel(R) UHD Graphics detected, no CUDA device",
+    estimated_duration: "~6 – 8 min",
+    compute_budget: "Host RAM & CPU (0 MB VRAM)",
+    budget_detail: "PyCOLMAP + YOLO11 (CPU multi-threading)",
+  };
+}
+
+
+
+export async function fetchMissionMarkings(missionId) {
+  if (!missionId) return [];
+  try {
+    const res = await fetch(`${API_BASE}/missions/${missionId}/markings`, {
+      headers: getAuthHeaders(),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      return data.markings || [];
+    }
+  } catch (err) {
+    console.warn('[API] Error fetching markings:', err);
+  }
+  return [];
+}
+
+export async function createMissionMarking(missionId, markingData) {
+  if (!missionId) return null;
+  try {
+    const res = await fetch(`${API_BASE}/missions/${missionId}/markings`, {
+      method: 'POST',
+      headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(markingData),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      return data.marking;
+    }
+  } catch (err) {
+    console.warn('[API] Error creating marking:', err);
+  }
+  return null;
+}
+
+export async function deleteMissionMarking(missionId, markingId) {
+  if (!missionId || !markingId) return false;
+  try {
+    const res = await fetch(`${API_BASE}/missions/${missionId}/markings/${markingId}`, {
+      method: 'DELETE',
+      headers: getAuthHeaders(),
+    });
+    return res.ok;
+  } catch (err) {
+    console.warn('[API] Error deleting marking:', err);
+    return false;
+  }
+}
+
+export async function fetchMissionKeyframes(missionId) {
+  if (!missionId) return [];
+  try {
+    const res = await fetch(`${API_BASE}/missions/${missionId}/keyframes`, {
+      headers: getAuthHeaders(),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      return data.frames || [];
+    }
+  } catch (err) {
+    console.warn('[API] Error fetching keyframes:', err);
+  }
+  return [];
 }

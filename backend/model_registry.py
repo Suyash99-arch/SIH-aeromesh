@@ -37,7 +37,12 @@ def _checksum(path: Path) -> str | None:
 class ModelRegistry:
     def __init__(self, model_path: str | Path | None = None):
         configured = str(model_path or os.getenv("YOLO_MODEL_PATH", "")).strip()
-        self.model_path = Path(configured) if configured else Path(__file__).resolve().parent / "models" / "aeromesh_yolo.pt"
+        default_p = Path(__file__).resolve().parent / "models" / "aeromesh_yolo.pt"
+        if not default_p.is_file():
+            default_p = Path(__file__).resolve().parent / "models" / "yolo11m.pt"
+        if not default_p.is_file():
+            default_p = Path(__file__).resolve().parent.parent / "yolo11m.pt"
+        self.model_path = Path(configured) if configured else default_p
 
     def inspect(self) -> ModelRecord:
         path = self.model_path.resolve()

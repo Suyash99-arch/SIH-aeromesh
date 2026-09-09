@@ -53,7 +53,19 @@ def get_job(job_id: str) -> dict[str, Any] | None:
         return None
 
 
-def update_job(job_id: str, *, status: str | None = None, stage: str | None = None, progress_percent: int | None = None, message: str | None = None, error_message: str | None = None) -> dict[str, Any] | None:
+def update_job(
+    job_id: str,
+    *,
+    status: str | None = None,
+    stage: str | None = None,
+    progress_percent: int | None = None,
+    message: str | None = None,
+    error_message: str | None = None,
+    current_stage_id: str | None = None,
+    completed_stages: list[str] | None = None,
+    failed_stage: str | None = None,
+    details: dict[str, Any] | None = None,
+) -> dict[str, Any] | None:
     job = _local_jobs.get(job_id)
     if job is not None:
         if status is not None: job["status"] = status
@@ -61,6 +73,11 @@ def update_job(job_id: str, *, status: str | None = None, stage: str | None = No
         if progress_percent is not None: job["progress_percent"] = progress_percent
         if message is not None: job["message"] = message
         if error_message is not None: job["error_message"] = error_message
+        if current_stage_id is not None: job["current_stage_id"] = current_stage_id
+        if completed_stages is not None: job["completed_stages"] = completed_stages
+        if failed_stage is not None: job["failed_stage"] = failed_stage
+        if details is not None:
+            job.setdefault("details", {}).update(details)
         if status == "FAILED" or stage == "FAILED": job["completed_at"] = _now()
         return dict(job)
     engine = get_configured_engine()

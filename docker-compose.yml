@@ -13,7 +13,7 @@ services:
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-aeromesh}
       POSTGRES_USER: ${POSTGRES_USER:-aeromesh}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-aeromesh_production_pass_2026}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
     volumes:
       - postgis_data:/var/lib/postgresql/data
     ports:
@@ -47,11 +47,11 @@ services:
       dockerfile: Dockerfile
     restart: unless-stopped
     environment:
-      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-aeromesh}:${POSTGRES_PASSWORD:-aeromesh_production_pass_2026}@db:5432/${POSTGRES_DB:-aeromesh}
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://${POSTGRES_USER:-aeromesh}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-aeromesh}}
       REDIS_URL: redis://redis:6379/0
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/0
-      SECRET_KEY: ${SECRET_KEY:-aeromesh-production-secret-key-change-in-env-2026}
+      SECRET_KEY: ${SECRET_KEY:?Set SECRET_KEY in .env}
       JWT_ALGORITHM: ${JWT_ALGORITHM:-HS256}
       JWT_EXPIRATION_MINUTES: ${JWT_EXPIRATION_MINUTES:-1440}
       AEROMESH_AUTH_OPTIONAL: ${AEROMESH_AUTH_OPTIONAL:-1}
@@ -77,7 +77,7 @@ services:
     command: ["celery", "-A", "backend.tasks.celery_app", "worker", "--loglevel=info", "-c", "2"]
     restart: unless-stopped
     environment:
-      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-aeromesh}:${POSTGRES_PASSWORD:-aeromesh_production_pass_2026}@db:5432/${POSTGRES_DB:-aeromesh}
+      DATABASE_URL: ${DATABASE_URL:-postgresql+psycopg://${POSTGRES_USER:-aeromesh}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-aeromesh}}
       REDIS_URL: redis://redis:6379/0
       CELERY_BROKER_URL: redis://redis:6379/0
       CELERY_RESULT_BACKEND: redis://redis:6379/0

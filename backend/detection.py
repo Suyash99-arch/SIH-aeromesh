@@ -47,7 +47,7 @@ SCENE_PROFILES: dict[str, frozenset[str] | None] = {
     "road": ROAD_SCENE_CLASSES,
     "terrestrial_road": ROAD_SCENE_CLASSES,
     "rail": frozenset({"train", "person", "car", "truck"}),
-    "maritime": frozenset({"boat", "person"}),
+    "maritime": frozenset({"boat", "ship", "vessel", "person"}),
     "aerial": frozenset({"airplane"}),
 }
 

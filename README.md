@@ -1,6 +1,6 @@
-# AeroMesh — Single-Pass Drone Video to 3D Spatial Intelligence
+# AEROMESH — Single-Pass Drone Video to 3D Spatial Intelligence
 
-AeroMesh is a professional photogrammetric and geospatial intelligence platform that transforms monocular drone video into 3D reconstructions, localized AI detections, metric measurements, and executive decision reports.
+AEROMESH is a professional photogrammetric and geospatial intelligence platform that transforms monocular drone video into 3D reconstructions, localized AI detections, metric measurements, and executive decision reports.
 
 ---
 
@@ -60,7 +60,7 @@ cmd /c "npx playwright test --config=frontend/playwright.config.js"
 
 ## Scientific Data Integrity & Truth in Advertising
 
-AeroMesh preserves scientific disclosures at all times:
+AEROMESH preserves scientific disclosures at all times:
 - Monocular camera models lacking absolute survey GCPs remain labeled `LOCAL_ARBITRARY`.
 - Scenes without an active metric calibration baseline remain labeled `RELATIVE_SCALE`.
 - Missions without external WGS84 coordinate reference systems remain labeled `UNREFERENCED`.

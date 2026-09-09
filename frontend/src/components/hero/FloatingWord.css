@@ -1,0 +1,70 @@
+/* FloatingWord Micro-Interaction Styles */
+
+.floating-word-interactive {
+  display: inline-block;
+  position: relative;
+  cursor: default;
+  transition: transform 0.15s ease-out, filter 0.25s ease;
+  will-change: transform;
+}
+
+/* Subtle idle floating oscillation on key words */
+.floating-word-interactive .floating-word-inner {
+  display: inline-block;
+  animation: floatingWordIdle 4.5s ease-in-out infinite alternate;
+}
+
+@keyframes floatingWordIdle {
+  0% {
+    transform: translateY(0px);
+  }
+  50% {
+    transform: translateY(-2.5px);
+  }
+  100% {
+    transform: translateY(1px);
+  }
+}
+
+/* Proximity / Hover State */
+.floating-word-interactive.hovered {
+  filter: drop-shadow(0 0 10px rgba(79, 216, 255, 0.45));
+}
+
+.floating-word-interactive.hovered .floating-word-inner {
+  animation-play-state: paused;
+}
+
+/* Spark Burst Glow */
+.floating-spark-flare {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 130%;
+  height: 130%;
+  transform: translate(-50%, -50%);
+  pointer-events: none;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(79, 216, 255, 0.4) 0%, rgba(139, 123, 255, 0.2) 40%, transparent 70%);
+  animation: sparkFlareBurst 0.65s ease-out forwards;
+  z-index: 1;
+}
+
+.floating-word-interactive.spark-burst-violet .floating-spark-flare {
+  background: radial-gradient(circle, rgba(139, 123, 255, 0.45) 0%, rgba(79, 216, 255, 0.2) 40%, transparent 70%);
+}
+
+@keyframes sparkFlareBurst {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.6);
+  }
+  30% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1.15);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1.4);
+  }
+}
