@@ -49,6 +49,7 @@ def test_celery_task_is_registered_or_fallback_exists():
 
 def test_detection_task_records_missing_model_failure(monkeypatch):
     monkeypatch.setattr(main, "get_configured_engine", lambda: None)
+    monkeypatch.setenv("YOLO_MODEL_PATH", "missing_model.pt")
     job = create_job("mission-3")
 
     detect_objects(job["id"])

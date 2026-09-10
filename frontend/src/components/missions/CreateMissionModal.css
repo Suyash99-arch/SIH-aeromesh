@@ -36,10 +36,10 @@
   background: var(--bg-surface);
   border: 1px solid rgba(0, 217, 255, 0.25);
   border-radius: 20px;
-  max-width: 640px;
-  width: min(92vw, 640px);
-  max-height: 90vh;
-  overflow: auto;
+  max-width: 680px;
+  width: min(92vw, 680px);
+  max-height: 92vh;
+  overflow-y: auto;
   box-shadow: 0 28px 80px rgba(0, 0, 0, 0.52);
   display: flex;
   flex-direction: column;
@@ -621,6 +621,19 @@
 .video-info-section li {
   font-size: 13px;
   color: var(--text-secondary);
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+  padding: 16px 24px;
+  border-top: 1px solid var(--border);
+  background: rgba(15, 18, 53, 0.94);
+  position: sticky;
+  bottom: 0;
+  z-index: 10;
+  margin-top: 16px;
 }
 
 /* Responsive */

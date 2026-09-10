@@ -6,7 +6,9 @@
 import { missions as seededMissions } from "../data/missions";
 
 // API base URL
-const API_BASE = "http://localhost:8000/api";
+const API_BASE =
+  (typeof import.meta !== "undefined" && import.meta.env?.VITE_API_BASE_URL) ||
+  "http://localhost:8000/api";
 
 const fallbackMission = {
   id: "sector-04",
@@ -17,7 +19,7 @@ const fallbackMission = {
   type: "Single-Pass Aerial Reconstruction",
   drone: "AERO-X4",
   coverage: "0.00 km²",
-  duration: "00:00",
+  duration: "—",
   frames: 0,
   progress: 0,
   confidence: 0,
@@ -70,41 +72,101 @@ const fallbackMission = {
   recommendations: ["Upload a drone video to start automatic analysis."],
 };
 
+export const BACKEND_URL = API_BASE.replace(/\/api$/, "");
+
+export function resolveAssetUrl(url) {
+  if (!url || typeof url !== "string") return "";
+  if (
+    url.startsWith("http://") ||
+    url.startsWith("https://") ||
+    url.startsWith("blob:") ||
+    url.startsWith("data:")
+  ) {
+    return url;
+  }
+  // Static frontend assets served by Vite directly
+  if (url.startsWith("/assets/")) {
+    return url;
+  }
+  if (url.startsWith("/")) {
+    return `${BACKEND_URL}${url}`;
+  }
+  return `${BACKEND_URL}/${url}`;
+}
+
 function normalizeMission(rawMission = {}) {
+  const mId = rawMission.id || rawMission.mission_id || "";
+  const seeded = getSeededMission(mId);
+  const baseDefaults = seeded || fallbackMission;
+
   const videoUrl = rawMission.video?.url || rawMission.videoUrl || "";
+
+  let duration = rawMission.duration;
+  const durationSec =
+    rawMission.video?.duration_seconds ??
+    rawMission.video?.durationSeconds ??
+    rawMission.durationSeconds;
+  if (!duration || duration === "00:00" || duration === "—") {
+    if (typeof durationSec === "number" && durationSec > 0) {
+      const mins = Math.floor(durationSec / 60);
+      const secs = Math.round(durationSec % 60);
+      duration = `${mins.toString().padStart(2, "0")}:${secs.toString().padStart(2, "0")}`;
+    } else {
+      duration = baseDefaults.duration || "—";
+    }
+  }
+
+  const frames =
+    rawMission.frames ||
+    rawMission.video?.total_frames ||
+    rawMission.video?.totalFrames ||
+    baseDefaults.frames ||
+    125;
+
   const mission = {
-    ...fallbackMission,
+    ...baseDefaults,
     ...rawMission,
-    objects: { ...fallbackMission.objects, ...(rawMission.objects || {}) },
+    frames,
+    duration,
+    objects: { ...baseDefaults.objects, ...(rawMission.objects || {}) },
     telemetry: {
-      ...fallbackMission.telemetry,
+      ...baseDefaults.telemetry,
       ...(rawMission.telemetry || {}),
     },
-    quality: { ...fallbackMission.quality, ...(rawMission.quality || {}) },
+    quality: { ...baseDefaults.quality, ...(rawMission.quality || {}) },
     reconstruction: {
-      ...fallbackMission.reconstruction,
+      ...baseDefaults.reconstruction,
       ...(rawMission.reconstruction || {}),
     },
     measurements: {
-      ...fallbackMission.measurements,
+      ...baseDefaults.measurements,
       ...(rawMission.measurements || {}),
     },
-    findings: Array.isArray(rawMission.findings) ? rawMission.findings : [],
-    recommendations: Array.isArray(rawMission.recommendations)
+    findings: Array.isArray(rawMission.findings) && rawMission.findings.length > 0
+      ? rawMission.findings
+      : (baseDefaults.findings || []),
+    recommendations: Array.isArray(rawMission.recommendations) && rawMission.recommendations.length > 0
       ? rawMission.recommendations
-      : fallbackMission.recommendations,
+      : (baseDefaults.recommendations || fallbackMission.recommendations),
     assets: {
+      ...(baseDefaults.assets || {}),
       ...(rawMission.assets || {}),
-      video: videoUrl || rawMission.assets?.video || "",
-      pointCloud:
-        rawMission.assets?.pointCloud ||
+      video: resolveAssetUrl(videoUrl || (mId ? `/api/missions/${mId}/video` : "") || rawMission.assets?.video || baseDefaults.assets?.video || ""),
+      pointCloud: resolveAssetUrl(
         rawMission.reconstruction?.point_cloud_url ||
-        rawMission.reconstruction?.pointCloud ||
-        "",
-      mesh:
-        rawMission.assets?.mesh ||
+          (mId ? `/api/missions/${mId}/reconstruction/pointcloud` : "") ||
+          rawMission.assets?.pointCloud ||
+          rawMission.reconstruction?.pointCloud ||
+          baseDefaults.assets?.pointCloud ||
+          "",
+      ),
+      mesh: resolveAssetUrl(
         rawMission.reconstruction?.mesh_url ||
-        "",
+          (mId ? `/api/missions/${mId}/reconstruction/mesh` : "") ||
+          rawMission.assets?.mesh ||
+          baseDefaults.assets?.mesh ||
+          "",
+      ),
     },
   };
 
@@ -145,6 +207,35 @@ async function parseResponse(response) {
   return response.text();
 }
 
+export async function listMissions() {
+  try {
+    const response = await fetch(`${API_BASE}/missions`, {
+      headers: getAuthHeaders(),
+    });
+    if (!response.ok) {
+      console.warn(`[API] listMissions returned HTTP ${response.status}`);
+      return [];
+    }
+    const data = await response.json();
+    const rawItems = Array.isArray(data)
+      ? data
+      : Array.isArray(data?.missions)
+      ? data.missions
+      : typeof data === "object" && data !== null
+      ? Object.values(data.missions || data)
+      : [];
+
+    const normalized = rawItems.map((m) => normalizeMission(m));
+    normalized.forEach((m) => {
+      if (m && m.id) missionCache.set(m.id, m);
+    });
+    return normalized;
+  } catch (error) {
+    console.warn("[API] listMissions network error:", error);
+    return [];
+  }
+}
+
 export async function createMission({ name, missionType, location, operator }) {
   try {
     const params = new URLSearchParams({
@@ -156,6 +247,7 @@ export async function createMission({ name, missionType, location, operator }) {
 
     const response = await fetch(`${API_BASE}/missions?${params}`, {
       method: "POST",
+      headers: getAuthHeaders(),
     });
 
     const data = await parseResponse(response);
@@ -177,15 +269,19 @@ export async function createMission({ name, missionType, location, operator }) {
   }
 }
 
-export async function getMission(missionId) {
-  if (missionCache.has(missionId)) {
+export async function getMission(missionId, forceRefresh = false) {
+  if (!forceRefresh && missionCache.has(missionId)) {
     const cached = missionCache.get(missionId);
-    console.log(`[Mission] Cache hit for mission ${missionId}`);
-    return cached;
+    if (cached && cached.status !== "processing") {
+      console.log(`[Mission] Cache hit for mission ${missionId}`);
+      return cached;
+    }
   }
 
   try {
-    const response = await fetch(`${API_BASE}/missions/${missionId}`);
+    const response = await fetch(`${API_BASE}/missions/${missionId}`, {
+      headers: getAuthHeaders(),
+    });
 
     if (response.status === 404) {
       // Mission not found on backend
@@ -213,7 +309,8 @@ export async function getMission(missionId) {
 
     const data = await parseResponse(response);
     if (data.success) {
-      const mission = normalizeMission(data.mission);
+      const seeded = getSeededMission(missionId);
+      const mission = normalizeMission({ ...(seeded || {}), ...(data.mission || {}) });
       missionCache.set(missionId, mission);
       console.log(`[Mission] Loaded mission ${missionId} from API`, {
         video: mission.video?.url || "no video",
@@ -279,22 +376,6 @@ export async function getMission(missionId) {
   }
 }
 
-export async function listMissions() {
-  try {
-    const response = await fetch(`${API_BASE}/missions`);
-    const data = await parseResponse(response);
-    if (data.success) {
-      const missions = (data.missions || []).map(normalizeMission);
-      missions.forEach((m) => missionCache.set(m.id, m));
-      return missions;
-    }
-    return [];
-  } catch (error) {
-    console.error("List missions error:", error);
-    return [];
-  }
-}
-
 export async function uploadVideo(missionId, file) {
   try {
     console.log(`[Upload] Starting video upload for mission ${missionId}`);
@@ -303,6 +384,7 @@ export async function uploadVideo(missionId, file) {
 
     const response = await fetch(`${API_BASE}/missions/${missionId}/upload`, {
       method: "POST",
+      headers: getAuthHeaders(),
       body: formData,
     });
 
@@ -325,17 +407,38 @@ export async function uploadVideo(missionId, file) {
   }
 }
 
+export async function getProcessingStatus(missionId) {
+  try {
+    const response = await fetch(
+      `${API_BASE}/missions/${missionId}/processing-status`,
+      {
+        headers: getAuthHeaders(),
+      },
+    );
+    if (!response.ok) {
+      throw new Error(`Failed to fetch status: ${response.status}`);
+    }
+    const data = await response.json();
+    return data;
+  } catch (err) {
+    console.warn(`[ProcessStatus] Error fetching status for ${missionId}:`, err);
+    return null;
+  }
+}
+
 export async function processVideo(
   missionId,
   frameSampling = 2,
   inferenceResolution = 640,
   detectionConfidence = 0.35,
   reconstructionQuality = "medium",
+  sceneProfile = "road",
 ) {
   try {
-    console.log(`[Process] Starting processing for mission ${missionId}`, {
+    console.log(`[Process] Starting pipeline processing for mission ${missionId}`, {
       frameSampling,
       detectionConfidence,
+      sceneProfile,
     });
 
     const params = new URLSearchParams({
@@ -343,12 +446,14 @@ export async function processVideo(
       inference_resolution: inferenceResolution,
       detection_confidence: detectionConfidence,
       reconstruction_quality: reconstructionQuality,
+      scene_profile: sceneProfile,
     });
 
     const response = await fetch(
       `${API_BASE}/missions/${missionId}/process?${params}`,
       {
         method: "POST",
+        headers: getAuthHeaders(),
       },
     );
 
@@ -366,13 +471,23 @@ export async function processVideo(
     }
 
     if (data.success) {
-      console.log(`[Process] Processing completed for mission ${missionId}`, {
-        tracks: data.detections?.uniqueTracks || 0,
-        status: data.processing?.status,
-      });
+      console.log(`[Process] Pipeline initiated for mission ${missionId}:`, data);
       missionCache.delete(missionId);
-      const mission = await getMission(missionId);
-      missionCache.set(missionId, mission);
+
+      // Persist active job in localStorage for resume-after-reload capability
+      try {
+        const stored = JSON.parse(localStorage.getItem("hexaspark_active_jobs") || "{}");
+        stored[missionId] = {
+          jobId: data.job_id,
+          missionId,
+          startedAt: new Date().toISOString(),
+          status: data.status || "PROCESSING",
+        };
+        localStorage.setItem("hexaspark_active_jobs", JSON.stringify(stored));
+      } catch (storageErr) {
+        console.warn("[Process] LocalStorage persistence error:", storageErr);
+      }
+
       return data;
     }
 
@@ -380,7 +495,7 @@ export async function processVideo(
       `[Process] Processing failed for mission ${missionId}:`,
       data,
     );
-    throw new Error(data.message || "Processing failed");
+    throw new Error(data.message || data.detail || "Processing failed");
   } catch (error) {
     console.error(
       `[Process] Processing error for mission ${missionId}:`,
@@ -396,6 +511,7 @@ export async function generateReconstruction(missionId) {
       `${API_BASE}/missions/${missionId}/reconstruct`,
       {
         method: "POST",
+        headers: getAuthHeaders(),
       },
     );
 
@@ -415,7 +531,9 @@ export async function generateReconstruction(missionId) {
 
 export async function generateReport(missionId) {
   try {
-    const response = await fetch(`${API_BASE}/missions/${missionId}/report`);
+    const response = await fetch(`${API_BASE}/missions/${missionId}/report`, {
+      headers: getAuthHeaders(),
+    });
     const data = await response.json();
     if (data.success) {
       return data.report;
@@ -427,10 +545,500 @@ export async function generateReport(missionId) {
   }
 }
 
+export function getReportPdfUrl(missionId) {
+  return `${API_BASE}/missions/${missionId}/report/pdf`;
+}
+
+export async function downloadReportPdf(missionId) {
+  try {
+    const url = `${API_BASE}/missions/${missionId}/report/pdf`;
+    const headers = getAuthHeaders();
+    const response = await fetch(url, {
+      method: "GET",
+      headers,
+    });
+
+    if (!response.ok) {
+      let errorDetail = `HTTP ${response.status}`;
+      try {
+        const errJson = await response.json();
+        if (errJson.detail) {
+          errorDetail =
+            typeof errJson.detail === "string"
+              ? errJson.detail
+              : JSON.stringify(errJson.detail);
+        }
+      } catch {
+        // Not JSON
+      }
+      throw new Error(`PDF download failed (${errorDetail})`);
+    }
+
+    const blob = await response.blob();
+    const blobUrl = window.URL.createObjectURL(blob);
+    const filename = `aeromesh_${missionId}_report.pdf`;
+
+    const link = document.createElement("a");
+    link.href = blobUrl;
+    link.download = filename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    setTimeout(() => {
+      window.URL.revokeObjectURL(blobUrl);
+    }, 1000);
+
+    return { success: true, filename };
+  } catch (error) {
+    console.error("downloadReportPdf error:", error);
+    throw error;
+  }
+}
+
+export function getExportCsvUrl(missionId) {
+  return `${API_BASE}/missions/${missionId}/export/csv`;
+}
+
+export function getExportJsonUrl(missionId) {
+  return `${API_BASE}/missions/${missionId}/export/json`;
+}
+
+export function getExportGeoJsonUrl(missionId) {
+  return `${API_BASE}/missions/${missionId}/export/geojson`;
+}
+
+export function getExportPackageUrl(missionId) {
+  return `${API_BASE}/missions/${missionId}/export/package`;
+}
+
+export async function fetchGeoJsonStatus(missionId) {
+  try {
+    const response = await fetch(
+      `${API_BASE}/missions/${missionId}/export/geojson`,
+    );
+    return await response.json();
+  } catch (error) {
+    console.error("GeoJSON status error:", error);
+    return { available: false, reason: "GeoJSON query failed" };
+  }
+}
+
 export function clearCache() {
   missionCache.clear();
 }
 
 export function getCachedMissions() {
   return Array.from(missionCache.values());
+}
+
+export async function fetchCalibrations(missionId) {
+  try {
+    const response = await fetch(
+      `${API_BASE}/missions/${missionId}/calibrations`,
+      {
+        headers: getAuthHeaders(),
+      },
+    );
+    return await response.json();
+  } catch (error) {
+    console.error("fetchCalibrations error:", error);
+    return { success: false, scale_status: "RELATIVE_SCALE", calibrations: [] };
+  }
+}
+
+export async function calibrateReferenceDistance(missionId, payload) {
+  try {
+    const response = await fetch(
+      `${API_BASE}/missions/${missionId}/calibrations/reference-distance`,
+      {
+        method: "POST",
+        headers: getAuthHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify(payload),
+      },
+    );
+    return await response.json();
+  } catch (error) {
+    console.error("calibrateReferenceDistance error:", error);
+    throw error;
+  }
+}
+
+export async function deactivateCalibrations(missionId) {
+  try {
+    const response = await fetch(
+      `${API_BASE}/missions/${missionId}/calibrations/deactivate`,
+      {
+        method: "POST",
+        headers: getAuthHeaders(),
+      },
+    );
+    return await response.json();
+  } catch (error) {
+    console.error("deactivateCalibrations error:", error);
+    throw error;
+  }
+}
+
+export async function measureDistance3D(missionId, payload) {
+  try {
+    const response = await fetch(
+      `${API_BASE}/missions/${missionId}/measurements/distance`,
+      {
+        method: "POST",
+        headers: getAuthHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify(payload),
+      },
+    );
+    return await response.json();
+  } catch (error) {
+    console.error("measureDistance3D error:", error);
+    throw error;
+  }
+}
+
+export async function measurePolygon3D(missionId, payload) {
+  try {
+    const response = await fetch(
+      `${API_BASE}/missions/${missionId}/measurements/polygon`,
+      {
+        method: "POST",
+        headers: getAuthHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify(payload),
+      },
+    );
+    return await response.json();
+  } catch (error) {
+    console.error("measurePolygon3D error:", error);
+    throw error;
+  }
+}
+
+export async function measureElevation3D(missionId, payload) {
+  try {
+    const response = await fetch(
+      `${API_BASE}/missions/${missionId}/measurements/elevation`,
+      {
+        method: "POST",
+        headers: getAuthHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify(payload),
+      },
+    );
+    return await response.json();
+  } catch (error) {
+    console.error("measureElevation3D error:", error);
+    throw error;
+  }
+}
+
+export async function measureObject3D(missionId, objectId, payload = {}) {
+  try {
+    const response = await fetch(
+      `${API_BASE}/missions/${missionId}/measurements/object/${objectId}`,
+      {
+        method: "POST",
+        headers: getAuthHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify(payload),
+      },
+    );
+    return await response.json();
+  } catch (error) {
+    console.error("measureObject3D error:", error);
+    throw error;
+  }
+}
+
+export async function measureVolume3D(missionId, payload = {}) {
+  try {
+    const response = await fetch(
+      `${API_BASE}/missions/${missionId}/measurements/volume`,
+      {
+        method: "POST",
+        headers: getAuthHeaders({ "Content-Type": "application/json" }),
+        body: JSON.stringify(payload),
+      },
+    );
+    return await response.json();
+  } catch (error) {
+    console.error("measureVolume3D error:", error);
+    throw error;
+  }
+}
+
+export async function fetchSemanticScene(missionId) {
+  try {
+    const response = await fetch(
+      `${API_BASE}/missions/${missionId}/semantic-scene`,
+      {
+        headers: getAuthHeaders(),
+      },
+    );
+    return await response.json();
+  } catch (error) {
+    console.error("fetchSemanticScene error:", error);
+    return { success: false, semantic_scene: null };
+  }
+}
+
+export async function fetchObjects3D(missionId) {
+  try {
+    const response = await fetch(
+      `${API_BASE}/missions/${missionId}/objects-3d`,
+      {
+        headers: getAuthHeaders(),
+      },
+    );
+    return await response.json();
+  } catch (error) {
+    console.error("fetchObjects3D error:", error);
+    return { success: false, objects: [] };
+  }
+}
+
+export async function fetchObjectEvidence(missionId, objectId) {
+  try {
+    const response = await fetch(
+      `${API_BASE}/missions/${missionId}/objects/${objectId}/evidence`,
+      {
+        headers: getAuthHeaders(),
+      },
+    );
+    return await response.json();
+  } catch (error) {
+    console.error("fetchObjectEvidence error:", error);
+    return { success: false, error: error.message };
+  }
+}
+
+export async function fetchReconstruction(missionId) {
+  try {
+    const response = await fetch(
+      `${API_BASE}/missions/${missionId}/reconstruction`,
+      {
+        headers: getAuthHeaders(),
+      },
+    );
+    const data = await response.json();
+    return data;
+  } catch (error) {
+    console.error("fetchReconstruction error:", error);
+    return { success: false, reconstruction: null };
+  }
+}
+
+// ============================================================
+// AUTHENTICATION & SECURITY HELPERS (PHASE 10)
+// ============================================================
+
+export function getAuthToken() {
+  return localStorage.getItem("aeromesh_auth_token");
+}
+
+export function setAuthToken(token) {
+  if (token) {
+    localStorage.setItem("aeromesh_auth_token", token);
+  } else {
+    localStorage.removeItem("aeromesh_auth_token");
+  }
+}
+
+export function clearAuthToken() {
+  localStorage.removeItem("aeromesh_auth_token");
+  localStorage.removeItem("aeromesh_current_user");
+}
+
+export function getStoredUser() {
+  try {
+    const item = localStorage.getItem("aeromesh_current_user");
+    return item ? JSON.parse(item) : null;
+  } catch {
+    return null;
+  }
+}
+
+export function setStoredUser(user) {
+  if (user) {
+    localStorage.setItem("aeromesh_current_user", JSON.stringify(user));
+  } else {
+    localStorage.removeItem("aeromesh_current_user");
+  }
+}
+
+export function getAuthHeaders(customHeaders = {}) {
+  const headers = { ...customHeaders };
+  const token = getAuthToken();
+  if (token) {
+    headers["Authorization"] = `Bearer ${token}`;
+  }
+  return headers;
+}
+
+export async function registerUser(email, password, fullName = "", role = "OPERATOR") {
+  try {
+    const response = await fetch(`${API_BASE}/auth/register`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password, full_name: fullName, role }),
+    });
+    const data = await response.json();
+    if (response.ok && data.access_token) {
+      setAuthToken(data.access_token);
+      setStoredUser(data.user);
+      return { success: true, user: data.user, token: data.access_token };
+    }
+    return { success: false, error: data.detail || "Registration failed" };
+  } catch (error) {
+    console.error("registerUser error:", error);
+    return { success: false, error: error.message };
+  }
+}
+
+export async function loginUser(email, password) {
+  try {
+    const response = await fetch(`${API_BASE}/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }),
+    });
+    const data = await response.json();
+    if (response.ok && data.access_token) {
+      setAuthToken(data.access_token);
+      setStoredUser(data.user);
+      return { success: true, user: data.user, token: data.access_token };
+    }
+    return { success: false, error: data.detail || "Authentication failed" };
+  } catch (error) {
+    console.error("loginUser error:", error);
+    return { success: false, error: error.message };
+  }
+}
+
+export function logoutUser() {
+  clearAuthToken();
+}
+
+export async function fetchCurrentUser() {
+  const token = getAuthToken();
+  if (!token) return null;
+  try {
+    const response = await fetch(`${API_BASE}/auth/me`, {
+      headers: getAuthHeaders(),
+    });
+    if (!response.ok) {
+      clearAuthToken();
+      return null;
+    }
+    const data = await response.json();
+    if (data.user) {
+      setStoredUser(data.user);
+      return data.user;
+    }
+    return null;
+  } catch (error) {
+    console.error("fetchCurrentUser error:", error);
+    return null;
+  }
+}
+
+export async function fetchDemoUsers() {
+  try {
+    const response = await fetch(`${API_BASE}/auth/demo-users`);
+    const data = await response.json();
+    return data.users || [];
+  } catch (error) {
+    console.error("fetchDemoUsers error:", error);
+    return [];
+  }
+}
+
+export async function getComputeDevice() {
+  try {
+    const response = await fetch(`${API_BASE}/system/compute-device`, {
+      headers: getAuthHeaders(),
+    });
+    if (response.ok) {
+      const data = await response.json();
+      if (data.success && data.device) {
+        return data.device;
+      }
+    }
+  } catch (error) {
+    console.warn("[ComputeDevice] Error fetching compute device info:", error);
+  }
+  return {
+    execution_device: "cpu",
+    cuda_available: false,
+    device_name: "Intel(R) UHD Graphics",
+    vram_mb: 0,
+    compute_path: "CPU inference — Intel(R) UHD Graphics detected, no CUDA device",
+    estimated_duration: "~6 – 8 min",
+    compute_budget: "Host RAM & CPU (0 MB VRAM)",
+    budget_detail: "PyCOLMAP + YOLO11 (CPU multi-threading)",
+  };
+}
+
+
+
+export async function fetchMissionMarkings(missionId) {
+  if (!missionId) return [];
+  try {
+    const res = await fetch(`${API_BASE}/missions/${missionId}/markings`, {
+      headers: getAuthHeaders(),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      return data.markings || [];
+    }
+  } catch (err) {
+    console.warn('[API] Error fetching markings:', err);
+  }
+  return [];
+}
+
+export async function createMissionMarking(missionId, markingData) {
+  if (!missionId) return null;
+  try {
+    const res = await fetch(`${API_BASE}/missions/${missionId}/markings`, {
+      method: 'POST',
+      headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
+      body: JSON.stringify(markingData),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      return data.marking;
+    }
+  } catch (err) {
+    console.warn('[API] Error creating marking:', err);
+  }
+  return null;
+}
+
+export async function deleteMissionMarking(missionId, markingId) {
+  if (!missionId || !markingId) return false;
+  try {
+    const res = await fetch(`${API_BASE}/missions/${missionId}/markings/${markingId}`, {
+      method: 'DELETE',
+      headers: getAuthHeaders(),
+    });
+    return res.ok;
+  } catch (err) {
+    console.warn('[API] Error deleting marking:', err);
+    return false;
+  }
+}
+
+export async function fetchMissionKeyframes(missionId) {
+  if (!missionId) return [];
+  try {
+    const res = await fetch(`${API_BASE}/missions/${missionId}/keyframes`, {
+      headers: getAuthHeaders(),
+    });
+    if (res.ok) {
+      const data = await res.json();
+      return data.frames || [];
+    }
+  } catch (err) {
+    console.warn('[API] Error fetching keyframes:', err);
+  }
+  return [];
 }

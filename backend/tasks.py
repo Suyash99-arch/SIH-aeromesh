@@ -11,8 +11,10 @@ except ImportError:  # pragma: no cover
 
 celery_app = Celery("aeromesh", broker=None, backend=None) if Celery else None
 if celery_app is not None:
-    celery_app.conf.broker_url = __import__("os").getenv("REDIS_URL", "redis://localhost:6379/0")
-    celery_app.conf.result_backend = celery_app.conf.broker_url
+    broker_url = __import__("os").getenv("CELERY_BROKER_URL") or __import__("os").getenv("REDIS_URL", "redis://localhost:6379/0")
+    result_backend = __import__("os").getenv("CELERY_RESULT_BACKEND") or broker_url
+    celery_app.conf.broker_url = broker_url
+    celery_app.conf.result_backend = result_backend
 
 
 def _placeholder(job_id: str):
@@ -88,6 +90,105 @@ def _reconstruction_task(job_id: str, mission_id: str = "", video_path=None, max
     return result
 
 
+def _fusion_task(job_id: str, mission_id: str = "", reprojection_threshold_px: float | None = None, *args, **kwargs):
+    update_job(job_id, status="FUSING_3D", stage="FUSING_3D", progress_percent=20, message="Starting AI-to-3D spatial association")
+    import os
+    from pathlib import Path
+    from .spatial_fusion import SpatialFusionEngine
+    from .reconstruction import get_reconstruction_mesh_path
+
+    try:
+        from .main import MissionData
+        mission = MissionData(mission_id)
+        if not mission.data:
+            update_job(job_id, status="FAILED", stage="FAILED", error_message="MISSION_NOT_FOUND", message="Mission not found")
+            return get_job_result(job_id)
+
+        update_job(job_id, status="FUSING_3D", stage="FUSING_3D", progress_percent=40, message="Loading 3D camera poses and scene geometry")
+        
+        mission_dir = Path(f"data/missions/{mission_id}")
+        candidate_model_dirs = [
+            mission_dir / "reconstruction" / "model" / "0",
+            mission_dir / "reconstruction" / "model",
+            mission_dir / "reconstruction" / "pinhole_model" / "0",
+            mission_dir / "reconstruction" / "sparse" / "0",
+        ]
+        model_dir = None
+        for cmd in candidate_model_dirs:
+            if cmd.exists() and ((cmd / "cameras.bin").exists() or (cmd / "cameras.txt").exists()):
+                model_dir = cmd
+                break
+
+        mesh_path = get_reconstruction_mesh_path(mission_id) or (mission_dir / "reconstruction" / "mesh.ply")
+        if not (mesh_path and Path(mesh_path).exists()):
+            mesh_path = None
+
+        thresh = reprojection_threshold_px or float(os.getenv("SPATIAL_FUSION_REPROJ_THRESHOLD", "25.0"))
+
+        if model_dir and model_dir.exists():
+            import pycolmap
+            recon = pycolmap.Reconstruction(model_dir)
+            engine, poses_by_name = SpatialFusionEngine.from_reconstruction(
+                reconstruction=recon,
+                mesh_path=mesh_path,
+                reprojection_threshold_px=thresh,
+            )
+        else:
+            engine = SpatialFusionEngine(reprojection_threshold_px=thresh)
+            poses_by_name = {}
+
+        update_job(job_id, status="FUSING_3D", stage="FUSING_3D", progress_percent=60, message="Fusing 2D tracks with 3D camera rays")
+
+        tracks = mission.get("tracks") or []
+        obs_list = (mission.get("detections") or {}).get("observations", [])
+        if obs_list:
+            obs_by_track = {}
+            for o in obs_list:
+                tid = o.get("trackId") or o.get("track_id")
+                if tid:
+                    obs_by_track.setdefault(tid, []).append(o)
+
+            # Ensure tracks have observations populated
+            enriched_tracks = []
+            for t in tracks:
+                t_copy = dict(t)
+                tid = t_copy.get("trackId") or t_copy.get("track_id")
+                if tid and "observations" not in t_copy and tid in obs_by_track:
+                    t_copy["observations"] = obs_by_track[tid]
+                enriched_tracks.append(t_copy)
+            tracks = enriched_tracks
+
+        fused_objects = engine.fuse_all_tracks(tracks, poses_by_name)
+
+        update_job(job_id, status="FUSING_3D", stage="FUSING_3D", progress_percent=85, message=f"Validated {len(fused_objects)} 3D objects")
+
+        fused_dicts = [obj.to_dict() for obj in fused_objects]
+        mission.update({
+            "objects_3d": fused_dicts,
+            "semantic_scene": {
+                "coordinate_system": "LOCAL_ARBITRARY",
+                "scale_status": "RELATIVE_SCALE",
+                "georeferencing_status": "UNREFERENCED",
+                "total_objects": len(fused_dicts),
+                "valid_objects": sum(1 for obj in fused_dicts if obj["association_status"] == "VALID"),
+                "moving_objects": sum(1 for obj in fused_dicts if obj["motion_state"] == "MOVING"),
+                "static_objects": sum(1 for obj in fused_dicts if obj["motion_state"] == "STATIC"),
+                "reprojection_threshold_px": thresh,
+                "objects": fused_dicts,
+            },
+        })
+        mission.save()
+
+        update_job(job_id, status="COMPLETED", stage="COMPLETED", progress_percent=100, message=f"AI-to-3D spatial fusion completed ({len(fused_dicts)} objects)")
+        result = get_job_result(job_id) or {}
+        result["objects_3d"] = fused_dicts
+        return result
+
+    except Exception as exc:
+        update_job(job_id, status="FAILED", stage="FAILED", error_message=f"FUSION_FAILED: {exc}", message="Spatial fusion failed")
+        return get_job_result(job_id)
+
+
 def get_job_result(job_id):
     from .jobs import get_job
     return get_job(job_id)
@@ -105,10 +206,12 @@ if celery_app is not None:
     detect_objects = celery_app.task(name="aeromesh.detect_objects")(_detection_task)
     track_objects = celery_app.task(name="aeromesh.track_objects")(_tracking_task)
     reconstruct = celery_app.task(name="aeromesh.reconstruct")(_reconstruction_task)
+    fuse_objects_3d = celery_app.task(name="aeromesh.fuse_objects_3d")(_fusion_task)
 else:
     detect_objects = _detection_task
     track_objects = _tracking_task
     reconstruct = _reconstruction_task
+    fuse_objects_3d = _fusion_task
 generate_mesh = _register("generate_mesh")
 analyze = _register("analyze")
 generate_report = _register("generate_report")
@@ -118,4 +221,9 @@ run_processing_pipeline = _register("run_processing_pipeline")
 def enqueue_processing_job(job_id: str):
     if celery_app is None or not __import__("os").getenv("REDIS_URL", "").strip():
         return run_processing_pipeline(job_id)
-    return run_processing_pipeline.delay(job_id)
+    try:
+        return run_processing_pipeline.delay(job_id)
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).warning("Celery dispatch unavailable (%s); executing synchronously", exc)
+        return run_processing_pipeline(job_id)

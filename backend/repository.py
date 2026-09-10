@@ -23,6 +23,8 @@ class MissionRepository:
             mission_type=data.get("type"),
             location=data.get("location"),
             operator=data.get("operator"),
+            created_by=data.get("created_by"),
+            owner_id=data.get("owner_id"),
             created_at=_parse_datetime(data.get("createdAt")),
             status=data.get("status", "created"),
             payload=data,

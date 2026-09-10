@@ -41,11 +41,14 @@ class LocalObjectStorage(ObjectStorage):
         self.root.mkdir(parents=True, exist_ok=True)
 
     def _path(self, key: str) -> Path:
-        relative = Path(key)
+        normalized_str = str(key).replace("\\", "/")
+        if normalized_str.startswith("/") or "/../" in f"/{normalized_str}/" or normalized_str.startswith("../") or normalized_str == "..":
+            raise ValueError("Storage key must be a relative path without traversal")
+        relative = Path(normalized_str)
         if relative.is_absolute() or ".." in relative.parts:
             raise ValueError("Storage key must be a relative path")
         target = (self.root / relative).resolve()
-        if self.root not in target.parents:
+        if self.root != target and self.root not in target.parents:
             raise ValueError("Storage key escapes storage root")
         return target
 

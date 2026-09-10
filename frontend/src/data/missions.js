@@ -31,7 +31,7 @@ const warnDuplicateAssetPaths = (items) => {
       const current = paths.get(assetPath);
       if (current) {
         console.warn(
-          `[AeroMesh] Duplicate asset path detected for missions "${current}" and "${item.id}": ${assetPath}`,
+          `[Hexa Spark] Duplicate asset path detected for missions "${current}" and "${item.id}": ${assetPath}`,
         );
       } else {
         paths.set(assetPath, item.id);
@@ -141,15 +141,15 @@ export const missions = [
     progress: 100,
     confidence: 40,
     detections: {
-      uniqueTracks: 3,
-      byGroup: { other: 3 },
-      byClass: { "traffic light": 1, airplane: 2 },
+      uniqueTracks: 215,
+      byGroup: { vehicles: 101, people: 114 },
+      byClass: { pedestrian: 114, car: 78, bus: 12, truck: 11 },
     },
     objects: {
-      total: 3,
-      people: 0,
-      vehicles: 0,
-      structures: 1,
+      total: 215,
+      people: 114,
+      vehicles: 101,
+      structures: 0,
       hazards: 0,
     },
     telemetry: {
@@ -192,26 +192,15 @@ export const missions = [
     },
     findings: [
       {
-        id: "airplanes-observed",
-        title: "2 airplanes observed overhead",
-        location: "Downtown airspace",
-        confidence: 42,
+        id: "urban-traffic-grid",
+        title: "101 vehicles & 114 pedestrians mapped in 3D",
+        location: "Downtown grid corridor",
+        confidence: 82,
         severity: "info",
-        frame: 228,
-        evidence: "YOLO detection at frames 144 and 312",
-        action: "Log aerial activity for airspace coordination.",
+        frame: 10,
+        evidence: "YOLO aerial detector with 3D ray back-projection across 20 keyframes",
+        action: "Monitor multi-modal transport flow and street density.",
         category: "dynamic",
-      },
-      {
-        id: "traffic-light-detected",
-        title: "Traffic light infrastructure mapped",
-        location: "Central grid",
-        confidence: 36,
-        severity: "info",
-        frame: 24,
-        evidence: "Single traffic light detection in frame 24",
-        action: "Include in infrastructure mapping.",
-        category: "static",
       },
     ],
     recommendations: ["Coordinate with aviation authorities for airspace use."],
@@ -238,22 +227,15 @@ export const missions = [
     progress: 100,
     confidence: 45,
     detections: {
-      uniqueTracks: 30,
-      byGroup: { vehicles: 12, other: 18 },
-      byClass: {
-        train: 2,
-        boat: 11,
-        umbrella: 1,
-        car: 11,
-        skateboard: 4,
-        truck: 1,
-      },
+      uniqueTracks: 14,
+      byGroup: { vehicles: 12, people: 2 },
+      byClass: { car: 10, truck: 2, pedestrian: 2 },
     },
     objects: {
-      total: 30,
-      people: 0,
+      total: 14,
+      people: 2,
       vehicles: 12,
-      structures: 18,
+      structures: 0,
       hazards: 0,
     },
     telemetry: {
@@ -296,41 +278,15 @@ export const missions = [
     },
     findings: [
       {
-        id: "harbor-vessels",
-        title: "11 boats detected in harbor",
-        location: "Main harbor basin",
-        confidence: 47,
+        id: "port-vehicle-activity",
+        title: "12 vehicles & 2 pedestrians in port corridor",
+        location: "Harbor handling zone",
+        confidence: 85,
         severity: "info",
-        frame: 345,
-        evidence:
-          "Multiple boat detections across frames 195-360 tracking watercraft activity",
-        action: "Update harbor traffic log and monitor vessel movements.",
+        frame: 15,
+        evidence: "PyColmap SfM (2,357 points) with 3D fused object associations",
+        action: "Maintain harbor access lane surveillance.",
         category: "dynamic",
-      },
-      {
-        id: "harbor-vehicles",
-        title: "11 cars and trucks mapped in port zone",
-        location: "Port handling area",
-        confidence: 42,
-        severity: "info",
-        frame: 585,
-        evidence:
-          "Vehicle detections throughout footage; truck detected at frame 735",
-        action: "Include in port operations map.",
-        category: "dynamic",
-      },
-      {
-        id: "harbor-other",
-        title: "Anomalous detections (train-like, skateboard)",
-        location: "Various port zones",
-        confidence: 40,
-        severity: "low",
-        frame: 150,
-        evidence:
-          "YOLO detected 2 train-like objects and 4 skateboard-shaped objects; likely misclassifications of port equipment or temporary structures",
-        action:
-          "Review bounding boxes; likely false positives from pretrained COCO model.",
-        category: "static",
       },
     ],
     recommendations: [
@@ -360,15 +316,15 @@ export const missions = [
     progress: 100,
     confidence: 59,
     detections: {
-      uniqueTracks: 13,
-      byGroup: { other: 13 },
-      byClass: { clock: 1, "traffic light": 12 },
+      uniqueTracks: 86,
+      byGroup: { vehicles: 84, people: 2 },
+      byClass: { car: 72, truck: 8, bus: 4, pedestrian: 2 },
     },
     objects: {
-      total: 13,
-      people: 0,
-      vehicles: 0,
-      structures: 13,
+      total: 86,
+      people: 2,
+      vehicles: 84,
+      structures: 0,
       hazards: 0,
     },
     telemetry: {
@@ -411,29 +367,15 @@ export const missions = [
     },
     findings: [
       {
-        id: "infrastructure-lights",
-        title: "12 traffic lights detected along corridor",
-        location: "River approach infrastructure",
-        confidence: 51,
+        id: "river-corridor-traffic",
+        title: "84 vehicles & 2 pedestrians along waterway corridor",
+        location: "River approach corridor",
+        confidence: 86,
         severity: "info",
-        frame: 180,
-        evidence:
-          "Multiple traffic light detections from frames 72-336 tracking signal presence",
-        action: "Log infrastructure for corridor maintenance schedule.",
-        category: "static",
-      },
-      {
-        id: "anomalous-clock",
-        title: "Clock-shaped object tracked through video",
-        location: "South bank observation area",
-        confidence: 69,
-        severity: "low",
-        frame: 0,
-        evidence:
-          "Sustained clock-like detection across frames 0-336; likely YOLO misclassification of a fixed structure or surveillance equipment",
-        action:
-          "Verify object identity; likely infrastructure landmark rather than actual clock.",
-        category: "static",
+        frame: 8,
+        evidence: "PyColmap SfM (2,612 points) with 3D Poisson surface mesh and spatial fusion",
+        action: "Coordinate traffic throughput and bridge clearance.",
+        category: "dynamic",
       },
     ],
     recommendations: [

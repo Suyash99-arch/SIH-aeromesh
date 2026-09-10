@@ -12,8 +12,8 @@ export function CountUp({ value, duration = 700, formatter = (v) => v }) {
 
   useEffect(() => {
     if (prefersReducedMotion) {
-      setDisplay(numericValue);
-      return undefined;
+      const raf = requestAnimationFrame(() => setDisplay(numericValue));
+      return () => cancelAnimationFrame(raf);
     }
 
     let rafId = 0;
@@ -88,14 +88,9 @@ export function Progress({ value, duration = 800 }) {
   const [width, setWidth] = useState(prefersReducedMotion ? value : 0);
 
   useEffect(() => {
-    if (prefersReducedMotion) {
-      setWidth(value);
-      return undefined;
-    }
-
     const frame = requestAnimationFrame(() => setWidth(value));
     return () => cancelAnimationFrame(frame);
-  }, [prefersReducedMotion, value]);
+  }, [value]);
 
   return (
     <div className="progress">

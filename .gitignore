@@ -3,15 +3,16 @@ node_modules/
 **/node_modules/
 
 # Python environments
-.venv/
-.venv312/
-.venv311/
-venv/
-env/
+.venv*/
+venv*/
+env*/
 
 # Python cache
 __pycache__/
 *.py[cod]
+*.pyc
+*.pyo
+*.pyd
 
 # Build output
 dist/
@@ -25,6 +26,16 @@ frontend/test-results/
 .env.*
 !.env.example
 
+# User credentials / test users
+data/users.json
+
+# Uploaded test videos and dynamically generated mission runs
+data/uploads/
+data/missions/*
+data/objects/missions/*/
+!data/objects/missions/north-ridge/
+!data/objects/missions/phase5_drone_validation/
+
 # Logs
 *.log
 
@@ -32,15 +43,11 @@ frontend/test-results/
 .vscode/*
 !.vscode/extensions.json
 !.vscode/settings.json
+.idea/
 
 # Generated output
 output/
 **/output/
-
-# Python / ML generated files
-*.pyc
-*.pyo
-*.pyd
 
 # Large ML models
 *.pt
@@ -48,6 +55,7 @@ output/
 *.onnx
 *.ckpt
 *.safetensors
+.hf_cache/
 
 # Large archives
 *.zip
@@ -63,4 +71,24 @@ output/
 # OS
 Thumbs.db
 .DS_Store
-data/missions/*
+
+# Temporary scratch, patches, notes, and nested repos
+scratch/
+SIH-aeromesh/
+latest-work.patch
+run_final.json
+pip_versions.txt
+*.png
+*.jpg
+!frontend/public/**/*.png
+!frontend/public/**/*.jpg
+!frontend/src/**/*.png
+!frontend/src/**/*.jpg
+
+# Ad-hoc frontend test / verification scripts
+frontend/*.cjs
+frontend/scripts/
+process_demo_missions_real.py
+test_live_eval_priority1.py
+verify_aa710.py
+verify_all_missions.py
