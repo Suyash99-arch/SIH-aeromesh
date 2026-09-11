@@ -342,8 +342,7 @@ def _run_pycolmap_sfm(
 
     # 1. Feature extraction with pycolmap 4.1.1 native options (tuned for low-texture aerial footage)
     reader_options = pycolmap.ImageReaderOptions()
-    reader_options.camera_model = "PINHOLE"
-    reader_options.camera_params = "475,475,192,425"
+    reader_options.camera_model = "SIMPLE_RADIAL"
     extraction_options = pycolmap.FeatureExtractionOptions()
     extraction_options.max_image_size = 1920
     extraction_options.num_threads = min(os.cpu_count() or 4, 4)
@@ -364,64 +363,47 @@ def _run_pycolmap_sfm(
     if progress_cb:
         progress_cb("Matching visual features across frames", 55)
 
-    # 2. Exhaustive feature matching for robust cross-frame registration
+    # 2. Sequential feature matching optimized for drone flight trajectories
     matching_options = pycolmap.FeatureMatchingOptions()
     matching_options.num_threads = min(os.cpu_count() or 4, 4)
+    pairing_options = pycolmap.SequentialPairingOptions()
+    pairing_options.overlap = 5
+    pairing_options.quadratic_overlap = False
+    if hasattr(pairing_options, "loop_detection"):
+        pairing_options.loop_detection = False
+
     try:
-        ex_pairing = pycolmap.ExhaustivePairingOptions()
-        pycolmap.match_exhaustive(
-            database_path=str(database_path),
-            matching_options=matching_options,
-            pairing_options=ex_pairing,
-            device=pycolmap.Device.cpu,
-        )
-    except Exception as exc:
-        logger.warning("Exhaustive matching failed, falling back to sequential matching: %s", exc)
-        pairing_options = pycolmap.SequentialPairingOptions()
-        pairing_options.overlap = 25
-        pairing_options.quadratic_overlap = False
         pycolmap.match_sequential(
             database_path=str(database_path),
             matching_options=matching_options,
             pairing_options=pairing_options,
             device=pycolmap.Device.cpu,
         )
+    except Exception as exc:
+        logger.info("Sequential match notice, attempting exhaustive match: %s", exc)
+        try:
+            ex_pairing = pycolmap.ExhaustivePairingOptions()
+            pycolmap.match_exhaustive(
+                database_path=str(database_path),
+                matching_options=matching_options,
+                pairing_options=ex_pairing,
+                device=pycolmap.Device.cpu,
+            )
+        except Exception:
+            pass
+
     if progress_cb:
         progress_cb("Running incremental Structure from Motion", 70)
 
     # 3. Incremental mapping with aerial photogrammetry thresholds
     inc_options = pycolmap.IncrementalPipelineOptions()
-
-    # Seed COLMAP with the strongest geometrically verified image pair.
-    try:
-        import sqlite3
-        conn = sqlite3.connect(str(database_path))
-        cur = conn.cursor()
-        best_pair = cur.execute('SELECT pair_id, rows FROM two_view_geometries WHERE rows >= 30 AND E IS NOT NULL ORDER BY rows DESC LIMIT 1').fetchone()
-        if best_pair is None:
-            best_pair = cur.execute('SELECT pair_id, rows FROM two_view_geometries WHERE rows > 0 ORDER BY rows DESC LIMIT 1').fetchone()
-        if best_pair:
-            pair_id, inlier_count = best_pair
-            max_image_id = 2147483647
-            init_image_id1 = pair_id // max_image_id
-            init_image_id2 = pair_id % max_image_id
-            inc_options.init_image_id1 = int(init_image_id1)
-            inc_options.init_image_id2 = int(init_image_id2)
-            print(f'[COLMAP] Explicit initialization pair: {init_image_id1} + {init_image_id2} ({inlier_count} geometric inliers)')
-        conn.close()
-    except Exception as exc:
-        print(f'[COLMAP] Explicit initialization setup failed: {exc}')
     inc_options.num_threads = min(os.cpu_count() or 4, 4)
-    inc_options.init_num_trials = 1000
     inc_options.ba_refine_extra_params = False
     inc_options.ba_refine_principal_point = False
-    inc_options.mapper.init_min_num_inliers = 20
-    inc_options.mapper.init_max_error = 16.0
-    inc_options.mapper.init_min_tri_angle = 1.0  # Relaxed for low-parallax aerial drone passes
+    inc_options.mapper.init_min_tri_angle = 1.5  # Lower threshold for low-parallax aerial drone passes
     inc_options.mapper.init_max_forward_motion = 0.99
     inc_options.mapper.ba_local_min_tri_angle = 1.0
-    inc_options.mapper.abs_pose_min_num_inliers = 15
-    inc_options.mapper.abs_pose_max_error = 16.0
+    inc_options.mapper.abs_pose_min_num_inliers = 12
 
     # Enable GPS/IMU prior position constraints in bundle adjustment if supported
     if hasattr(inc_options, "use_prior_position"):
@@ -1618,14 +1600,11 @@ def get_reconstruction_pointcloud_path(mission_id: str) -> Optional[Path]:
     recon_dirs = [
         MISSIONS_DIR / mission_id / "reconstruction",
         DATA_DIR / "objects" / "missions" / mission_id / "reconstruction",
-        BASE_DIR / "frontend" / "public" / "assets" / "missions" / mission_id,
-        BASE_DIR / "frontend" / "dist" / "assets" / "missions" / mission_id,
     ]
     for recon_dir in recon_dirs:
         candidates = [
             recon_dir / "hybrid_point_cloud.ply",
             recon_dir / "point_cloud.ply",
-            recon_dir / "point-cloud.ply",
             recon_dir / "model" / "point_cloud.ply",
             recon_dir / "pinhole_model" / "model_0.ply",
             recon_dir / "dense" / "sparse_with_normals.ply",
@@ -1641,13 +1620,9 @@ def get_reconstruction_mesh_path(mission_id: str) -> Optional[Path]:
     recon_dirs = [
         MISSIONS_DIR / mission_id / "reconstruction",
         DATA_DIR / "objects" / "missions" / mission_id / "reconstruction",
-        BASE_DIR / "frontend" / "public" / "assets" / "missions" / mission_id,
-        BASE_DIR / "frontend" / "dist" / "assets" / "missions" / mission_id,
     ]
     for recon_dir in recon_dirs:
         candidates = [
-            recon_dir / "reconstruction-model.glb",
-            recon_dir / "model.glb",
             recon_dir / "hybrid_mesh.glb",
             recon_dir / "hybrid_mesh.obj",
             recon_dir / "mesh.ply",
@@ -1659,7 +1634,6 @@ def get_reconstruction_mesh_path(mission_id: str) -> Optional[Path]:
             if candidate.exists():
                 return candidate
     return None
-
 
 
 
@@ -1723,4 +1697,3 @@ def get_reconstruction_metadata(mission_id: str) -> Optional[Dict[str, Any]]:
                 pass
 
     return None
-

@@ -80,14 +80,25 @@ def _load_mission_json(mission_id: str) -> Dict[str, Any]:
 
 
 def _load_semantic_scene(mission_id: str) -> Dict[str, Any]:
-    p = MISSIONS_DIR / mission_id / "semantic_scene.json"
-    if p.exists():
-        try:
-            with open(p, "r", encoding="utf-8") as f:
-                return json.load(f)
-        except Exception as e:
-            logger.warning("Failed loading %s: %s", p, e)
+    canonical_id = _resolve_mission_id(mission_id)
+    candidates = [
+        MISSIONS_DIR / canonical_id / "semantic_scene.json",
+        MISSIONS_DIR / mission_id / "semantic_scene.json",
+        DATA_DIR / "objects" / "missions" / canonical_id / "semantic_scene.json",
+        DATA_DIR / "objects" / "missions" / mission_id / "semantic_scene.json",
+    ]
+    for p in candidates:
+        if p.exists():
+            try:
+                with open(p, "r", encoding="utf-8") as f:
+                    return json.load(f)
+            except Exception as e:
+                logger.warning("Failed loading %s: %s", p, e)
+    mission_data = _load_mission_json(canonical_id)
+    if mission_data.get("semantic_scene"):
+        return mission_data["semantic_scene"]
     return {}
+
 
 
 def _find_points3d_bin(mission_id: str) -> Optional[Path]:

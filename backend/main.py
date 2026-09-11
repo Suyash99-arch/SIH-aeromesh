@@ -36,7 +36,7 @@ from fastapi import (
     status,
 )
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 import uvicorn
 from backend.database import check_database, get_configured_engine, init_database, session_scope
@@ -85,6 +85,13 @@ from backend.measurement_engine import (
 )
 
 scale_calibration_service = ScaleCalibrationService()
+
+from backend.seeds import (
+    ensure_seeded_missions,
+    build_seeded_mission_manifest,
+    resolve_canonical_mission_id,
+    load_csv_fused_objects,
+)
 
 try:
     from dotenv import load_dotenv
@@ -393,7 +400,8 @@ def _remap_visdrone_class(class_name: str) -> str:
 class MissionData:
     """Mission service facade with database-first and JSON fallback storage."""
     def __init__(self, mission_id: str):
-        self.mission_id = mission_id
+        self.raw_mission_id = str(mission_id)
+        self.mission_id = resolve_canonical_mission_id(mission_id)
         self.data = {}
         self.load()
     
@@ -410,9 +418,26 @@ class MissionData:
                 logger.warning("Database read unavailable; using JSON fallback: %s", exc)
         mission_file = MISSIONS_DIR / f"{self.mission_id}.json"
         if mission_file.exists():
-            with open(mission_file) as f:
-                self.data = json.load(f)
-        elif self.mission_id == "phase5_drone_validation":
+            try:
+                with open(mission_file, "r", encoding="utf-8") as f:
+                    self.data = json.load(f)
+                    return
+            except Exception as exc:
+                logger.warning("Failed reading %s: %s", mission_file, exc)
+
+        # Check if this is a known seeded mission
+        seeded_manifest = build_seeded_mission_manifest(self.mission_id)
+        if seeded_manifest is not None:
+            self.data = seeded_manifest
+            try:
+                MISSIONS_DIR.mkdir(parents=True, exist_ok=True)
+                with open(mission_file, "w", encoding="utf-8") as f:
+                    json.dump(self.data, f, indent=2)
+            except Exception as exc:
+                logger.warning("Failed caching seeded mission %s to disk: %s", self.mission_id, exc)
+            return
+
+        if self.mission_id == "phase5_drone_validation":
             val_file = DATA_DIR / "validation" / "phase5" / "phase5_reconstruction.json"
             if val_file.exists():
                 try:
@@ -426,6 +451,7 @@ class MissionData:
                         self.data.setdefault("status", "MESH_GENERATED")
                 except Exception as exc:
                     logger.warning("Failed reading phase5 validation data: %s", exc)
+
     
     def save(self):
         database_engine = get_configured_engine()
@@ -798,8 +824,13 @@ def detect_compute_device() -> Dict[str, Any]:
 
 @app.on_event("startup")
 async def startup_hardware_detection():
+    try:
+        ensure_seeded_missions()
+    except Exception as exc:
+        logger.warning("Failed ensuring seeded missions on startup: %s", exc)
     dev = detect_compute_device()
     logger.info("Compute hardware initialized: %s (CUDA available: %s)", dev.get("device_name"), dev.get("cuda_available"))
+
 
 
 @app.get("/api/system/compute-device")
@@ -1166,6 +1197,7 @@ async def get_mission(mission_id: str):
     if not mission.data:
         raise HTTPException(status_code=404, detail="Mission not found")
     mission_dict = dict(mission.data)
+    m_id = mission.mission_id
     
     # Ensure canonical video URL is available in assets
     assets = dict(mission_dict.get("assets") or {})
@@ -1175,7 +1207,7 @@ async def get_mission(mission_id: str):
     if not assets.get("video") and isinstance(video_dict, dict) and video_dict.get("url"):
         assets["video"] = video_dict["url"]
     
-    recon_meta = get_reconstruction_metadata(mission_id)
+    recon_meta = get_reconstruction_metadata(m_id)
     if recon_meta:
         existing_recon = mission_dict.get("reconstruction")
         merged_recon = {**(existing_recon if isinstance(existing_recon, dict) else {}), **recon_meta}
@@ -1187,7 +1219,12 @@ async def get_mission(mission_id: str):
         if "mesh_url" in recon_meta and not assets.get("mesh"):
             assets["mesh"] = recon_meta["mesh_url"]
     
-    fused_objs = _get_mission_fused_objects(mission_id, mission)
+    if get_reconstruction_pointcloud_path(m_id) and not assets.get("pointCloud"):
+        assets["pointCloud"] = f"/api/missions/{m_id}/reconstruction/pointcloud"
+    if get_reconstruction_mesh_path(m_id) and not assets.get("mesh"):
+        assets["mesh"] = f"/api/missions/{m_id}/reconstruction/mesh"
+
+    fused_objs = _get_mission_fused_objects(m_id, mission)
     if fused_objs:
         mission_dict["objects_3d"] = fused_objs
 
@@ -1196,6 +1233,7 @@ async def get_mission(mission_id: str):
         "success": True,
         "mission": mission_dict
     }
+
 
 @app.get("/api/missions")
 async def list_missions():
@@ -1377,41 +1415,182 @@ async def download_storage_object(storage_key: str):
         raise HTTPException(status_code=400, detail=str(exc))
 
 
+def ranged_file_response(file_path: Path, request: Request, content_type: str = "video/mp4") -> Response:
+    """
+    Serve a file with HTTP Range support (RFC 7233).
+    Supports 206 Partial Content, seeking, 200 full stream, 416 Range Not Satisfiable.
+    Streams in 64KB chunks to prevent loading entire video files into memory.
+    """
+    stat_res = file_path.stat()
+    file_size = stat_res.st_size
+    range_header = request.headers.get("range") or request.headers.get("Range")
+
+    if not range_header or not range_header.strip().startswith("bytes="):
+        def iter_full():
+            with open(file_path, "rb") as f:
+                while chunk := f.read(64 * 1024):
+                    yield chunk
+
+        headers = {
+            "Accept-Ranges": "bytes",
+            "Content-Length": str(file_size),
+            "Content-Range": f"bytes 0-{file_size - 1}/{file_size}" if file_size > 0 else "bytes 0-0/0",
+            "Content-Disposition": f'inline; filename="{file_path.name}"',
+        }
+        return StreamingResponse(iter_full(), status_code=200, media_type=content_type, headers=headers)
+
+    # Parse Range: bytes=start-end
+    range_val = range_header.replace("bytes=", "").strip()
+    parts = range_val.split("-")
+    try:
+        if parts[0] == "":
+            suffix_len = int(parts[1])
+            start = max(0, file_size - suffix_len)
+            end = file_size - 1
+        else:
+            start = int(parts[0])
+            end = int(parts[1]) if len(parts) > 1 and parts[1] != "" else file_size - 1
+    except ValueError:
+        return Response(
+            status_code=416,
+            headers={"Content-Range": f"bytes */{file_size}"}
+        )
+
+    if start >= file_size or end < start or start < 0:
+        return Response(
+            status_code=416,
+            headers={"Content-Range": f"bytes */{file_size}"}
+        )
+
+    end = min(end, file_size - 1)
+    content_length = end - start + 1
+
+    def iter_range(seek_pos: int, bytes_to_read: int):
+        with open(file_path, "rb") as f:
+            f.seek(seek_pos)
+            remaining = bytes_to_read
+            chunk_size = 64 * 1024
+            while remaining > 0:
+                chunk = f.read(min(chunk_size, remaining))
+                if not chunk:
+                    break
+                remaining -= len(chunk)
+                yield chunk
+
+    headers = {
+        "Content-Range": f"bytes {start}-{end}/{file_size}",
+        "Accept-Ranges": "bytes",
+        "Content-Length": str(content_length),
+        "Content-Disposition": f'inline; filename="{file_path.name}"',
+    }
+    return StreamingResponse(
+        iter_range(start, content_length),
+        status_code=206,
+        media_type=content_type,
+        headers=headers,
+    )
+
+
 @app.get("/api/missions/{mission_id}/video")
-async def get_mission_video(mission_id: str):
-    """Serve the video for any mission (uploaded or seeded)."""
-    # 1. Check direct mission directory
-    mission_dir = MISSIONS_DIR / mission_id
-    if mission_dir.exists():
-        for cand in [mission_dir / "video.mp4", *mission_dir.glob("video.*")]:
-            if cand.is_file():
-                return FileResponse(str(cand), media_type="video/mp4", filename=cand.name)
+async def get_mission_video(mission_id: str, request: Request):
+    """
+    Serve the video for any mission (uploaded, storage-backed, or seeded).
+    Supports HTTP range requests for seeking, sets video/mp4 MIME type,
+    streams in chunks without loading file into RAM, and enforces path traversal protection.
+    """
+    # 0. Path traversal protection on mission_id
+    if any(sep in mission_id for sep in ("..", "/", "\\")):
+        raise HTTPException(status_code=400, detail="Invalid mission identifier")
 
-    # 2. Check storage objects and mission manifest
-    mission = MissionData(mission_id)
-    if mission.data:
-        video_meta = mission.get("video") or {}
-        storage_key = video_meta.get("storage_key")
-        if storage_key:
-            storage_path = DATA_DIR / "objects" / storage_key
-            if storage_path.is_file():
-                return FileResponse(str(storage_path), media_type="video/mp4", filename=storage_path.name)
-        video_path_raw = mission.get("video_path")
-        if video_path_raw and Path(video_path_raw).is_file():
-            return FileResponse(str(video_path_raw), media_type="video/mp4", filename=Path(video_path_raw).name)
+    canonical_id = resolve_canonical_mission_id(mission_id)
+    if any(sep in canonical_id for sep in ("..", "/", "\\")):
+        raise HTTPException(status_code=400, detail="Invalid canonical mission identifier")
 
-    # 3. Check seeded missions in frontend/public and frontend/dist
-    for asset_dir in [
-        BASE_DIR / "frontend" / "public" / "assets" / "missions" / mission_id,
-        BASE_DIR / "frontend" / "dist" / "assets" / "missions" / mission_id,
-    ]:
-        if asset_dir.exists():
-            for v_name in ["flight-video.mp4", "video.mp4"]:
-                v_cand = asset_dir / v_name
-                if v_cand.is_file():
-                    return FileResponse(str(v_cand), media_type="video/mp4", filename=v_cand.name)
+    allowed_roots = [
+        MISSIONS_DIR.resolve(),
+        DATA_DIR.resolve(),
+        (BASE_DIR / "frontend" / "public").resolve(),
+        (BASE_DIR / "frontend" / "dist").resolve(),
+    ]
 
-    raise HTTPException(status_code=404, detail="Mission video not found")
+    def is_safe_path(p: Path) -> bool:
+        try:
+            resolved = p.resolve()
+            for root in allowed_roots:
+                try:
+                    resolved.relative_to(root)
+                    return True
+                except ValueError:
+                    continue
+            return False
+        except Exception:
+            return False
+
+    candidate_files = []
+    storage = get_storage(DATA_DIR / "objects")
+
+    # 1. Check storage keys using the storage abstraction
+    for m_id in dict.fromkeys([canonical_id, mission_id]):
+        for key_candidate in [
+            f"missions/{m_id}/flight-video.mp4",
+            f"missions/{m_id}/video.mp4",
+            f"{m_id}/video.mp4",
+        ]:
+            if storage.exists(key_candidate):
+                if hasattr(storage, "_path"):
+                    cand_path = storage._path(key_candidate)
+                    if cand_path.is_file() and is_safe_path(cand_path):
+                        candidate_files.append(cand_path)
+
+    # 2. Check direct mission directories in MISSIONS_DIR
+    for m_id in dict.fromkeys([canonical_id, mission_id]):
+        mission_dir = MISSIONS_DIR / m_id
+        if mission_dir.exists():
+            for name in ["flight-video.mp4", "video.mp4"]:
+                cand = mission_dir / name
+                if cand.is_file() and is_safe_path(cand) and cand not in candidate_files:
+                    candidate_files.append(cand)
+            for cand in mission_dir.glob("video.*"):
+                if cand.is_file() and is_safe_path(cand) and cand not in candidate_files:
+                    candidate_files.append(cand)
+
+    # 3. Check mission manifest/metadata
+    for m_id in dict.fromkeys([canonical_id, mission_id]):
+        mission = MissionData(m_id)
+        if mission.data:
+            video_meta = mission.get("video") or {}
+            storage_key = video_meta.get("storage_key")
+            if storage_key and storage.exists(storage_key):
+                if hasattr(storage, "_path"):
+                    cand_path = storage._path(storage_key)
+                    if cand_path.is_file() and is_safe_path(cand_path) and cand_path not in candidate_files:
+                        candidate_files.append(cand_path)
+            video_path_raw = mission.get("video_path")
+            if video_path_raw:
+                p_raw = Path(video_path_raw)
+                if p_raw.is_file() and is_safe_path(p_raw) and p_raw not in candidate_files:
+                    candidate_files.append(p_raw)
+
+    # 4. Check seeded assets in frontend/public and frontend/dist
+    for m_id in dict.fromkeys([canonical_id, mission_id]):
+        for asset_dir in [
+            BASE_DIR / "frontend" / "public" / "assets" / "missions" / m_id,
+            BASE_DIR / "frontend" / "dist" / "assets" / "missions" / m_id,
+        ]:
+            if asset_dir.exists():
+                for v_name in ["flight-video.mp4", "video.mp4"]:
+                    v_cand = asset_dir / v_name
+                    if v_cand.is_file() and is_safe_path(v_cand) and v_cand not in candidate_files:
+                        candidate_files.append(v_cand)
+
+    for cand in candidate_files:
+        if cand.is_file() and cand.stat().st_size > 0:
+            return ranged_file_response(cand, request, content_type="video/mp4")
+
+    raise HTTPException(
+        status_code=404,
+        detail=f"No video uploaded or available for mission '{mission_id}'"
+    )
 
 
 @app.post("/api/jobs")
@@ -2354,7 +2533,8 @@ async def get_mission_reconstruction(mission_id: str):
     if not mission.data:
         raise HTTPException(status_code=404, detail="Mission not found")
 
-    meta = get_reconstruction_metadata(mission_id)
+    m_id = mission.mission_id
+    meta = get_reconstruction_metadata(m_id)
     reconstruction = meta or mission.get("reconstruction")
     if not reconstruction:
         # Check top-level mission reconstruction fields
@@ -2375,9 +2555,9 @@ async def get_mission_reconstruction(mission_id: str):
                 "mean_reprojection_error": sparse_info.get("mean_reprojection_error_px", 0.98),
                 "camera_poses": mission.get("camera_poses", []),
                 "point_cloud_path": sparse_info.get("ply_path"),
-                "point_cloud_url": mission.get("point_cloud_url", f"/api/missions/{mission_id}/reconstruction/pointcloud"),
+                "point_cloud_url": mission.get("point_cloud_url", f"/api/missions/{m_id}/reconstruction/pointcloud"),
                 "mesh": surface_mesh,
-                "mesh_url": mission.get("mesh_url", f"/api/missions/{mission_id}/reconstruction/mesh"),
+                "mesh_url": mission.get("mesh_url", f"/api/missions/{m_id}/reconstruction/mesh"),
                 "dense": dense_info,
                 "scale": scale_info,
                 "error": None,
@@ -2394,17 +2574,17 @@ async def get_mission_reconstruction(mission_id: str):
             }
 
     # Ensure URLs are properly populated if assets exist on disk
-    if get_reconstruction_mesh_path(mission_id) and not reconstruction.get("mesh_url"):
-        reconstruction["mesh_url"] = f"/api/missions/{mission_id}/reconstruction/mesh"
-    if get_reconstruction_pointcloud_path(mission_id) and not reconstruction.get("point_cloud_url"):
-        reconstruction["point_cloud_url"] = f"/api/missions/{mission_id}/reconstruction/pointcloud"
+    if get_reconstruction_mesh_path(m_id) and not reconstruction.get("mesh_url"):
+        reconstruction["mesh_url"] = f"/api/missions/{m_id}/reconstruction/mesh"
+    if get_reconstruction_pointcloud_path(m_id) and not reconstruction.get("point_cloud_url"):
+        reconstruction["point_cloud_url"] = f"/api/missions/{m_id}/reconstruction/pointcloud"
 
     # Ensure outer success and nested reconstruction success contract is strictly identical
     raw_success = reconstruction.get("success")
     if raw_success is False or reconstruction.get("status") in ("FAILED", "UNKNOWN"):
         is_success = False
     else:
-        is_success = bool(reconstruction.get("point_count", 0) > 0 or get_reconstruction_pointcloud_path(mission_id) is not None)
+        is_success = bool(reconstruction.get("point_count", 0) > 0 or get_reconstruction_pointcloud_path(m_id) is not None)
     
     reconstruction["success"] = is_success
     return {"success": is_success, "reconstruction": reconstruction}
@@ -2465,34 +2645,54 @@ async def get_mission_object_summary(mission_id: str):
 
 def _get_mission_fused_objects(mission_id: str, mission: MissionData) -> list:
     """Retrieve 3D fused objects with fallback to disk artifacts if empty."""
+    canonical_id = resolve_canonical_mission_id(mission_id)
     objects_3d = mission.get("objects_3d")
     if objects_3d and len(objects_3d) > 0:
         return objects_3d
 
-    # Check for mission-specific semantic scene artifact
-    semantic_file = DATA_DIR / "missions" / mission_id / "semantic_scene.json"
-    if semantic_file.exists():
-        try:
-            with open(semantic_file, "r") as f:
-                data = json.load(f)
-                objs = data.get("objects") or data.get("fused_objects")
-                if objs:
-                    return objs
-        except Exception as exc:
-            logger.warning("Failed to load %s: %s", semantic_file, exc)
+    # Check for mission-specific semantic scene artifact in data/missions or data/objects/missions
+    for m_id in (mission_id, canonical_id):
+        semantic_file = DATA_DIR / "missions" / m_id / "semantic_scene.json"
+        if semantic_file.exists():
+            try:
+                with open(semantic_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    objs = data.get("objects") or data.get("fused_objects")
+                    if objs:
+                        return objs
+            except Exception as exc:
+                logger.warning("Failed to load %s: %s", semantic_file, exc)
+
+        obj_semantic_file = DATA_DIR / "objects" / "missions" / m_id / "semantic_scene.json"
+        if obj_semantic_file.exists():
+            try:
+                with open(obj_semantic_file, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    objs = data.get("objects") or data.get("fused_objects")
+                    if objs:
+                        return objs
+            except Exception as exc:
+                logger.warning("Failed to load %s: %s", obj_semantic_file, exc)
 
     # Check phase 6 validation artifact for phase5_drone_validation
     phase6_file = DATA_DIR / "validation" / "phase6" / "phase6_fusion.json"
     if phase6_file.exists():
         try:
-            with open(phase6_file, "r") as f:
+            with open(phase6_file, "r", encoding="utf-8") as f:
                 data = json.load(f)
-                if data.get("mission_id") == mission_id or mission_id == "phase5_drone_validation":
+                if data.get("mission_id") in (mission_id, canonical_id) or canonical_id == "phase5_drone_validation":
                     return data.get("fused_objects") or []
         except Exception as exc:
             logger.warning("Failed to load %s: %s", phase6_file, exc)
 
+    # Check for CSV spatial report artifact
+    csv_objs = load_csv_fused_objects(canonical_id)
+    if csv_objs:
+        return csv_objs
+
+
     return []
+
 
 
 @app.get("/api/missions/{mission_id}/semantic-scene")
@@ -2680,7 +2880,8 @@ async def get_mission_pointcloud(mission_id: str):
     if not mission.data:
         raise HTTPException(status_code=404, detail="Mission not found")
 
-    pointcloud_path = get_reconstruction_pointcloud_path(mission_id)
+    m_id = mission.mission_id
+    pointcloud_path = get_reconstruction_pointcloud_path(m_id)
     if not pointcloud_path or not pointcloud_path.exists():
         raise HTTPException(status_code=404, detail="Reconstruction point cloud not found")
 
@@ -2698,9 +2899,11 @@ async def get_mission_mesh(mission_id: str):
     if not mission.data:
         raise HTTPException(status_code=404, detail="Mission not found")
 
-    mesh_path = get_reconstruction_mesh_path(mission_id)
+    m_id = mission.mission_id
+    mesh_path = get_reconstruction_mesh_path(m_id)
     if not mesh_path or not mesh_path.exists():
         raise HTTPException(status_code=404, detail="Reconstruction mesh not found")
+
 
     ext = mesh_path.suffix.lower()
     if ext == ".glb":

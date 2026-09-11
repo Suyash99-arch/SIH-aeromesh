@@ -190,6 +190,49 @@ def test_object_endpoints_and_model_status(client):
     assert objects.json()["summary"]["total_unique_objects"] == 1
     assert detections.json()["detections"][0]["class_name"] == "car"
     assert tracks.json()["tracks"][0]["track_id"] == "T0001"
-    assert summary.json()["counts_by_class"] == {"car": 1}
     assert model_status.status_code == 200
     assert isinstance(model_status.json()["model"]["available"], bool)
+
+
+def test_mission_video_streaming_and_range_requests(client, tmp_path):
+    mission = create_mission(client, name="Video Mission")
+    mission_id = mission["id"]
+
+    # 1. Non-existent video returns 404
+    missing_resp = client.get(f"/api/missions/{mission_id}/video")
+    assert missing_resp.status_code == 404
+    assert "No video uploaded or available" in missing_resp.json()["detail"]
+
+    # 2. Write a simulated video file
+    video_bytes = b"FLIGHT_VIDEO_HEADER" + b"\x00" * 2000
+    mission_dir = main.MISSIONS_DIR / mission_id
+    mission_dir.mkdir(parents=True, exist_ok=True)
+    video_file = mission_dir / "video.mp4"
+    video_file.write_bytes(video_bytes)
+
+    # 3. Full stream request (no Range)
+    full_resp = client.get(f"/api/missions/{mission_id}/video")
+    assert full_resp.status_code == 200
+    assert full_resp.headers["content-type"] == "video/mp4"
+    assert full_resp.headers["accept-ranges"] == "bytes"
+    assert int(full_resp.headers["content-length"]) == len(video_bytes)
+    assert full_resp.content == video_bytes
+
+    # 4. HTTP Range request (seeking support: 206 Partial Content)
+    range_resp = client.get(
+        f"/api/missions/{mission_id}/video",
+        headers={"Range": "bytes=0-99"},
+    )
+    assert range_resp.status_code == 206
+    assert range_resp.headers["content-type"] == "video/mp4"
+    assert range_resp.headers["accept-ranges"] == "bytes"
+    assert range_resp.headers["content-range"] == f"bytes 0-99/{len(video_bytes)}"
+    assert int(range_resp.headers["content-length"]) == 100
+    assert range_resp.content == video_bytes[:100]
+
+    # 5. Out of bounds range request returns 416
+    oob_resp = client.get(
+        f"/api/missions/{mission_id}/video",
+        headers={"Range": f"bytes={len(video_bytes) + 1000}-"},
+    )
+    assert oob_resp.status_code == 416

@@ -90,7 +90,24 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
 
   const toggleLayer = (key) => {
     setLayers((prev) => {
-      const updated = { ...prev, [key]: !prev[key] };
+      let updated;
+      if (key === "pointsOnly") {
+        const isPointsOnly = prev.pointsOnly === true;
+        updated = {
+          ...prev,
+          pointsOnly: !isPointsOnly,
+          mesh: isPointsOnly,
+          pointCloud: !isPointsOnly,
+        };
+      } else {
+        const targetKey =
+          key === "flight"
+            ? "cameraTrajectory"
+            : key === "objects"
+              ? "semanticObjects"
+              : key;
+        updated = { ...prev, [targetKey]: !prev[targetKey] };
+      }
       try {
         sessionStorage.setItem(
           `aeromesh_layers_${missionId}`,
@@ -944,6 +961,7 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
           }
           reconstructionMeta={reconstructionMeta}
           layers={layers}
+          onToggleLayer={toggleLayer}
           mode="hybrid"
           selectedObject={selectedObject}
           onSelectObject={handleSelectObject}

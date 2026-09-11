@@ -91,4 +91,4 @@ frontend/scripts/
 process_demo_missions_real.py
 test_live_eval_priority1.py
 verify_aa710.py
-verify_all_missions.py
+verify_all_missions.py.venv312/

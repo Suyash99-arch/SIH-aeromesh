@@ -156,10 +156,11 @@ export default function HeroCompassReconstruction() {
 
     // 3. 60FPS Animation Loop with Continuous Slow Rotation
     let rafId = null;
-    let clock = new THREE.Clock();
+    const timer = new THREE.Timer();
 
     const animate = () => {
-      const elapsed = clock.getElapsedTime();
+      timer.update();
+      const elapsed = timer.getElapsed();
       // Continuous slow rotation around Y-axis
       modelGroup.rotation.y = elapsed * 0.28;
       // Gentle pitch & roll breathing

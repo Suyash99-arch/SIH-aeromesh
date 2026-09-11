@@ -750,8 +750,8 @@ function SemanticObjects3D({ objects, selectedId, onSelect, layers }) {
               </mesh>
             )}
 
-            {/* 3D Label: show for selected or verified high-confidence objects */}
-            {(isSelected || (!isLowConf && layers?.labels !== false)) && (
+            {/* 3D Label: show when labels layer is enabled */}
+            {layers?.labels !== false && (isSelected || !isLowConf) && (
               <Text
                 font="/fonts/space_grotesk.ttf"
                 position={[0, 1.1, 0]}
@@ -776,7 +776,7 @@ function SemanticObjects3D({ objects, selectedId, onSelect, layers }) {
  * Custom Operator Markings Component
  * Renders user-dropped pins with interactive selection and custom colors.
  */
-function CustomMarkings3D({ markings, selectedId, onSelect }) {
+function CustomMarkings3D({ markings, selectedId, onSelect, layers }) {
   if (!markings || !Array.isArray(markings) || markings.length === 0) return null;
 
   return (
@@ -813,18 +813,20 @@ function CustomMarkings3D({ markings, selectedId, onSelect }) {
               />
             </mesh>
             {/* Text label */}
-            <Text
-              font="/fonts/space_grotesk.ttf"
-              position={[0, 2.4, 0]}
-              fontSize={0.65}
-              color="#ffffff"
-              anchorX="center"
-              anchorY="bottom"
-              outlineWidth={0.06}
-              outlineColor="#061017"
-            >
-              {m.name || "Marker"}
-            </Text>
+            {layers?.labels !== false && (
+              <Text
+                font="/fonts/space_grotesk.ttf"
+                position={[0, 2.4, 0]}
+                fontSize={0.65}
+                color="#ffffff"
+                anchorX="center"
+                anchorY="bottom"
+                outlineWidth={0.06}
+                outlineColor="#061017"
+              >
+                {m.name || "Marker"}
+              </Text>
+            )}
           </group>
         );
       })}
@@ -1165,6 +1167,7 @@ function Scene({
               markings={customMarkings}
               selectedId={selectedMarkingId}
               onSelect={onSelectMarking}
+              layers={layers}
             />
           )}
         </group>
@@ -1363,20 +1366,30 @@ export default function ReconstructionViewer({
     } else {
       if (key === "pointsOnly") {
         setInternalLayers((prev) => {
-          const isPointsOnly = prev.pointsOnly === true;
+          const currentPointsOnly =
+            prev.pointsOnly !== undefined
+              ? prev.pointsOnly
+              : layers?.pointsOnly === true;
+          const nextVal = !currentPointsOnly;
           return {
             ...prev,
-            pointsOnly: !isPointsOnly,
-            mesh: isPointsOnly, // Restore mesh if turning off
-            pointCloud: !isPointsOnly,
+            pointsOnly: nextVal,
+            mesh: !nextVal, // Restore mesh if turning off
+            pointCloud: nextVal,
           };
         });
         return;
       }
-      setInternalLayers((prev) => ({
-        ...prev,
-        [key]: !prev[key],
-      }));
+      setInternalLayers((prev) => {
+        const currentVal =
+          prev[key] !== undefined
+            ? prev[key]
+            : (layers?.[key] !== undefined ? layers[key] : true);
+        return {
+          ...prev,
+          [key]: !currentVal,
+        };
+      });
     }
   };
 
