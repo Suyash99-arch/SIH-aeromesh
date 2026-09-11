@@ -128,8 +128,7 @@ export default function App() {
         const nextMission = await getApiMission(missionId, isPoll);
         if (!active) return;
 
-        const fallbackMission =
-          getSeedMission(missionId) || getSeedMission(DEFAULT_MISSION_ID);
+        const fallbackMission = getSeedMission(missionId) || null;
         const resolvedMission =
           nextMission && !nextMission.hasError ? nextMission : fallbackMission;
 

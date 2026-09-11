@@ -2905,8 +2905,13 @@ async def get_mission_mesh(mission_id: str):
         raise HTTPException(status_code=404, detail="Reconstruction mesh not found")
 
 
+    with open(mesh_path, "rb") as f:
+        header_magic = f.read(4)
+
     ext = mesh_path.suffix.lower()
-    if ext == ".glb":
+    if header_magic.startswith(b"ply"):
+        media_type = "application/octet-stream"
+    elif ext == ".glb" and header_magic == b"glTF":
         media_type = "model/gltf-binary"
     elif ext == ".gltf":
         media_type = "model/gltf+json"
@@ -3806,3 +3811,4 @@ async def export_mission_evidence_package(
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
+

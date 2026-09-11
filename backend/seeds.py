@@ -109,6 +109,50 @@ def build_semantic_scene_from_objects(objects_3d: List[Dict[str, Any]]) -> Dict[
     }
 
 
+SEEDED_RECONSTRUCTION_PROFILES = {
+    "north-ridge": {
+        "status": "complete",
+        "success": True,
+        "sparse_point_count": 5252,
+        "point_count": 5252,
+        "registered_cameras": 20,
+        "total_images": 20,
+        "mean_reprojection_error": 1.95,
+        "mesh": {"face_count": 25584, "vertex_count": 12925, "format": "ply"},
+    },
+    "river-approach": {
+        "status": "complete",
+        "success": True,
+        "sparse_point_count": 2612,
+        "point_count": 2612,
+        "registered_cameras": 18,
+        "total_images": 20,
+        "mean_reprojection_error": 1.42,
+        "mesh": {"face_count": 20092, "vertex_count": 10203, "format": "ply"},
+    },
+    "downtown-grid": {
+        "status": "complete",
+        "success": True,
+        "sparse_point_count": 4466,
+        "point_count": 4466,
+        "registered_cameras": 24,
+        "total_images": 25,
+        "mean_reprojection_error": 1.68,
+        "mesh": {"face_count": 22393, "vertex_count": 11351, "format": "ply"},
+    },
+    "harbor-district": {
+        "status": "complete",
+        "success": True,
+        "sparse_point_count": 2357,
+        "point_count": 2357,
+        "registered_cameras": 16,
+        "total_images": 18,
+        "mean_reprojection_error": 1.55,
+        "mesh": {"face_count": 19708, "vertex_count": 9945, "format": "ply"},
+    },
+}
+
+
 def build_seeded_mission_manifest(mission_id: str) -> Optional[Dict[str, Any]]:
     canonical_id = resolve_canonical_mission_id(mission_id)
     if canonical_id not in SEEDED_MISSION_IDS:
@@ -174,16 +218,21 @@ def build_seeded_mission_manifest(mission_id: str) -> Optional[Dict[str, Any]]:
     frame_quality = inf_data.get("frameQuality") or base_meta.get("quality") or {}
     provenance_meta = inf_data.get("provenance") or {}
 
-    # Reconstruction block
+    # Authoritative, distinct per-mission reconstruction block
+    profile = SEEDED_RECONSTRUCTION_PROFILES.get(canonical_id, {})
     recon_meta = dict(base_meta.get("reconstruction") or {})
-    recon_meta.setdefault("status", "complete")
-    recon_meta.setdefault("success", True)
-    recon_meta.setdefault("sparse_point_count", 12916)
-    recon_meta.setdefault("point_count", recon_meta.get("sparse_point_count", 12916))
-    recon_meta.setdefault("registered_cameras", 20)
-    recon_meta.setdefault("mean_reprojection_error", 1.95)
-    recon_meta["point_cloud_url"] = f"/api/missions/{canonical_id}/reconstruction/pointcloud"
-    recon_meta["mesh_url"] = f"/api/missions/{canonical_id}/reconstruction/mesh"
+    recon_meta.update({
+        "status": profile.get("status", "complete"),
+        "success": profile.get("success", True),
+        "sparse_point_count": profile.get("sparse_point_count", 2500),
+        "point_count": profile.get("point_count", 2500),
+        "registered_cameras": profile.get("registered_cameras", 20),
+        "total_images": profile.get("total_images", 20),
+        "mean_reprojection_error": profile.get("mean_reprojection_error", 1.5),
+        "mesh": profile.get("mesh", {"face_count": 20000, "vertex_count": 10000, "format": "ply"}),
+        "point_cloud_url": f"/api/missions/{canonical_id}/reconstruction/pointcloud",
+        "mesh_url": f"/api/missions/{canonical_id}/reconstruction/mesh",
+    })
 
     # Objects count summary
     if semantic_scene and semantic_scene.get("valid_objects"):

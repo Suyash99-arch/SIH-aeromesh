@@ -171,6 +171,7 @@ function RealPointCloud({ url, onBoundsComputed }) {
 
   // Clean up GPU resources on unmount or before new point cloud loads
   useEffect(() => {
+    setGeometry(null);
     return () => {
       if (currentGeometryRef.current) {
         try {
@@ -188,6 +189,7 @@ function RealPointCloud({ url, onBoundsComputed }) {
         }
         currentMaterialRef.current = null;
       }
+      setGeometry(null);
     };
   }, [url]);
 
@@ -307,8 +309,10 @@ function RealMesh({ url, mode, onBoundsComputed, onError }) {
 
   // Cleanup on unmount or URL change
   useEffect(() => {
+    setMeshData(null);
     return () => {
       disposeCurrentMesh();
+      setMeshData(null);
     };
   }, [url, disposeCurrentMesh]);
 
@@ -435,7 +439,9 @@ function RealMesh({ url, mode, onBoundsComputed, onError }) {
           const loader = new PLYLoader();
           const rawGeom = loader.parse(buffer);
           const geom = sanitizeBufferGeometry(rawGeom);
-          geom.computeVertexNormals();
+          if (!geom.hasAttribute("normal")) {
+            geom.computeVertexNormals();
+          }
           geom.computeBoundingBox();
 
           const center = new THREE.Vector3();

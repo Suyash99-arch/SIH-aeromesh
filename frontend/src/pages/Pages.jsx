@@ -820,7 +820,7 @@ export function DronePage({ mission }) {
 }
 
 export function ReconstructionPage({ mission, notice }) {
-  return <MissionAnalysisWorkspace mission={mission} notice={notice} />;
+  return <MissionAnalysisWorkspace key={mission?.id} mission={mission} notice={notice} />;
 }
 
 function Phase7MeasurementsSection({ mission, notice }) {

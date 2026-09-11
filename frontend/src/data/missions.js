@@ -396,7 +396,7 @@ export const missions = [
 warnDuplicateAssetPaths(missions);
 
 export const getMission = (id) =>
-  missions.find((m) => m.id === id) || missions[0];
+  missions.find((m) => m.id === id) || null;
 export const pipelineStages = [
   ["Video", "drone"],
   ["Quality", "drone"],

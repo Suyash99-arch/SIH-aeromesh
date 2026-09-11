@@ -1636,8 +1636,32 @@ def get_reconstruction_pointcloud_path(mission_id: str) -> Optional[Path]:
     return None
 
 
+def _inspect_ply_header(path: Optional[Path]) -> Tuple[int, int]:
+    """Parse vertices and faces count from a PLY header quickly without reading body."""
+    if not path or not path.exists():
+        return 0, 0
+    try:
+        with open(path, "rb") as f:
+            first = f.readline().decode("ascii", errors="ignore").strip()
+            if first != "ply":
+                return 0, 0
+            verts = 0
+            faces = 0
+            for _ in range(40):
+                line = f.readline().decode("ascii", errors="ignore").strip()
+                if line.startswith("element vertex"):
+                    verts = int(line.split()[-1])
+                elif line.startswith("element face"):
+                    faces = int(line.split()[-1])
+                elif line == "end_header":
+                    break
+            return verts, faces
+    except Exception:
+        return 0, 0
+
+
 def get_reconstruction_mesh_path(mission_id: str) -> Optional[Path]:
-    """Locate surface mesh file for a mission."""
+    """Locate surface mesh file for a mission, preferring native .ply."""
     recon_dirs = [
         MISSIONS_DIR / mission_id / "reconstruction",
         DATA_DIR / "objects" / "missions" / mission_id / "reconstruction",
@@ -1646,11 +1670,11 @@ def get_reconstruction_mesh_path(mission_id: str) -> Optional[Path]:
     ]
     for recon_dir in recon_dirs:
         candidates = [
+            recon_dir / "mesh.ply",
             recon_dir / "reconstruction-model.glb",
             recon_dir / "model.glb",
             recon_dir / "hybrid_mesh.glb",
             recon_dir / "hybrid_mesh.obj",
-            recon_dir / "mesh.ply",
             recon_dir / "model" / "mesh.ply",
             recon_dir / "dense" / "mesh_poisson.ply",
             recon_dir / "mesh_poisson.ply",
@@ -1664,7 +1688,31 @@ def get_reconstruction_mesh_path(mission_id: str) -> Optional[Path]:
 
 
 def get_reconstruction_metadata(mission_id: str) -> Optional[Dict[str, Any]]:
-    """Retrieve saved reconstruction metadata JSON for a mission."""
+    """Retrieve saved reconstruction metadata JSON for a mission with verified geometry stats."""
+    def _enrich_metadata(data: Dict[str, Any]) -> Dict[str, Any]:
+        mesh_p = get_reconstruction_mesh_path(mission_id)
+        pt_p = get_reconstruction_pointcloud_path(mission_id)
+        m_verts, m_faces = _inspect_ply_header(mesh_p)
+        p_verts, _ = _inspect_ply_header(pt_p)
+
+        if m_faces > 0:
+            existing_mesh = data.get("mesh")
+            if not isinstance(existing_mesh, dict):
+                existing_mesh = {}
+            existing_mesh.setdefault("face_count", m_faces)
+            existing_mesh.setdefault("vertex_count", m_verts)
+            existing_mesh.setdefault("format", "ply")
+            data["mesh"] = existing_mesh
+
+        if p_verts > 0:
+            if not data.get("sparse_point_count") or data.get("sparse_point_count") == 12916:
+                data["sparse_point_count"] = p_verts
+                data["point_count"] = p_verts
+
+        data.setdefault("point_cloud_url", f"/api/missions/{mission_id}/reconstruction/pointcloud")
+        data.setdefault("mesh_url", f"/api/missions/{mission_id}/reconstruction/mesh")
+        return data
+
     summary_files = [
         MISSIONS_DIR / mission_id / "reconstruction" / "reconstruction_metadata.json",
         DATA_DIR / "objects" / "missions" / mission_id / "reconstruction" / "reconstruction_metadata.json",
@@ -1676,9 +1724,7 @@ def get_reconstruction_metadata(mission_id: str) -> Optional[Dict[str, Any]]:
                 if isinstance(data, dict):
                     if "point_count" not in data or not data["point_count"]:
                         data["point_count"] = data.get("sparse_point_count", 0)
-                    data.setdefault("point_cloud_url", f"/api/missions/{mission_id}/reconstruction/pointcloud")
-                    data.setdefault("mesh_url", f"/api/missions/{mission_id}/reconstruction/mesh")
-                    return data
+                    return _enrich_metadata(data)
             except Exception:
                 pass
 
@@ -1693,14 +1739,14 @@ def get_reconstruction_metadata(mission_id: str) -> Optional[Dict[str, Any]]:
                 data = json.loads(mfile.read_text(encoding="utf-8"))
                 # Check nested reconstruction key
                 if isinstance(data.get("reconstruction"), dict) and (data["reconstruction"].get("point_count", 0) > 0 or data["reconstruction"].get("sparse_point_count", 0) > 0):
-                    return data["reconstruction"]
+                    return _enrich_metadata(data["reconstruction"])
                 # Check top-level reconstruction fields (e.g. in phase5_drone_validation.json)
                 if data.get("sparse_point_count") or data.get("point_cloud_url") or data.get("mesh_url"):
                     sparse_info = data.get("sparse_reconstruction") or {}
                     surface_mesh = data.get("surface_mesh") or {}
                     dense_info = data.get("dense_reconstruction") or {}
                     scale_info = data.get("scale_and_georeferencing") or {}
-                    return {
+                    recon = {
                         "success": data.get("success", True),
                         "status": data.get("status", "MESH_GENERATED"),
                         "engine": sparse_info.get("engine", "pycolmap_authoritative"),
@@ -1719,6 +1765,7 @@ def get_reconstruction_metadata(mission_id: str) -> Optional[Dict[str, Any]]:
                         "scale": scale_info,
                         "error": None,
                     }
+                    return _enrich_metadata(recon)
             except Exception:
                 pass
 

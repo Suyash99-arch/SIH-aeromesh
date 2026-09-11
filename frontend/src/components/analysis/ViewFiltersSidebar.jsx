@@ -127,9 +127,9 @@ export default function ViewFiltersSidebar({
       {/* 2. CUSTOM MARKINGS */}
       <div className="sidebar-section">
         <div className="sidebar-section-header between">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5" style={{ minWidth: 0, flexShrink: 1 }}>
             <Icon name="MapPin" size={14} className="section-icon cyan" />
-            <span className="section-title">CUSTOM MARKINGS</span>
+            <span className="section-title" style={{ whiteSpace: "nowrap", fontSize: "11px", letterSpacing: "0.03em" }}>CUSTOM MARKINGS</span>
           </div>
           <button
             type="button"
