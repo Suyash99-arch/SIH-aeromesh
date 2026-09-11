@@ -1,0 +1,95 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    background-color: #050811;
+    color: #e2e8f0;
+    font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  }
+}
+
+/* Custom AeroMesh glow utilities */
+.glow-cyan-sm {
+  filter: drop-shadow(0 0 6px rgba(0, 210, 255, 0.45));
+}
+
+.glow-cyan-md {
+  filter: drop-shadow(0 0 14px rgba(0, 210, 255, 0.55));
+}
+
+.glow-blue-md {
+  filter: drop-shadow(0 0 16px rgba(37, 99, 235, 0.6));
+}
+
+.text-gradient-cyan {
+  background: linear-gradient(135deg, #ffffff 0%, #bceeff 45%, #00d2ff 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.text-gradient-blue {
+  background: linear-gradient(135deg, #ffffff 15%, #93c5fd 60%, #3b82f6 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.bg-radial-glow {
+  background: radial-gradient(circle at 50% 30%, rgba(14, 116, 144, 0.15) 0%, rgba(5, 8, 17, 0) 70%);
+}
+
+.border-glass {
+  border: 1px solid rgba(30, 58, 112, 0.45);
+}
+
+.bg-glass {
+  background: rgba(8, 14, 30, 0.75);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.bg-glass-card {
+  background: linear-gradient(165deg, rgba(13, 23, 48, 0.85) 0%, rgba(7, 12, 26, 0.9) 100%);
+  border: 1px solid rgba(25, 48, 92, 0.6);
+  backdrop-filter: blur(16px);
+}
+
+.bg-glass-card:hover {
+  border-color: rgba(0, 210, 255, 0.4);
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #060a16;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #192a52;
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #2563eb;
+}
+
+/* Building 3D Y-axis rotation */
+@keyframes rotateBuilding {
+  0% {
+    transform: perspective(1200px) rotateY(0deg);
+  }
+  100% {
+    transform: perspective(1200px) rotateY(360deg);
+  }
+}
+
+.animate-rotate-building {
+  animation: rotateBuilding 20s linear infinite;
+  transform-style: preserve-3d;
+  will-change: transform;
+}
