@@ -141,7 +141,7 @@ export default function AuthPage({ onAuthenticated, onCancel, notice }) {
             }}
           >
             <span style={{ width: "6px", height: "6px", borderRadius: "50%", background: "#38bdf8", boxShadow: "0 0 8px #38bdf8" }} />
-            Hexa Spark Sentinel Auth
+            AeroMesh Sentinel Auth
           </div>
           <h1
             style={{

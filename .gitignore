@@ -87,7 +87,9 @@ pip_versions.txt
 
 # Ad-hoc frontend test / verification scripts
 frontend/*.cjs
+frontend/*.mjs
 frontend/scripts/
+scratch_inspect_pcd.py
 process_demo_missions_real.py
 test_live_eval_priority1.py
 verify_aa710.py

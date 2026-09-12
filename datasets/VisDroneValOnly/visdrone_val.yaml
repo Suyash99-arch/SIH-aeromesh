@@ -1,0 +1,14 @@
+path: c:/Users/kc889/OneDrive/Desktop/Sih/datasets/VisDroneValOnly
+train: images/val
+val: images/val
+names:
+  0: awning-tricycle
+  1: bicycle
+  2: bus
+  3: car
+  4: motor
+  5: pedestrian
+  6: people
+  7: tricycle
+  8: truck
+  9: van

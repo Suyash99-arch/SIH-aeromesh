@@ -64,7 +64,7 @@ export default function App() {
   const [missionId, setMissionId] = useState(() => getInitialMissionId());
   const [toast, setToast] = useState(null);
   const [theme, setTheme] = useState(
-    () => localStorage.getItem("hexaspark-theme") || "dark",
+    () => localStorage.getItem("aeromesh-theme") || "dark",
   );
   const [showCreateMission, setShowCreateMission] = useState(false);
   const [mission, setMission] = useState(() =>
@@ -87,7 +87,7 @@ export default function App() {
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
-    localStorage.setItem("hexaspark-theme", theme);
+    localStorage.setItem("aeromesh-theme", theme);
   }, [theme]);
 
   useEffect(() => {
@@ -246,7 +246,7 @@ export default function App() {
     );
 
   return (
-    <div className="hexa-app-root">
+    <div className="aeromesh-app-root">
       {/* Soft ambient cursor-follow glow layer */}
       <AmbientCursorGlow />
 

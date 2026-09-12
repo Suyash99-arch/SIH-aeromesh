@@ -5,10 +5,11 @@
 
 import { missions as seededMissions } from "../data/missions";
 
-// API base URL
+// API base URL - supports VITE_API_URL, VITE_API_BASE_URL, and relative /api for Vercel and local dev proxy
 const API_BASE =
-  (typeof import.meta !== "undefined" && import.meta.env?.VITE_API_BASE_URL) ||
-  "http://localhost:8000/api";
+  (typeof import.meta !== "undefined" &&
+    (import.meta.env?.VITE_API_URL || import.meta.env?.VITE_API_BASE_URL)) ||
+  (typeof window !== "undefined" ? "/api" : "http://localhost:8000/api");
 
 const fallbackMission = {
   id: "sector-04",
@@ -476,14 +477,14 @@ export async function processVideo(
 
       // Persist active job in localStorage for resume-after-reload capability
       try {
-        const stored = JSON.parse(localStorage.getItem("hexaspark_active_jobs") || "{}");
+        const stored = JSON.parse(localStorage.getItem("aeromesh_active_jobs") || "{}");
         stored[missionId] = {
           jobId: data.job_id,
           missionId,
           startedAt: new Date().toISOString(),
           status: data.status || "PROCESSING",
         };
-        localStorage.setItem("hexaspark_active_jobs", JSON.stringify(stored));
+        localStorage.setItem("aeromesh_active_jobs", JSON.stringify(stored));
       } catch (storageErr) {
         console.warn("[Process] LocalStorage persistence error:", storageErr);
       }
@@ -768,9 +769,10 @@ export async function measureVolume3D(missionId, payload = {}) {
 export async function fetchSemanticScene(missionId) {
   try {
     const response = await fetch(
-      `${API_BASE}/missions/${missionId}/semantic-scene`,
+      `${API_BASE}/missions/${missionId}/semantic-scene?_t=${Date.now()}`,
       {
         headers: getAuthHeaders(),
+        cache: "no-store",
       },
     );
     return await response.json();
@@ -783,9 +785,10 @@ export async function fetchSemanticScene(missionId) {
 export async function fetchObjects3D(missionId) {
   try {
     const response = await fetch(
-      `${API_BASE}/missions/${missionId}/objects-3d`,
+      `${API_BASE}/missions/${missionId}/objects-3d?_t=${Date.now()}`,
       {
         headers: getAuthHeaders(),
+        cache: "no-store",
       },
     );
     return await response.json();
@@ -798,9 +801,10 @@ export async function fetchObjects3D(missionId) {
 export async function fetchObjectEvidence(missionId, objectId) {
   try {
     const response = await fetch(
-      `${API_BASE}/missions/${missionId}/objects/${objectId}/evidence`,
+      `${API_BASE}/missions/${missionId}/objects/${objectId}/evidence?_t=${Date.now()}`,
       {
         headers: getAuthHeaders(),
+        cache: "no-store",
       },
     );
     return await response.json();
@@ -813,9 +817,10 @@ export async function fetchObjectEvidence(missionId, objectId) {
 export async function fetchReconstruction(missionId) {
   try {
     const response = await fetch(
-      `${API_BASE}/missions/${missionId}/reconstruction`,
+      `${API_BASE}/missions/${missionId}/reconstruction?_t=${Date.now()}`,
       {
         headers: getAuthHeaders(),
+        cache: "no-store",
       },
     );
     const data = await response.json();

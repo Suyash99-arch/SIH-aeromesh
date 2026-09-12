@@ -24,7 +24,7 @@ export const MissionCommandPage: React.FC = () => {
       id: 'north-ridge-01',
       title: 'North Ridge · Sector 01',
       status: 'RECONSTRUCTION READY',
-      drone: 'HEXA-SPARK V4 · UNIT ALPHA',
+      drone: 'AEROMESH V4 · UNIT ALPHA',
       battery: '88%',
       signal: '98%',
       cameras: 20,
@@ -36,7 +36,7 @@ export const MissionCommandPage: React.FC = () => {
       id: 'downtown-perimeter-grid',
       title: 'Downtown Perimeter Grid',
       status: 'VIDEO CAPTURE COMPLETE',
-      drone: 'HEXA-SPARK V4 · UNIT BETA',
+      drone: 'AEROMESH V4 · UNIT BETA',
       battery: '64%',
       signal: '92%',
       cameras: 20,
@@ -48,7 +48,7 @@ export const MissionCommandPage: React.FC = () => {
       id: 'harbor-coastal-approach',
       title: 'Harbor Coastal Approach',
       status: 'RECONSTRUCTION READY',
-      drone: 'HEXA-SPARK V3 · UNIT GAMMA',
+      drone: 'AEROMESH V3 · UNIT GAMMA',
       battery: '94%',
       signal: '99%',
       cameras: 20,
@@ -122,7 +122,7 @@ export const MissionCommandPage: React.FC = () => {
             <div className="dock-header font-display">AIRFRAME TELEMETRY DOCK</div>
             <div className="row-kv">
               <span className="k">Drone Airframe</span>
-              <span className="v mono">HEXA-SPARK-01</span>
+              <span className="v mono">AEROMESH-01</span>
             </div>
             <div className="row-kv">
               <span className="k">Flight Mode</span>

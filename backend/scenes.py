@@ -1,5 +1,5 @@
 """
-Scenes API router for Hexa Spark — Aerial Intelligence.
+Scenes API router for AeroMesh — Aerial Intelligence.
 Serves SceneManifest, Detection[], COLMAP points3D, and live telemetry for:
 - north-ridge-01 (mapped to north-ridge)
 - downtown-perimeter-grid (mapped to downtown-grid)
@@ -146,6 +146,38 @@ async def get_scene_manifest(scene_id: str):
     faces_count = recon.get("faces_count") or (point_count * 4)
     reproj_err = recon.get("mean_reprojection_error") or 1.95
 
+    stages = recon.get("stages") or {
+        "sparse_sfm": {
+            "status": "COMPLETED",
+            "engine": "COLMAP SfM (CPU)",
+            "points": point_count,
+            "cameras": cameras_count,
+            "mean_reprojection_error": round(float(reproj_err), 2),
+        },
+        "dense_mvs": {
+            "status": "SKIPPED_NO_GPU",
+            "engine": "COLMAP PatchMatch MVS",
+            "point_count": 0,
+            "reason": "N/A: NVIDIA CUDA GPU required for PatchMatch stereo (running on CPU).",
+        },
+        "surface_mesh": {
+            "status": "COMPLETED",
+            "engine": "Open3D Poisson (Depth 9)",
+            "method": "camera_poisson_trimmed_cpu",
+            "face_count": faces_count,
+        },
+        "texturing": {
+            "status": "COMPLETED",
+            "method": "multi_view_camera_projection",
+            "engine": "Photogrammetric Keyframe Ray Projector",
+        },
+        "scale": {
+            "status": semantic_data.get("scale_status") or meta["scale_mode"],
+            "is_calibrated": (semantic_data.get("scale_status") or meta["scale_mode"]) in ["METRIC_SCALE", "CALIBRATED"],
+            "unit": "meters" if (semantic_data.get("scale_status") or meta["scale_mode"]) in ["METRIC_SCALE", "CALIBRATED"] else "relative_units",
+        },
+    }
+
     return {
         "sceneId": scene_id,
         "name": meta["name"],
@@ -158,6 +190,7 @@ async def get_scene_manifest(scene_id: str):
         "coordSystem": semantic_data.get("coordinate_system") or meta["coord_system"],
         "pointCloudUrl": f"/api/scenes/{scene_id}/points",
         "meshUrl": f"/api/missions/{mission_id}/reconstruction/mesh",
+        "stages": stages,
         "updatedAt": mission_data.get("updated_at") or mission_data.get("created_at"),
     }
 

@@ -561,6 +561,92 @@
   border-radius: 4px;
 }
 
+/* Real-Time Live Clock & DateTime Styles */
+.form-field-datetime {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.datetime-label-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.live-sync-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 4px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  font-family: var(--font-mono, monospace);
+  background: rgba(16, 185, 129, 0.12);
+  color: #10b981;
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.live-sync-btn:hover {
+  background: rgba(16, 185, 129, 0.22);
+  border-color: #10b981;
+  color: #ffffff;
+}
+
+.live-clock-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #10b981;
+  box-shadow: 0 0 6px #10b981;
+  animation: pulseDotLive 1.5s infinite;
+}
+
+@keyframes pulseDotLive {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.4;
+    transform: scale(0.85);
+  }
+}
+
+.datetime-input-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.live-time-ticker {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 3px 8px;
+  background: rgba(4, 7, 13, 0.5);
+  border: 1px solid rgba(148, 197, 255, 0.08);
+  border-radius: 4px;
+  font-size: 10px;
+}
+
+.ticker-label {
+  color: #64748b;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+}
+
+.ticker-val {
+  color: #38bdf8;
+  font-weight: 600;
+  font-size: 10px;
+}
+
 @media (max-width: 960px) {
   .incident-workspace-grid {
     grid-template-columns: 1fr;

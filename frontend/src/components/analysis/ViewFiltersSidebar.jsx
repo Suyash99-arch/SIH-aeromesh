@@ -19,14 +19,36 @@ export default function ViewFiltersSidebar({
   totalPeople = 0,
   totalVehicles = 0,
   entryExitCount = 0,
+  onClose,
 }) {
   return (
     <aside className="view-filters-sidebar" aria-label="Scene Filters and Markings">
       {/* 1. VIEW FILTERS */}
       <div className="sidebar-section">
-        <div className="sidebar-section-header">
-          <Icon name="Sliders" size={14} className="section-icon" />
-          <span className="section-title">VIEW FILTERS</span>
+        <div className="sidebar-section-header between">
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <Icon name="Sliders" size={14} className="section-icon" />
+            <span className="section-title">VIEW FILTERS</span>
+          </div>
+          {onClose && (
+            <button
+              type="button"
+              onClick={onClose}
+              className="sidebar-close-btn"
+              title="Close Filters"
+              style={{
+                background: "transparent",
+                border: "none",
+                color: "#94a3b8",
+                cursor: "pointer",
+                padding: "2px 6px",
+                borderRadius: "4px",
+                fontSize: "14px",
+              }}
+            >
+              ✕
+            </button>
+          )}
         </div>
 
         <div className="filter-group">
@@ -51,40 +73,41 @@ export default function ViewFiltersSidebar({
               checked={layers.vehicles !== false}
               onChange={() => onToggleLayer?.("vehicles")}
             />
-            <span className="filter-label">Vehicles</span>
+            <span className="filter-label">Vehicles (3D Boxes)</span>
             <span className="filter-badge count">{totalVehicles}</span>
           </label>
 
-          {/* Fire & Smoke */}
-          <label className="filter-item warning-item">
+          {/* Buildings & Structures */}
+          <label className="filter-item">
             <input
               type="checkbox"
-              checked={layers.fireSmoke !== false}
-              onChange={() => onToggleLayer?.("fireSmoke")}
+              checked={layers.buildings !== false}
+              onChange={() => onToggleLayer?.("buildings")}
             />
-            <span className="filter-label">Fire & Smoke</span>
-            <span
-              className="filter-badge notice"
-              title="Standard YOLO11 COCO weights do not detect fire/smoke. Requires fine-tuned FLAME model."
-            >
-              0 (Requires FLAME weights)
-            </span>
+            <span className="filter-label">Buildings & Facades</span>
+            <span className="filter-badge active">Spatial</span>
           </label>
 
-          {/* Structural Damage */}
-          <label className="filter-item warning-item">
+          {/* Infrastructure */}
+          <label className="filter-item">
             <input
               type="checkbox"
-              checked={layers.damage !== false}
-              onChange={() => onToggleLayer?.("damage")}
+              checked={layers.infrastructure !== false}
+              onChange={() => onToggleLayer?.("infrastructure")}
             />
-            <span className="filter-label">Structural Damage</span>
-            <span
-              className="filter-badge notice"
-              title="Standard detection does not segment structural damage. Requires xBD disaster model weights."
-            >
-              0 (Requires xBD weights)
-            </span>
+            <span className="filter-label">Road & Rail Infra</span>
+            <span className="filter-badge active">Corridor</span>
+          </label>
+
+          {/* Vegetation */}
+          <label className="filter-item">
+            <input
+              type="checkbox"
+              checked={layers.vegetation !== false}
+              onChange={() => onToggleLayer?.("vegetation")}
+            />
+            <span className="filter-label">Vegetation & Canopy</span>
+            <span className="filter-badge">Terrain</span>
           </label>
 
           {/* Entry/Exit Points */}
@@ -105,7 +128,7 @@ export default function ViewFiltersSidebar({
               checked={layers.mesh !== false}
               onChange={() => onToggleLayer?.("mesh")}
             />
-            <span className="filter-label">3D Reconstruction Mesh</span>
+            <span className="filter-label">3D Surface Mesh</span>
             <span className="filter-badge active">Active</span>
           </label>
 

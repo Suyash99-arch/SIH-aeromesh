@@ -2635,7 +2635,7 @@ function Reports({ mission, notice }) {
           >
             <button onClick={() => setOpenModal(false)}>×</button>
             <span className="eyebrow">
-              HEXA SPARK / DECISION REPORT PREVIEW
+              AEROMESH / DECISION REPORT PREVIEW
             </span>
             <h2>
               {repMission.name || mission.name} — {mission.sector}

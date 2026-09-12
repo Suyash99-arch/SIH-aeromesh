@@ -7,7 +7,7 @@ import {
 } from '../types/aerial.ts';
 import { parsePointCloud, generateDemoPointCloud } from './parsers/colmap.ts';
 
-const RAW_BASE = (import.meta.env.VITE_API_BASE_URL || '').replace(/\/$/, '');
+const RAW_BASE = ((import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || '') as string).replace(/\/$/, '');
 const BASE_URL = RAW_BASE.endsWith('/api') ? RAW_BASE.slice(0, -4) : RAW_BASE;
 
 export const DEMO_DETECTIONS: Detection[] = [

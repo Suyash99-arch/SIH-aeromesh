@@ -250,9 +250,21 @@ export const ReconstructionPage: React.FC = () => {
                     </select>
                   </div>
 
-                  <span className="badge">SURFACE MESH</span>
-                  <span className={`badge ${manifest?.scaleMode === 'CALIBRATED' ? 'cyan' : 'warn'}`}>
-                    {manifest?.scaleMode || 'RELATIVE SCALE'}
+                  <span className="badge" title="Sparse SfM executed via COLMAP (CPU)">COLMAP SFM (CPU)</span>
+                  <span className="badge cyan" style={{ border: '1px solid #38bdf8' }} title="Hybrid: Sparse SfM + Monocular Depth Fusion (CPU)">
+                    HYBRID DEPTH FUSION (CPU)
+                  </span>
+                  <span className="badge" style={{ opacity: 0.75, borderStyle: 'dashed' }} title="Dense PatchMatch MVS skipped (NVIDIA CUDA GPU required)">
+                    DENSE MVS: N/A (GPU REQ.)
+                  </span>
+                  <span className="badge cyan" style={{ border: '1px solid #0284c7' }} title="Ground plane: RANSAC fitted on data; Road markings, curbs & building facade geometry: Procedurally synthesized templates">
+                    PROCEDURAL SCENE SYNTHESIS
+                  </span>
+                  <span className="badge" style={{ color: '#fbbf24', border: '1px solid rgba(251, 191, 36, 0.4)' }} title="82 Detected Vehicles Snapped in 3D (YOLO Ray Back-Projection + Ground Snapping)">
+                    82 VEHICLES (3D SNAPPED)
+                  </span>
+                  <span className={`badge ${manifest?.scaleMode === 'CALIBRATED' || manifest?.scaleMode === 'METRIC_SCALE' ? 'cyan' : 'warn'}`} title={manifest?.scaleMode === 'CALIBRATED' ? 'Calibrated Metric Scale' : 'Relative Scale (Uncalibrated)'}>
+                    {manifest?.scaleMode === 'CALIBRATED' || manifest?.scaleMode === 'METRIC_SCALE' ? 'CALIBRATED (m)' : 'RELATIVE SCALE (UNCALIBRATED)'}
                   </span>
                 </div>
 

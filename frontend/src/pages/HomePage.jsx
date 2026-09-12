@@ -1143,7 +1143,7 @@ function StageVisualCanvas({ stageIndex }) {
             fontSize="9"
             fontFamily="monospace"
           >
-            HEXA SPARK CERTIFIED
+            AEROMESH CERTIFIED
           </text>
           <text
             x="110"
@@ -1272,7 +1272,7 @@ export default function HomePage({ onNavigateDashboard, onStartMission, currentU
             <Icon name="Radar" size={18} />
           </div>
           <div className="logo-text">
-            <strong>HEXA SPARK</strong>
+            <strong>AEROMESH</strong>
             <small>AERIAL INTELLIGENCE</small>
           </div>
         </div>
@@ -1371,10 +1371,10 @@ export default function HomePage({ onNavigateDashboard, onStartMission, currentU
               COMMERCIAL AERIAL INTELLIGENCE & GIS
             </span>
 
-            {/* Glowing HEXA SPARK Wordmark with Shimmer Sweep */}
+            {/* Glowing AEROMESH Wordmark with Shimmer Sweep */}
             <div className="hero-wordmark-container">
-              <h1 className="hero-wordmark-title" data-text="HEXA SPARK">
-                <FloatingWord sparkColor="cyan">HEXA SPARK</FloatingWord>
+              <h1 className="hero-wordmark-title" data-text="AEROMESH">
+                <FloatingWord sparkColor="cyan">AEROMESH</FloatingWord>
               </h1>
               <div className="hero-wordmark-tagline">
                 From Drone Footage <FloatingWord sparkColor="violet"><span>to 3D Intelligence</span></FloatingWord>
@@ -1514,7 +1514,7 @@ export default function HomePage({ onNavigateDashboard, onStartMission, currentU
         ref={workflowRef}
       >
         <div className="section-header-center">
-          <span className="eyebrow">HEXA SPARK MISSION LIFECYCLE</span>
+          <span className="eyebrow">AEROMESH MISSION LIFECYCLE</span>
           <h2>The 11-Stage Aerial Intelligence Pipeline</h2>
           <p>
             From drone video ingestion to survey-grade 3D environment

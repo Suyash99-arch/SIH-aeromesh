@@ -72,7 +72,7 @@ html, body {
 .font-mono, .mono { font-family: var(--font-mono); }
 
 /* Root HUD Container */
-.hexa-root {
+.aeromesh-root {
   min-height: 100vh;
   width: 100%;
   position: relative;
@@ -86,13 +86,13 @@ html, body {
   transition: opacity 0.5s ease, transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
-.hexa-root.is-ready {
+.aeromesh-root.is-ready {
   opacity: 1;
   transform: scale(1);
 }
 
 /* Subtle CRT scanline overlay */
-.hexa-root::before {
+.aeromesh-root::before {
   content: '';
   position: fixed;
   inset: 0;

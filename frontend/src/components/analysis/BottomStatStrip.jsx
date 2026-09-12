@@ -48,29 +48,7 @@ export default function BottomStatStrip({
         <div className="stat-strip-sub">Automotive & Transport</div>
       </div>
 
-      {/* 3. Fire & Smoke Incidents (Honest Disclosure) */}
-      <div className="stat-strip-cell">
-        <div className="stat-strip-label">
-          <Icon name="Flame" size={13} className="stat-icon amber" />
-          <span>FIRE INCIDENTS</span>
-        </div>
-        <div className="stat-strip-value amber">0</div>
-        <div className="stat-strip-sub warning-text" title="YOLO11 COCO dataset does not predict flame/smoke classes. Requires fine-tuned FLAME model.">
-          Requires FLAME Weights
-        </div>
-      </div>
 
-      {/* 4. Damaged Areas (Honest Disclosure) */}
-      <div className="stat-strip-cell">
-        <div className="stat-strip-label">
-          <Icon name="AlertTriangle" size={13} className="stat-icon amber" />
-          <span>DAMAGED AREAS</span>
-        </div>
-        <div className="stat-strip-value amber">0</div>
-        <div className="stat-strip-sub warning-text" title="Photogrammetric pipeline reconstructs geometry; debris & damage classification requires xBD disaster weights.">
-          Requires xBD Weights
-        </div>
-      </div>
 
       {/* 5. Entry / Exit Points */}
       <div className="stat-strip-cell">

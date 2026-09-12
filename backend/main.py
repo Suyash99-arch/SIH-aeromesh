@@ -8,12 +8,18 @@ import json
 import logging
 import os
 import shutil
+import sys
 import time
 import uuid
 import importlib.util
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, Optional
+
+# Ensure repository root is in sys.path for robust absolute package imports
+_REPO_ROOT = Path(__file__).resolve().parent.parent
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
 
 # Offline-First: Block runtime model/library telemetry and update checks by default unless overridden
 if os.environ.get("AEROMESH_OFFLINE") == "1" or os.environ.get("OFFLINE") == "1":
@@ -172,7 +178,7 @@ if configured_engine is not None:
 # ============================================================
 
 app = FastAPI(
-    title="Hexa Spark Backend",
+    title="AeroMesh Backend",
     description="Single-Pass Drone Video to 3D Reconstruction",
     version="1.0.0",
 )
@@ -198,7 +204,7 @@ if cors_origins_env:
 app.add_middleware(
     CORSMiddleware,
     allow_origins=dev_origins,
-    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1|.*\.vercel\.app)(:\d+)?$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -207,7 +213,7 @@ app.add_middleware(
 # 2. HTTP Security Headers
 app.add_middleware(SecurityHeadersMiddleware)
 
-# 3. Mount Hexa Spark Scenes Router
+# 3. Mount AeroMesh Scenes Router
 from backend.scenes import router as scenes_router
 app.include_router(scenes_router)
 
@@ -2646,11 +2652,8 @@ async def get_mission_object_summary(mission_id: str):
 def _get_mission_fused_objects(mission_id: str, mission: MissionData) -> list:
     """Retrieve 3D fused objects with fallback to disk artifacts if empty."""
     canonical_id = resolve_canonical_mission_id(mission_id)
-    objects_3d = mission.get("objects_3d")
-    if objects_3d and len(objects_3d) > 0:
-        return objects_3d
 
-    # Check for mission-specific semantic scene artifact in data/missions or data/objects/missions
+    # Prioritize mission-specific semantic scene artifact in data/missions or data/objects/missions
     for m_id in (mission_id, canonical_id):
         semantic_file = DATA_DIR / "missions" / m_id / "semantic_scene.json"
         if semantic_file.exists():
@@ -2662,6 +2665,10 @@ def _get_mission_fused_objects(mission_id: str, mission: MissionData) -> list:
                         return objs
             except Exception as exc:
                 logger.warning("Failed to load %s: %s", semantic_file, exc)
+
+    objects_3d = mission.get("objects_3d")
+    if objects_3d and len(objects_3d) > 0:
+        return objects_3d
 
         obj_semantic_file = DATA_DIR / "objects" / "missions" / m_id / "semantic_scene.json"
         if obj_semantic_file.exists():
@@ -2806,6 +2813,7 @@ async def get_mission_object_evidence(mission_id: str, object_id: str):
             "pixel_center": obs.get("pixel_center"),
             "reprojected_point_2d": obs.get("reprojected_point_2d"),
             "reprojection_error_px": obs.get("reprojection_error_px"),
+            "depth_zc": obs.get("depth_zc"),
             "overlay_url": overlay_url,
             "frame_url": frame_url,
             "camera_id": obs.get("camera_id"),

@@ -60,7 +60,7 @@ class NumberedCanvas(canvas.Canvas):
 
         # Running header (on pages 2+)
         if self._pageNumber > 1:
-            self.drawString(54, 11 * inch - 36, "HEXA SPARK MISSION REPORT | UNMANNED AERIAL INSPECTION")
+            self.drawString(54, 11 * inch - 36, "AEROMESH MISSION REPORT | UNMANNED AERIAL INSPECTION")
             self.drawRightString(8.5 * inch - 54, 11 * inch - 36, "CONFIDENTIAL & PROPRIETARY")
             self.setStrokeColor(colors.HexColor("#cbd5e1"))
             self.setLineWidth(0.5)

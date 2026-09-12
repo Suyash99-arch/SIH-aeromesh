@@ -133,7 +133,7 @@ export default function Sidebar({
           {...{ activePage, navigate }}
         />
         <footer>
-          HEXA SPARK v0.9.0 <i>•</i> SIH BUILD
+          AEROMESH v0.9.0 <i>•</i> SIH BUILD
         </footer>
       </aside>
 

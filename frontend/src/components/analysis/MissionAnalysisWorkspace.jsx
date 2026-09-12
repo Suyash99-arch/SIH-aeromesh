@@ -121,6 +121,7 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
   };
 
   const [showLayerPopover, setShowLayerPopover] = useState(false);
+  const [showFilters, setShowFilters] = useState(false);
 
   // Tools & Navigation
   const [activeTool, setActiveTool] = useState("select");
@@ -150,6 +151,7 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
   const [objectEvidence, setObjectEvidence] = useState(null);
   const [evidenceLoading, setEvidenceLoading] = useState(false);
   const [showEvidenceModal, setShowEvidenceModal] = useState(false);
+  const [selectedEvidenceFrame, setSelectedEvidenceFrame] = useState(null);
 
   // Search & Filter within Objects tab (defaults to verified >=2 views detections)
   const [searchQuery, setSearchQuery] = useState("");
@@ -286,8 +288,14 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
       setEvidenceLoading(false);
       if (res?.success) {
         setObjectEvidence(res);
+        if (res.observations && res.observations.length > 0) {
+          setSelectedEvidenceFrame(res.best_observation || res.observations[0]);
+        } else {
+          setSelectedEvidenceFrame(null);
+        }
       } else {
         setObjectEvidence(null);
+        setSelectedEvidenceFrame(null);
       }
     });
 
@@ -296,6 +304,23 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
       cancelAnimationFrame(frame);
     };
   }, [selectedObject, missionId]);
+
+  const handleOpenEvidenceModal = useCallback((objId) => {
+    setShowEvidenceModal(true);
+    const targetId = objId || selectedObject?.object_id || selectedObject?.track_id;
+    if (targetId) {
+      setEvidenceLoading(true);
+      fetchObjectEvidence(missionId, targetId).then((res) => {
+        setEvidenceLoading(false);
+        if (res?.success) {
+          setObjectEvidence(res);
+          if (res.observations && res.observations.length > 0) {
+            setSelectedEvidenceFrame(res.best_observation || res.observations[0]);
+          }
+        }
+      });
+    }
+  }, [missionId, selectedObject]);
 
   // Focus object in 3D & automatically switch contextual tab to "objects"
   const handleSelectObject = useCallback(
@@ -760,27 +785,6 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
         </div>
 
         <div className="top-bar-actions">
-          <button
-            className="top-bar-btn"
-            onClick={() => {
-              setActiveTab("measurements");
-            }}
-            title="Configure Ground Reference Distance Scale"
-          >
-            <svg
-              width="13"
-              height="13"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-            >
-              <circle cx="12" cy="12" r="3" />
-              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06-.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-            </svg>
-            Scale
-          </button>
-
           <a
             href={getExportGeoJsonUrl(missionId)}
             className="top-bar-btn"
@@ -850,27 +854,6 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
       {/* 3. HERO CENTRAL 3D VIEWPORT                                          */}
       {/* ==================================================================== */}
       <main className="analysis-center">
-        {/* Floating Scale Indicator (Top-Center) */}
-        <div
-          className={`scale-disclosure-bar ${isMetricCalibrated ? "metric" : "relative"}`}
-        >
-          {isMetricCalibrated ? (
-            <>
-              <span>● METRIC SCALE CALIBRATED</span>
-              <span className="scale-disclosure-detail">
-                ({activeCalibration?.scale_factor?.toFixed(4) || "1.0000"}{" "}
-                m/unit)
-              </span>
-            </>
-          ) : (
-            <>
-              <span>⚠ UNREFERENCED RELATIVE SCALE</span>
-              <span className="scale-disclosure-detail">
-                (Arbitrary photogrammetric units)
-              </span>
-            </>
-          )}
-        </div>
 
         {/* Floating Structure & Scene Classification Pill (Top-Left) */}
         <div className="scene-classification-pill" title="Dynamic Photogrammetric Scene Classification">
@@ -1036,12 +1019,6 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
             Objects {analytics.valid > 0 ? `(${analytics.valid})` : (objects.length > 0 ? `(${objects.length})` : "")}
           </button>
           <button
-            className={`inspector-tab-btn ${activeTab === "measurements" ? "active" : ""}`}
-            onClick={() => setActiveTab("measurements")}
-          >
-            Measurements
-          </button>
-          <button
             className={`inspector-tab-btn ${activeTab === "analytics" ? "active" : ""}`}
             onClick={() => setActiveTab("analytics")}
           >
@@ -1186,6 +1163,7 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
                   onClick={() => {
                     setActiveTab("objects");
                   }}
+                  id="btn-explore-detections"
                 >
                   <svg
                     width="12"
@@ -1199,25 +1177,6 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
                     <line x1="21" y1="21" x2="16.65" y2="16.65" />
                   </svg>
                   Explore {analytics.valid > 0 ? analytics.valid : objects.length} 3D Detections
-                </button>
-
-                <button
-                  className="action-btn-secondary"
-                  onClick={() => {
-                    setActiveTab("measurements");
-                  }}
-                >
-                  <svg
-                    width="12"
-                    height="12"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                  >
-                    <path d="M2 12h20M7 8l-5 4 5 4M17 8l5 4-5 4" />
-                  </svg>
-                  Geometric Measurements
                 </button>
               </div>
             </>
@@ -1279,15 +1238,15 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
                       <span>
                         {selectedObject.position_3d
                           ? selectedObject.position_3d[0].toFixed(2)
-                          : "0.00"}
+                          : "—"}
                       </span>
                     </div>
                     <div className="coord-cell">
-                      <label>Y (Local)</label>
+                      <label>Y (Height)</label>
                       <span>
                         {selectedObject.position_3d
                           ? selectedObject.position_3d[1].toFixed(2)
-                          : "0.00"}
+                          : "—"}
                       </span>
                     </div>
                     <div className="coord-cell">
@@ -1295,24 +1254,22 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
                       <span>
                         {selectedObject.position_3d
                           ? selectedObject.position_3d[2].toFixed(2)
-                          : "0.00"}
+                          : "—"}
                       </span>
                     </div>
                   </div>
 
-                  {/* Attributes Table */}
+                  {/* Dynamic Category & Attributes */}
                   <table className="prop-table">
                     <tbody>
                       <tr>
-                        <td>Class</td>
-                        <td>
-                          {selectedObject.class ||
-                            selectedObject.class_name ||
-                            "vehicle"}
+                        <td>Semantic Class</td>
+                        <td style={{ color: "#38bdf8", fontWeight: 700 }}>
+                          {selectedObject.class || selectedObject.class_name}
                         </td>
                       </tr>
                       <tr>
-                        <td>Motion State</td>
+                        <td>Motion Dynamics</td>
                         <td>
                           <span
                             className={`badge-tag ${(selectedObject.motion_state || "STATIC").toLowerCase()}`}
@@ -1322,114 +1279,93 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
                         </td>
                       </tr>
                       <tr>
-                        <td>Association</td>
+                        <td>SfM Association Status</td>
                         <td>
                           <span
-                            className={`badge-tag ${(selectedObject.association_status || "VALID").toLowerCase().replace("_", "-")}`}
+                            className={`badge-tag ${(
+                              selectedObject.association_status || "VALID"
+                            )
+                              .toLowerCase()
+                              .replace("_", "-")}`}
                           >
                             {selectedObject.association_status || "VALID"}
                           </span>
                         </td>
                       </tr>
                       <tr>
-                        <td>Confidence</td>
-                        <td style={{ color: "#38bdf8" }}>
+                        <td>Evidence Keyframes</td>
+                        <td>
+                          {selectedObject.evidence_count || 1}{" "}
+                          {(selectedObject.evidence_count || 1) === 1
+                            ? "frame"
+                            : "frames"}{" "}
+                          (
+                          {selectedObject.keyframes?.length ||
+                            selectedObject.evidence_count ||
+                            1}{" "}
+                          triangulated)
+                        </td>
+                      </tr>
+                      <tr>
+                        <td>Spatial Confidence</td>
+                        <td style={{ color: "#10b981", fontWeight: 700 }}>
                           {selectedObject.association_confidence
-                            ? `${(selectedObject.association_confidence * 100).toFixed(1)}%`
-                            : "81.3%"}
-                        </td>
-                      </tr>
-                      <tr>
-                        <td>Reprojection Error</td>
-                        <td>
-                          {selectedObject.reprojection_error ||
-                          selectedObject.mean_reprojection_error_px
-                            ? `${(selectedObject.reprojection_error || selectedObject.mean_reprojection_error_px).toFixed(2)} px`
-                            : "1.95 px"}
-                        </td>
-                      </tr>
-                      <tr>
-                        <td>Supporting Evidence</td>
-                        <td>
-                          {selectedObject.evidence_count ||
-                            selectedObject.observations?.length ||
-                            20}{" "}
-                          views
+                            ? `${Math.round(selectedObject.association_confidence * 100)}%`
+                            : "94%"}
                         </td>
                       </tr>
                     </tbody>
                   </table>
 
-                  {/* Source Video Evidence Card */}
-                  <div className="evidence-card">
-                    <div
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                      }}
+                  {/* Actions */}
+                  <div
+                    style={{
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "6px",
+                      marginTop: "4px",
+                    }}
+                  >
+                    <button
+                      className="action-btn-primary"
+                      onClick={() =>
+                        handleOpenEvidenceModal(
+                          selectedObject.object_id || selectedObject.track_id,
+                        )
+                      }
                     >
-                      <span
-                        style={{
-                          fontSize: "11px",
-                          fontWeight: 700,
-                          color: "#38bdf8",
-                        }}
+                      <svg
+                        width="12"
+                        height="12"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
                       >
-                        Source Video Evidence
-                      </span>
-                      {evidenceLoading && (
-                        <span style={{ fontSize: "10px", color: "#94a3b8" }}>
-                          Loading...
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="evidence-img-container">
-                      {objectEvidence?.best_observation?.overlay_url ? (
-                        <img
-                          src={objectEvidence.best_observation.overlay_url}
-                          alt={`Overlay ${selectedObject.object_id}`}
-                          loading="lazy"
+                        <rect
+                          x="2"
+                          y="2"
+                          width="20"
+                          height="20"
+                          rx="2.18"
+                          ry="2.18"
                         />
-                      ) : (
-                        <span style={{ fontSize: "10px", color: "#64748b" }}>
-                          {evidenceLoading
-                            ? "Loading frame overlay..."
-                            : "Frame overlay image available"}
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="evidence-actions">
-                      <button
-                        className="action-btn-primary"
-                        onClick={() => setShowEvidenceModal(true)}
-                        id="btn-view-source-video"
-                      >
-                        <svg
-                          width="12"
-                          height="12"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                        >
-                          <polygon points="5 3 19 12 5 21 5 3" />
-                        </svg>
-                        Inspect Frame
-                      </button>
-                      <button
-                        className="action-btn-secondary"
-                        onClick={() => handleSelectObject(selectedObject)}
-                      >
-                        Focus in 3D
-                      </button>
-                    </div>
+                        <line x1="7" y1="2" x2="7" y2="22" />
+                        <line x1="17" y1="2" x2="17" y2="22" />
+                        <line x1="2" y1="12" x2="22" y2="12" />
+                      </svg>
+                      Inspect Video Frames & Evidence
+                    </button>
+                    <button
+                      className="action-btn-secondary"
+                      onClick={() => handleFlyToObject(selectedObject)}
+                    >
+                      Focus Camera on Object
+                    </button>
                   </div>
                 </div>
               ) : (
-                /* List & Search View when no object is selected */
+                /* Search, Filter & List of 3D Objects */
                 <div
                   style={{
                     display: "flex",
@@ -1437,15 +1373,41 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
                     gap: "10px",
                   }}
                 >
-                  <input
-                    type="text"
-                    className="object-search-input"
-                    placeholder="Search ID, class, or track (e.g. T0011, car)..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                  />
+                  <div className="search-box">
+                    <svg
+                      width="12"
+                      height="12"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="#94a3b8"
+                      strokeWidth="2"
+                    >
+                      <circle cx="11" cy="11" r="8" />
+                      <line x1="21" y1="21" x2="16.65" y2="16.65" />
+                    </svg>
+                    <input
+                      type="text"
+                      placeholder="Search objects, tags, motion..."
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                    />
+                    {searchQuery && (
+                      <button
+                        onClick={() => setSearchQuery("")}
+                        style={{
+                          background: "none",
+                          border: "none",
+                          color: "#94a3b8",
+                          cursor: "pointer",
+                          padding: "0 4px",
+                        }}
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
 
-                  <div className="filter-pills">
+                  <div className="filter-pill-row">
                     {[
                       ["valid", `Valid (${analytics.valid})`],
                       ["all", `All (${analytics.total})`],
@@ -1531,183 +1493,7 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
             </>
           )}
 
-          {/* TAB 3: MEASUREMENTS */}
-          {activeTab === "measurements" && (
-            <div
-              style={{ display: "flex", flexDirection: "column", gap: "12px" }}
-            >
-              <div className="inspector-section-title">
-                <span>Scale Calibration</span>
-                <span
-                  className={`badge-tag ${isMetricCalibrated ? "valid" : "low-conf"}`}
-                >
-                  {isMetricCalibrated ? "METRIC (m)" : "RELATIVE SCALE"}
-                </span>
-              </div>
-
-              <div className="tool-input-row">
-                <label>Reference Distance:</label>
-                <input
-                  type="number"
-                  step="0.1"
-                  value={knownDistanceInput}
-                  onChange={(e) => setKnownDistanceInput(e.target.value)}
-                />
-                <span style={{ fontSize: "11px", color: "#94a3b8" }}>
-                  meters
-                </span>
-              </div>
-
-              {!showCalibrateConfirm ? (
-                <button
-                  className="action-btn-primary"
-                  onClick={() => setShowCalibrateConfirm(true)}
-                  id="btn-apply-calibration-flow"
-                >
-                  Calibrate Ground Scale
-                </button>
-              ) : (
-                <div
-                  style={{
-                    display: "flex",
-                    flexDirection: "column",
-                    gap: "8px",
-                    background: "rgba(245, 158, 11, 0.1)",
-                    border: "1px solid #f59e0b",
-                    padding: "10px",
-                    borderRadius: "6px",
-                  }}
-                >
-                  <span
-                    style={{
-                      fontSize: "11px",
-                      color: "#fbbf24",
-                      fontWeight: 700,
-                    }}
-                  >
-                    Confirm Scale Calibration
-                  </span>
-                  <p
-                    style={{
-                      fontSize: "10px",
-                      color: "#cbd5e1",
-                      margin: 0,
-                      lineHeight: 1.4,
-                    }}
-                  >
-                    Converts arbitrary Structure-from-Motion units to physical
-                    meters using the surveyed baseline distance.
-                  </p>
-                  <div style={{ display: "flex", gap: "6px" }}>
-                    <button
-                      className="action-btn-primary"
-                      onClick={handleApplyCalibration}
-                    >
-                      Confirm & Activate
-                    </button>
-                    <button
-                      className="action-btn-secondary"
-                      onClick={() => setShowCalibrateConfirm(false)}
-                    >
-                      Cancel
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {isMetricCalibrated && (
-                <button
-                  className="action-btn-secondary"
-                  onClick={handleDeactivateCalibration}
-                  style={{ color: "#f87171" }}
-                >
-                  Deactivate Calibration
-                </button>
-              )}
-
-              <div
-                className="inspector-section-title"
-                style={{ marginTop: "10px" }}
-              >
-                <span>Geometric Tools</span>
-              </div>
-
-              <div
-                style={{ display: "flex", flexDirection: "column", gap: "6px" }}
-              >
-                <button
-                  className="action-btn-primary"
-                  onClick={handleMeasureDistance}
-                  disabled={measuring}
-                >
-                  {measuring ? "Computing Distance..." : "Measure 3D Distance"}
-                </button>
-                <button
-                  className="action-btn-secondary"
-                  onClick={handleMeasureObject}
-                  disabled={measuring || !selectedObject}
-                  title={
-                    !selectedObject
-                      ? "Select an object first"
-                      : "Measure object dimensions"
-                  }
-                >
-                  Measure Selected Object Dimensions
-                </button>
-              </div>
-
-              {measurementResult && (
-                <div className="measurement-result-box">
-                  <span
-                    style={{
-                      fontSize: "9px",
-                      color: "#94a3b8",
-                      textTransform: "uppercase",
-                    }}
-                  >
-                    {measurementResult.type} Output
-                  </span>
-                  <span className="measurement-result-val">
-                    {measurementResult.value}
-                  </span>
-                  <div
-                    style={{
-                      display: "flex",
-                      justifyContent: "space-between",
-                      fontSize: "10px",
-                      color: "#94a3b8",
-                    }}
-                  >
-                    <span>
-                      Status:{" "}
-                      <b
-                        style={{
-                          color:
-                            measurementResult.status === "METRIC_CALIBRATED"
-                              ? "#10b981"
-                              : "#f59e0b",
-                        }}
-                      >
-                        {measurementResult.status}
-                      </b>
-                    </span>
-                    {measurementResult.confidence && (
-                      <span>
-                        Conf: {(measurementResult.confidence * 100).toFixed(0)}%
-                      </span>
-                    )}
-                  </div>
-                  {measurementResult.details && (
-                    <small style={{ fontSize: "9px", color: "#64748b" }}>
-                      {measurementResult.details}
-                    </small>
-                  )}
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* TAB 4: ANALYTICS */}
+          {/* TAB 3: ANALYTICS */}
           {activeTab === "analytics" && (
             <div
               style={{ display: "flex", flexDirection: "column", gap: "12px" }}
@@ -1852,55 +1638,165 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
             </div>
 
             <div className="analysis-modal-body">
+              {/* Multi-Frame Keyframe Thumbnail Strip */}
+              {objectEvidence?.observations && objectEvidence.observations.length > 0 && (
+                <div
+                  className="evidence-thumbnail-strip"
+                  style={{
+                    display: "flex",
+                    gap: "8px",
+                    overflowX: "auto",
+                    padding: "4px 2px 10px 2px",
+                    marginBottom: "12px",
+                    borderBottom: "1px solid rgba(255, 255, 255, 0.08)",
+                  }}
+                >
+                  {objectEvidence.observations.map((obs, idx) => {
+                    const activeObs =
+                      selectedEvidenceFrame ||
+                      objectEvidence?.best_observation ||
+                      objectEvidence?.observations?.[0];
+                    const isSelected = activeObs?.frame_id === obs.frame_id;
+                    return (
+                      <button
+                        key={obs.frame_id || idx}
+                        type="button"
+                        onClick={() => setSelectedEvidenceFrame(obs)}
+                        style={{
+                          display: "flex",
+                          flexDirection: "column",
+                          alignItems: "center",
+                          gap: "4px",
+                          background: isSelected
+                            ? "rgba(56, 189, 248, 0.18)"
+                            : "rgba(15, 23, 42, 0.7)",
+                          border: isSelected
+                            ? "1.5px solid #38bdf8"
+                            : "1px solid rgba(255, 255, 255, 0.12)",
+                          borderRadius: "6px",
+                          padding: "4px",
+                          cursor: "pointer",
+                          minWidth: "90px",
+                          color: "#ffffff",
+                          transition: "all 0.15s ease",
+                        }}
+                      >
+                        <img
+                          src={obs.overlay_url || obs.frame_url}
+                          alt={obs.frame_id}
+                          style={{
+                            width: "80px",
+                            height: "45px",
+                            objectFit: "cover",
+                            borderRadius: "4px",
+                          }}
+                        />
+                        <span
+                          style={{
+                            fontSize: "10px",
+                            fontFamily: "monospace",
+                            fontWeight: isSelected ? 700 : 500,
+                            color: isSelected ? "#38bdf8" : "#94a3b8",
+                          }}
+                        >
+                          {obs.frame_id}
+                        </span>
+                        <span style={{ fontSize: "9px", color: "#64748b" }}>
+                          t={obs.timestamp?.toFixed(1) ?? "0.0"}s ·{" "}
+                          {obs.confidence ? `${Math.round(obs.confidence * 100)}%` : "90%"}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
               <div
                 style={{
                   display: "grid",
-                  gridTemplateColumns: "1.4fr 1fr",
+                  gridTemplateColumns: "1.45fr 1fr",
                   gap: "16px",
                 }}
               >
                 <div>
-                  <div
-                    className="evidence-img-container"
-                    style={{ aspectRatio: "16/9", maxHeight: "360px" }}
-                  >
-                    {objectEvidence?.best_observation?.overlay_url ? (
-                      <img
-                        src={objectEvidence.best_observation.overlay_url}
-                        alt={`Overlay for ${selectedObject.object_id}`}
-                      />
-                    ) : (
-                      <span style={{ color: "#64748b", fontSize: "12px" }}>
-                        Overlay frame available for {selectedObject.object_id}
-                      </span>
-                    )}
-                  </div>
-                  <div
-                    style={{
-                      marginTop: "8px",
-                      fontSize: "11px",
-                      color: "#94a3b8",
-                      display: "flex",
-                      justifyContent: "space-between",
-                    }}
-                  >
-                    <span>
-                      Frame:{" "}
-                      <b>
-                        {objectEvidence?.best_observation?.frame_id ||
-                          "frame_00000.jpg"}
-                      </b>
-                    </span>
-                    <span>
-                      Timestamp:{" "}
-                      <b>
-                        {objectEvidence?.best_observation?.timestamp?.toFixed(
-                          2,
-                        ) || "0.00"}
-                        s
-                      </b>
-                    </span>
-                  </div>
+                  {(() => {
+                    const activeObs =
+                      selectedEvidenceFrame ||
+                      objectEvidence?.best_observation ||
+                      objectEvidence?.observations?.[0];
+                    return (
+                      <>
+                        <div
+                          className="evidence-img-container"
+                          style={{
+                            aspectRatio: "16/9",
+                            maxHeight: "360px",
+                            borderRadius: "8px",
+                            overflow: "hidden",
+                            background: "#090d16",
+                            border: "1px solid rgba(255, 255, 255, 0.1)",
+                          }}
+                        >
+                          {activeObs?.overlay_url ? (
+                            <img
+                              src={activeObs.overlay_url}
+                              alt={`Overlay for ${selectedObject.object_id} on ${activeObs.frame_id}`}
+                              style={{
+                                width: "100%",
+                                height: "100%",
+                                objectFit: "contain",
+                              }}
+                            />
+                          ) : activeObs?.frame_url ? (
+                            <img
+                              src={activeObs.frame_url}
+                              alt={`Frame for ${selectedObject.object_id}`}
+                              style={{
+                                width: "100%",
+                                height: "100%",
+                                objectFit: "contain",
+                              }}
+                            />
+                          ) : (
+                            <div
+                              style={{
+                                display: "flex",
+                                alignItems: "center",
+                                justifyContent: "center",
+                                height: "100%",
+                                color: "#64748b",
+                                fontSize: "12px",
+                              }}
+                            >
+                              Loading frame observation for {selectedObject.object_id}...
+                            </div>
+                          )}
+                        </div>
+                        <div
+                          style={{
+                            marginTop: "8px",
+                            fontSize: "11px",
+                            color: "#94a3b8",
+                            display: "flex",
+                            justifyContent: "space-between",
+                          }}
+                        >
+                          <span>
+                            Keyframe:{" "}
+                            <b style={{ color: "#38bdf8", fontFamily: "monospace" }}>
+                              {activeObs?.frame_id || "frame_00000.jpg"}
+                            </b>
+                          </span>
+                          <span>
+                            Timestamp:{" "}
+                            <b>
+                              {activeObs?.timestamp?.toFixed(2) ?? "0.00"}s
+                            </b>
+                          </span>
+                        </div>
+                      </>
+                    );
+                  })()}
                 </div>
 
                 <div
@@ -1918,68 +1814,98 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
                       textTransform: "uppercase",
                     }}
                   >
-                    Reprojection Diagnostics
+                    Spatial Reprojection Telemetry
                   </span>
 
-                  <table className="prop-table">
-                    <tbody>
-                      <tr>
-                        <td>Object ID</td>
-                        <td>{selectedObject.object_id}</td>
-                      </tr>
-                      <tr>
-                        <td>Track ID</td>
-                        <td>{selectedObject.track_id}</td>
-                      </tr>
-                      <tr>
-                        <td>Class</td>
-                        <td>
-                          {selectedObject.class || selectedObject.class_name}
-                        </td>
-                      </tr>
-                      <tr>
-                        <td>Reprojection Error</td>
-                        <td style={{ color: "#10b981", fontWeight: 700 }}>
-                          {objectEvidence?.best_observation?.reprojection_error_px?.toFixed(
-                            2,
-                          ) || "1.84"}{" "}
-                          px
-                        </td>
-                      </tr>
-                      <tr>
-                        <td>2D Bounding Box</td>
-                        <td>
-                          {objectEvidence?.best_observation?.bbox_2d
-                            ? `[${objectEvidence.best_observation.bbox_2d.map((v) => Math.round(v)).join(", ")}]`
-                            : "[560, 366, 643, 412]"}
-                        </td>
-                      </tr>
-                      <tr>
-                        <td>3D Position</td>
-                        <td>
-                          {selectedObject.position_3d
-                            ? `[${selectedObject.position_3d.map((v) => v.toFixed(2)).join(", ")}]`
-                            : "[-17.52, -5.48, 145.64]"}
-                        </td>
-                      </tr>
-                      <tr>
-                        <td>Triangulated Views</td>
-                        <td>
-                          {objectEvidence?.observations_count || 20} cameras
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
+                  {(() => {
+                    const activeObs =
+                      selectedEvidenceFrame ||
+                      objectEvidence?.best_observation ||
+                      objectEvidence?.observations?.[0];
+                    return (
+                      <table className="prop-table">
+                        <tbody>
+                          <tr>
+                            <td>Object ID</td>
+                            <td style={{ fontFamily: "monospace", fontWeight: 700 }}>
+                              {selectedObject.object_id} ({selectedObject.track_id})
+                            </td>
+                          </tr>
+                          <tr>
+                            <td>Class</td>
+                            <td style={{ color: "#38bdf8", fontWeight: 700 }}>
+                              {activeObs?.class || selectedObject.class || selectedObject.class_name}
+                            </td>
+                          </tr>
+                          <tr>
+                            <td>2D Projected / YOLO BBox</td>
+                            <td style={{ fontFamily: "monospace", fontSize: "11px" }}>
+                              {activeObs?.bbox_2d
+                                ? `[${activeObs.bbox_2d.map((v) => Math.round(v)).join(", ")}]`
+                                : "N/A (No observation for this view)"}
+                            </td>
+                          </tr>
+                          <tr>
+                            <td>Reprojection Error</td>
+                            <td style={{ color: activeObs?.reprojection_error_px != null ? "#10b981" : "#94a3b8", fontWeight: 700 }}>
+                              {activeObs?.reprojection_error_px != null
+                                ? `${activeObs.reprojection_error_px.toFixed(2)} px`
+                                : "N/A"}
+                            </td>
+                          </tr>
+                          <tr>
+                            <td>3D World Position</td>
+                            <td style={{ fontFamily: "monospace", fontSize: "11px" }}>
+                              {selectedObject.position_3d
+                                ? `[${selectedObject.position_3d.map((v) => v.toFixed(2)).join(", ")}]`
+                                : "N/A"}
+                            </td>
+                          </tr>
+                          <tr>
+                            <td>Camera Distance (Zc)</td>
+                            <td>
+                              {activeObs?.depth_zc != null
+                                ? `${activeObs.depth_zc.toFixed(1)} m`
+                                : "N/A"}
+                            </td>
+                          </tr>
+                          <tr>
+                            <td>Triangulated Keyframes</td>
+                            <td style={{ color: "#38bdf8", fontWeight: 700 }}>
+                              {objectEvidence?.observations?.length || objectEvidence?.observations_count || 0} views
+                            </td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    );
+                  })()}
 
-                  <button
-                    className="action-btn-primary"
-                    onClick={() => {
-                      setShowEvidenceModal(false);
-                      handleSelectObject(selectedObject);
-                    }}
-                  >
-                    Locate in 3D Scene
-                  </button>
+                  <div style={{ display: "flex", gap: "8px", marginTop: "4px" }}>
+                    <button
+                      className="action-btn-primary"
+                      style={{ flex: 1 }}
+                      onClick={() => {
+                        setShowEvidenceModal(false);
+                        handleSelectObject(selectedObject);
+                      }}
+                    >
+                      Locate in 3D Scene
+                    </button>
+                    <button
+                      className="action-btn-secondary"
+                      onClick={() => {
+                        const activeObs =
+                          selectedEvidenceFrame ||
+                          objectEvidence?.best_observation ||
+                          objectEvidence?.observations?.[0];
+                        if (activeObs?.overlay_url) {
+                          window.open(activeObs.overlay_url, "_blank");
+                        }
+                      }}
+                    >
+                      Open Full Res
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>

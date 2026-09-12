@@ -42,8 +42,27 @@ class DepthAnythingV2Runner:
     def _load_model(self):
         os.makedirs(self.cache_dir, exist_ok=True)
         from transformers import AutoImageProcessor, AutoModelForDepthEstimation
-        self.processor = AutoImageProcessor.from_pretrained(self.model_name, cache_dir=self.cache_dir)
-        self.model = AutoModelForDepthEstimation.from_pretrained(self.model_name, cache_dir=self.cache_dir)
+        
+        # Check for local snapshot in cache_dir
+        snapshot_candidate = None
+        cache_path = Path(self.cache_dir)
+        snapshots = list(cache_path.glob("models--depth-anything--Depth-Anything-V2-Small-hf/snapshots/*"))
+        if snapshots and (snapshots[0] / "model.safetensors").exists():
+            snapshot_candidate = str(snapshots[0])
+            
+        load_path = snapshot_candidate or self.model_name
+        local_only = bool(snapshot_candidate)
+        
+        self.processor = AutoImageProcessor.from_pretrained(
+            load_path,
+            cache_dir=self.cache_dir if not local_only else None,
+            local_files_only=local_only
+        )
+        self.model = AutoModelForDepthEstimation.from_pretrained(
+            load_path,
+            cache_dir=self.cache_dir if not local_only else None,
+            local_files_only=local_only
+        )
         self.model.to(self.device)
         self.model.eval()
 

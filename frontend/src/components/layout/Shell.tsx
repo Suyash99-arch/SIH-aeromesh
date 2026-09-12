@@ -51,7 +51,7 @@ export const Shell: React.FC = () => {
   }, []);
 
   return (
-    <div className={`hexa-root ${ready ? 'is-ready' : ''}`}>
+    <div className={`aeromesh-root ${ready ? 'is-ready' : ''}`}>
       {/* Screen reader live region for route announcements */}
       <div className="sr-only" aria-live="polite" aria-atomic="true">
         Navigated to {currentRoute.label}

@@ -16,6 +16,26 @@ import "./NewIncidentWorkspace.css";
  * - 100% Offline-safe with zero external geocoding dependencies
  */
 export default function NewIncidentWorkspace({ onClose, onMissionCreated, currentUser, notice }) {
+  const getLocalDatetimeString = (d = new Date()) => {
+    const pad = (n) => String(n).padStart(2, "0");
+    const year = d.getFullYear();
+    const month = pad(d.getMonth() + 1);
+    const day = pad(d.getDate());
+    const hours = pad(d.getHours());
+    const minutes = pad(d.getMinutes());
+    return `${year}-${month}-${day}T${hours}:${minutes}`;
+  };
+
+  // Live real-time clock state
+  const [liveTime, setLiveTime] = useState(() => new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setLiveTime(new Date());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
   // Auto-generate Incident ID
   const [incidentId, setIncidentId] = useState(() => {
     const yr = new Date().getFullYear();
@@ -27,7 +47,7 @@ export default function NewIncidentWorkspace({ onClose, onMissionCreated, curren
     name: "",
     location: "Sector 04 — Northern Perimeter (37.7749° N, 122.4194° W)",
     description: "Rapid single-pass aerial survey over damaged infrastructure for real-time 3D photogrammetry and survivor search.",
-    dateTime: new Date().toISOString().slice(0, 16),
+    dateTime: getLocalDatetimeString(new Date()),
     missionType: "single-pass",
     operator: currentUser?.full_name || "Tactical Field Operator",
   });
@@ -98,7 +118,7 @@ export default function NewIncidentWorkspace({ onClose, onMissionCreated, curren
       name: "",
       location: "",
       description: "",
-      dateTime: new Date().toISOString().slice(0, 16),
+      dateTime: getLocalDatetimeString(new Date()),
       missionType: "single-pass",
       operator: currentUser?.full_name || "",
     });
@@ -292,15 +312,49 @@ export default function NewIncidentWorkspace({ onClose, onMissionCreated, curren
                   />
                 </div>
 
-                <div className="form-field">
-                  <label htmlFor="inc-datetime">Date & Time of Capture</label>
-                  <input
-                    id="inc-datetime"
-                    type="datetime-local"
-                    name="dateTime"
-                    value={formData.dateTime}
-                    onChange={handleInputChange}
-                  />
+                <div className="form-field form-field-datetime">
+                  <div className="datetime-label-row">
+                    <label htmlFor="inc-datetime">Date & Time of Capture</label>
+                    <button
+                      type="button"
+                      className="live-sync-btn"
+                      onClick={() => {
+                        setFormData((prev) => ({
+                          ...prev,
+                          dateTime: getLocalDatetimeString(new Date()),
+                        }));
+                      }}
+                      title="Sync timestamp to current exact local time"
+                    >
+                      <span className="live-clock-dot" />
+                      <span>LIVE SYNC NOW</span>
+                    </button>
+                  </div>
+                  <div className="datetime-input-wrap">
+                    <input
+                      id="inc-datetime"
+                      type="datetime-local"
+                      name="dateTime"
+                      value={formData.dateTime}
+                      onChange={handleInputChange}
+                    />
+                    <div className="live-time-ticker">
+                      <span className="ticker-label">CURRENT REAL-TIME:</span>
+                      <span className="ticker-val mono">
+                        {liveTime.toLocaleDateString(undefined, {
+                          year: "numeric",
+                          month: "short",
+                          day: "2-digit",
+                        })}{" "}
+                        {liveTime.toLocaleTimeString(undefined, {
+                          hour12: false,
+                          hour: "2-digit",
+                          minute: "2-digit",
+                          second: "2-digit",
+                        })}
+                      </span>
+                    </div>
+                  </div>
                 </div>
 
                 <div className="form-field">
@@ -418,6 +472,12 @@ export default function NewIncidentWorkspace({ onClose, onMissionCreated, curren
                 <div className="rail-info-row">
                   <span className="info-label">Operator</span>
                   <span className="info-value">{formData.operator || "Anonymous"}</span>
+                </div>
+                <div className="rail-info-row">
+                  <span className="info-label">Capture Time</span>
+                  <span className="info-value mono cyan" style={{ fontSize: "11px" }}>
+                    {formData.dateTime ? formData.dateTime.replace("T", " ") : "Real-time"}
+                  </span>
                 </div>
                 <div className="rail-info-row">
                   <span className="info-label">Target File</span>

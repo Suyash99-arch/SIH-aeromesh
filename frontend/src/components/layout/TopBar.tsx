@@ -17,7 +17,7 @@ export const TopBar: React.FC = () => {
         <div className="brand">
           <div className="brand-mark" aria-hidden="true" />
           <div className="brand-text">
-            <div className="name font-display">HEXA SPARK</div>
+            <div className="name font-display">AEROMESH</div>
             <div className="sub">AERIAL INTELLIGENCE</div>
           </div>
         </div>

@@ -9,7 +9,7 @@ export function exportDetectionsToGeoJSON(
     properties: {
       scene_id: sceneId,
       exported_at: new Date().toISOString(),
-      generator: 'Hexa Spark Aerial Intelligence v2.0',
+      generator: 'AeroMesh Aerial Intelligence v2.0',
     },
     features: detections.map((d) => ({
       type: 'Feature',
@@ -36,7 +36,7 @@ export function exportDetectionsToGeoJSON(
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement('a');
   anchor.href = url;
-  anchor.download = `hexa-spark-${sceneId}-detections.geojson`;
+  anchor.download = `aeromesh-${sceneId}-detections.geojson`;
   document.body.appendChild(anchor);
   anchor.click();
   document.body.removeChild(anchor);

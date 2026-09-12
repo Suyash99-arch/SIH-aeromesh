@@ -4,7 +4,7 @@ export const missionNavigation = [
 ];
 export const intelligenceNavigation = [
   ["analytics", "Scene Intelligence", "ChartNoAxesCombined"], ["map", "Geospatial Intelligence", "Map"],
-  ["measurements", "Measurements", "Ruler"], ["findings", "AI Findings", "BrainCircuit", "06"], ["reports", "Reports", "FileText"],
+  ["reports", "Reports", "FileText"],
 ];
 export const outputNavigation = [["challenge", "Challenge Coverage", "ShieldCheck"]];
 export const systemNavigation = [

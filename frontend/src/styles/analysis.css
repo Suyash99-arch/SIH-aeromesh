@@ -2,8 +2,8 @@
 
 .analysis-workspace {
   display: grid;
-  grid-template-rows: 46px 1fr;
-  grid-template-columns: 54px 1fr 340px;
+  grid-template-rows: 46px 1fr auto;
+  grid-template-columns: 220px 1fr 300px;
   gap: 8px;
   height: calc(100vh - 105px);
   min-height: 640px;
@@ -27,7 +27,7 @@
 
 @media (max-width: 1200px) {
   .analysis-workspace {
-    grid-template-columns: 50px 1fr 310px;
+    grid-template-columns: 200px 1fr 260px;
     gap: 6px;
   }
 }
@@ -455,12 +455,30 @@
 }
 
 /* ==========================================================================
-   4. RIGHT CONTEXTUAL INSPECTOR PANEL (340px)
+   3. CENTER HERO 3D VIEWPORT
+   ========================================================================== */
+.analysis-center {
+  grid-column: 2;
+  grid-row: 2;
+  width: 100%;
+  height: 100%;
+  position: relative;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+  background: #061017;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ==========================================================================
+   4. RIGHT CONTEXTUAL INSPECTOR PANEL
    ========================================================================== */
 .analysis-inspector {
   grid-column: 3;
   grid-row: 2;
-  width: 340px;
+  width: 100%;
+  height: 100%;
   background: var(--bg-surface, #0f1624);
   border: 1px solid var(--border, rgba(255, 255, 255, 0.08));
   border-radius: 6px;
@@ -470,10 +488,10 @@
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
 }
 
-/* Top 4-Tab Bar: Overview | Objects | Measurements | Analytics */
+/* Top 3-Tab Bar: Overview | Objects | Analytics */
 .inspector-tab-bar {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, 1fr);
   background: rgba(0, 0, 0, 0.25);
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
 }
@@ -1205,17 +1223,22 @@
   }
 }
 
-/* Left View Filters & Custom Markings Sidebar */
+/* Left View Filters & Custom Markings Sidebar (Side Small & Visible) */
 .view-filters-sidebar {
-  background: rgba(11, 19, 38, 0.85);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(56, 189, 248, 0.15);
-  border-radius: 8px;
-  padding: 12px;
+  grid-column: 1;
+  grid-row: 2;
+  width: 100%;
+  height: 100%;
+  position: static;
+  background: var(--bg-surface, #0f1624);
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.08));
+  border-radius: 6px;
+  padding: 10px;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
   overflow-y: auto;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
   z-index: 5;
 }
 
