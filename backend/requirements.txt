@@ -1,4 +1,5 @@
-fastapi==0.104.1
+fastapi>=0.111.0,<=0.115.6
+starlette>=0.37.2
 uvicorn[standard]==0.24.0
 python-multipart==0.0.6
 python-dotenv>=1.0.0
@@ -10,7 +11,7 @@ roboflow>=1.0.0
 inference-sdk>=0.16.0
 pycolmap>=3.11.1
 pytest>=8.0.0
-httpx>=0.24.0,<0.28.0
+httpx>=0.28.0
 SQLAlchemy>=2.0,<3.0
 alembic>=1.13,<2.0
 psycopg[binary]>=3.1,<4.0

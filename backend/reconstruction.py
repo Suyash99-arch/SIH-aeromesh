@@ -1686,6 +1686,12 @@ def run_reconstruction_pipeline(
         },
     }
 
+    reported_point_count = (
+        dense_and_mesh["dense"]["point_count"]
+        if dense_and_mesh["dense"].get("point_count", 0) > 0
+        else sfm_res["sparse_point_count"]
+    )
+
     return {
         "success": True,
         "status": final_status,
