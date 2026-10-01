@@ -35,7 +35,7 @@ export default function BottomStatStrip({
           <span>TOTAL PEOPLE</span>
         </div>
         <div className="stat-strip-value cyan">{totalPeople}</div>
-        <div className="stat-strip-sub">Real Detection[] Count</div>
+        <div className="stat-strip-sub">Pedestrians & Personnel</div>
       </div>
 
       {/* 2. Vehicles Count */}

@@ -27,7 +27,7 @@ export interface SceneManifest {
   sparsePointCount: number;
   surfaceFaceCount: number;
   meanReprojError: number;
-  scaleMode: 'CALIBRATED' | 'UNREFERENCED_SCALE' | 'RELATIVE_SCALE';
+  scaleMode: 'CALIBRATED' | 'METRIC_SCALE' | 'METRIC_CALIBRATED' | 'UNREFERENCED_SCALE' | 'RELATIVE_SCALE';
   coordSystem: string;
   pointCloudUrl?: string;
   meshUrl?: string;

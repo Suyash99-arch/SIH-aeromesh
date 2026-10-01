@@ -76,6 +76,8 @@ export const ReconstructionPage: React.FC = () => {
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const { stats: liveStats, trackedObjectsCount } = useLiveSceneStats(sceneId);
 
+  const isCalibrated = manifest?.scaleMode === 'CALIBRATED' || manifest?.scaleMode === 'METRIC_SCALE' || manifest?.scaleMode === 'METRIC_CALIBRATED';
+
   // Load scene data from real backend
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -263,8 +265,8 @@ export const ReconstructionPage: React.FC = () => {
                   <span className="badge" style={{ color: '#fbbf24', border: '1px solid rgba(251, 191, 36, 0.4)' }} title="82 Detected Vehicles Snapped in 3D (YOLO Ray Back-Projection + Ground Snapping)">
                     82 VEHICLES (3D SNAPPED)
                   </span>
-                  <span className={`badge ${manifest?.scaleMode === 'CALIBRATED' || manifest?.scaleMode === 'METRIC_SCALE' ? 'cyan' : 'warn'}`} title={manifest?.scaleMode === 'CALIBRATED' ? 'Calibrated Metric Scale' : 'Relative Scale (Uncalibrated)'}>
-                    {manifest?.scaleMode === 'CALIBRATED' || manifest?.scaleMode === 'METRIC_SCALE' ? 'CALIBRATED (m)' : 'RELATIVE SCALE (UNCALIBRATED)'}
+                  <span className={`badge ${isCalibrated ? 'cyan' : 'warn'}`} title={isCalibrated ? 'Calibrated Metric Scale' : 'Relative Scale (Uncalibrated)'}>
+                    {isCalibrated ? 'CALIBRATED (m)' : 'RELATIVE SCALE (UNCALIBRATED)'}
                   </span>
                 </div>
 
@@ -324,7 +326,7 @@ export const ReconstructionPage: React.FC = () => {
                       display: 'flex',
                       alignItems: 'center',
                       gap: 7,
-                      color: manifest?.scaleMode === 'CALIBRATED' ? 'var(--cyan)' : 'var(--amber)',
+                      color: isCalibrated ? 'var(--cyan)' : 'var(--amber)',
                     }}
                   >
                     <ScanLine size={12} aria-hidden="true" /> {manifest?.scaleMode || 'UNREFERENCED SCALE'}
@@ -333,7 +335,7 @@ export const ReconstructionPage: React.FC = () => {
                     className="mono"
                     style={{ fontSize: 12, color: 'var(--dim)', marginTop: 4, letterSpacing: '0.03em' }}
                   >
-                    {manifest?.scaleMode === 'CALIBRATED' ? 'COLMAP metric reconstruction' : 'Arbitrary photogrammetric units'}
+                    {isCalibrated ? 'COLMAP metric reconstruction' : 'Arbitrary photogrammetric units'}
                   </div>
                 </div>
 

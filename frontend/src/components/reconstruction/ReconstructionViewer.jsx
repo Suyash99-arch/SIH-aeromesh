@@ -164,7 +164,7 @@ export function sanitizeBufferGeometry(geom) {
  * Visualizes dense or sparse photogrammetric point clouds using PLY format.
  * Includes complete GPU memory disposal on mission/URL change or component unmount.
  */
-function RealPointCloud({ url, onBoundsComputed }) {
+function RealPointCloud({ url, onBoundsComputed, pointSize = 0.22 }) {
   const [geometry, setGeometry] = useState(null);
   const currentGeometryRef = useRef(null);
   const currentMaterialRef = useRef(null);
@@ -265,12 +265,12 @@ function RealPointCloud({ url, onBoundsComputed }) {
     <points geometry={geometry}>
       <pointsMaterial
         ref={currentMaterialRef}
-        size={0.06}
+        size={pointSize}
         vertexColors={geometry.hasAttribute("color")}
         color={geometry.hasAttribute("color") ? undefined : "#38d7ff"}
         sizeAttenuation
         transparent
-        opacity={0.94}
+        opacity={0.96}
       />
     </points>
   );
@@ -409,9 +409,9 @@ function RealMesh({ url, mode, onBoundsComputed, onError }) {
                 sanitizeBufferGeometry(child.geometry);
               }
               child.material = new THREE.MeshStandardMaterial({
-                color: "#28758a",
-                metalness: 0.2,
-                roughness: 0.7,
+                color: "#94a3b8",
+                metalness: 0.1,
+                roughness: 0.6,
                 side: THREE.DoubleSide,
               });
             }
@@ -489,9 +489,9 @@ function RealMesh({ url, mode, onBoundsComputed, onError }) {
         if (child.isMesh && child.material) {
           child.material.wireframe = mode === "wireframe";
           if (mode === "solid") {
-            child.material.color = new THREE.Color("#475569");
+            child.material.color = new THREE.Color("#cbd5e1");
           } else if (mode === "topographic") {
-            child.material.color = new THREE.Color("#28758a");
+            child.material.color = new THREE.Color("#38bdf8");
           }
         }
       });
@@ -513,10 +513,10 @@ function RealMesh({ url, mode, onBoundsComputed, onError }) {
       <meshStandardMaterial
         ref={currentMaterialRef}
         vertexColors={isSolid ? false : hasVertexColors}
-        color={isSolid ? "#475569" : hasVertexColors ? 0xffffff : (mode === "topographic" ? "#28758a" : "#1c5a69")}
+        color={isSolid ? "#cbd5e1" : hasVertexColors ? 0xffffff : (mode === "topographic" ? "#38bdf8" : "#94a3b8")}
         wireframe={isWireframe}
-        metalness={isSolid ? 0.08 : 0.15}
-        roughness={isSolid ? 0.75 : 0.65}
+        metalness={isSolid ? 0.08 : 0.12}
+        roughness={isSolid ? 0.7 : 0.55}
         side={THREE.DoubleSide}
       />
     </mesh>
@@ -887,7 +887,7 @@ function SemanticObjects3D({ objects, selectedId, onSelect, layers }) {
             {isVehicle && layers?.vehicles !== false && (
               <group position={[0, 0, 0]}>
                 {/* 1. Main Vehicle Lower Chassis */}
-                <mesh position={[0, -chassisH / 2, 0]}>
+                <mesh position={[0, chassisH / 2, 0]}>
                   <boxGeometry args={[boxDim[0], chassisH, boxDim[2]]} />
                   <meshStandardMaterial
                     color={bodyColor}
@@ -897,7 +897,7 @@ function SemanticObjects3D({ objects, selectedId, onSelect, layers }) {
                 </mesh>
 
                 {/* 2. Sleek Passenger Cabin & Windshield */}
-                <mesh position={[0, -(chassisH + cabinH / 2), -boxDim[2] * 0.08]}>
+                <mesh position={[0, chassisH + cabinH / 2, -boxDim[2] * 0.08]}>
                   <boxGeometry args={[boxDim[0] * 0.85, cabinH, boxDim[2] * 0.55]} />
                   <meshStandardMaterial
                     color="#0f172a"
@@ -909,27 +909,27 @@ function SemanticObjects3D({ objects, selectedId, onSelect, layers }) {
                 </mesh>
 
                 {/* 3. Glowing Headlights (Front: +Z) */}
-                <mesh position={[-boxDim[0] * 0.32, -chassisH * 0.6, boxDim[2] * 0.51]}>
+                <mesh position={[-boxDim[0] * 0.32, chassisH * 0.6, boxDim[2] * 0.51]}>
                   <boxGeometry args={[0.3, 0.15, 0.05]} />
-                  <meshStandardMaterial color="#fef08a" emissive="#fef08a" emissiveIntensity={1.2} />
+                  <meshStandardMaterial color="#fef08a" emissive="#fef08a" emissiveIntensity={1.4} />
                 </mesh>
-                <mesh position={[boxDim[0] * 0.32, -chassisH * 0.6, boxDim[2] * 0.51]}>
+                <mesh position={[boxDim[0] * 0.32, chassisH * 0.6, boxDim[2] * 0.51]}>
                   <boxGeometry args={[0.3, 0.15, 0.05]} />
-                  <meshStandardMaterial color="#fef08a" emissive="#fef08a" emissiveIntensity={1.2} />
+                  <meshStandardMaterial color="#fef08a" emissive="#fef08a" emissiveIntensity={1.4} />
                 </mesh>
 
                 {/* 4. Glowing Taillights (Rear: -Z) */}
-                <mesh position={[-boxDim[0] * 0.32, -chassisH * 0.6, -boxDim[2] * 0.51]}>
+                <mesh position={[-boxDim[0] * 0.32, chassisH * 0.6, -boxDim[2] * 0.51]}>
                   <boxGeometry args={[0.3, 0.15, 0.05]} />
-                  <meshStandardMaterial color="#ef4444" emissive="#ef4444" emissiveIntensity={1.2} />
+                  <meshStandardMaterial color="#ef4444" emissive="#ef4444" emissiveIntensity={1.4} />
                 </mesh>
-                <mesh position={[boxDim[0] * 0.32, -chassisH * 0.6, -boxDim[2] * 0.51]}>
+                <mesh position={[boxDim[0] * 0.32, chassisH * 0.6, -boxDim[2] * 0.51]}>
                   <boxGeometry args={[0.3, 0.15, 0.05]} />
-                  <meshStandardMaterial color="#ef4444" emissive="#ef4444" emissiveIntensity={1.2} />
+                  <meshStandardMaterial color="#ef4444" emissive="#ef4444" emissiveIntensity={1.4} />
                 </mesh>
 
                 {/* 5. 3D Oriented Bounding Box Cage */}
-                <mesh position={[0, -boxDim[1] / 2, 0]}>
+                <mesh position={[0, boxDim[1] / 2, 0]}>
                   <boxGeometry args={[boxDim[0] * 1.05, boxDim[1] * 1.05, boxDim[2] * 1.05]} />
                   <meshBasicMaterial
                     color={isSelected ? "#fbbf24" : color}
@@ -945,7 +945,7 @@ function SemanticObjects3D({ objects, selectedId, onSelect, layers }) {
             {isBuilding && layers?.buildings !== false && (
               <group position={[0, 0, 0]}>
                 {/* 1. Main Facade Walls */}
-                <mesh position={[0, -bldDim[1] / 2, 0]}>
+                <mesh position={[0, bldDim[1] / 2, 0]}>
                   <boxGeometry args={bldDim} />
                   <meshStandardMaterial
                     color="#e2d9cc"
@@ -955,7 +955,7 @@ function SemanticObjects3D({ objects, selectedId, onSelect, layers }) {
                 </mesh>
 
                 {/* 2. Pitched Roof */}
-                <mesh position={[0, -(bldDim[1] + 1.2), 0]} rotation={[0, Math.PI / 4, 0]}>
+                <mesh position={[0, bldDim[1] + 1.2, 0]} rotation={[0, Math.PI / 4, 0]}>
                   <coneGeometry args={[bldDim[0] * 0.72, 2.4, 4]} />
                   <meshStandardMaterial
                     color="#b9533c"
@@ -965,7 +965,7 @@ function SemanticObjects3D({ objects, selectedId, onSelect, layers }) {
                 </mesh>
 
                 {/* 3. Bounding Box Cage */}
-                <mesh position={[0, -bldDim[1] / 2, 0]}>
+                <mesh position={[0, bldDim[1] / 2, 0]}>
                   <boxGeometry args={[bldDim[0] * 1.02, bldDim[1] * 1.02, bldDim[2] * 1.02]} />
                   <meshBasicMaterial
                     color="#a78bfa"
@@ -979,7 +979,7 @@ function SemanticObjects3D({ objects, selectedId, onSelect, layers }) {
 
             {/* Selection highlight ring */}
             {isSelected && (
-              <mesh position={[0, 0, 0]} rotation={[Math.PI / 2, 0, 0]}>
+              <mesh position={[0, 0.05, 0]} rotation={[Math.PI / 2, 0, 0]}>
                 <ringGeometry args={[0.6, 0.85, 24]} />
                 <meshBasicMaterial
                   color="#fbbf24"
@@ -994,7 +994,7 @@ function SemanticObjects3D({ objects, selectedId, onSelect, layers }) {
             {layers?.labels !== false && (isSelected || !isLowConf) && (
               <Text
                 font="/fonts/space_grotesk.ttf"
-                position={[0, (isBuilding ? -(bldDim[1] + 3.0) : -(boxDim[1] + 0.8)), 0]}
+                position={[0, (isBuilding ? bldDim[1] + 2.2 : boxDim[1] + 0.8), 0]}
                 fontSize={isSelected ? 0.65 : 0.42}
                 color={isSelected ? "#fbbf24" : "#e2e8f0"}
                 anchorX="center"
@@ -1100,6 +1100,7 @@ function Scene({
   onSceneClick,
   measurePoints = [],
   onMeasurePoint,
+  pointSize = 0.22,
 }) {
   const controlsRef = useRef();
   const hasAutoFramedRef = useRef(false);
@@ -1224,14 +1225,13 @@ function Scene({
       if (!hasAutoFramedRef.current && controlsRef.current) {
         hasAutoFramedRef.current = true;
         const [cx, cy, cz] = bounds.center || [0.0, 0.0, 0.0];
-        const r = Math.max(bounds.radius || 25.0, 15.0);
-        const fov = 45;
-        const dist = (r / Math.sin((fov * Math.PI) / 360)) * 1.35;
+        const r = Math.max(bounds.radius || 20.0, 12.0);
+        const dist = r * 1.45;
         const camera = controlsRef.current.object;
 
         camera.position.set(
-          cx + dist * 0.45,
-          cy + dist * 0.65,
+          cx + dist * 0.65,
+          cy + dist * 0.75,
           cz + dist * 0.75,
         );
         camera.lookAt(cx, cy, cz);
@@ -1287,18 +1287,53 @@ function Scene({
         if (!controlsRef.current) return;
         const b = modelBounds || { center: centroid, radius: 25 };
         const [cx, cy, cz] = b.center;
-        const dist = (b.radius / Math.sin((45 * Math.PI) / 360)) * 1.15;
+        const dist = Math.max(b.radius * 1.45, 18);
         const cam = controlsRef.current.object;
-        cam.position.set(cx + dist * 0.45, cy + dist * 0.65, cz + dist * 0.75);
+        cam.position.set(cx + dist * 0.65, cy + dist * 0.75, cz + dist * 0.75);
         cam.lookAt(cx, cy, cz);
         controlsRef.current.target.set(cx, cy, cz);
         controlsRef.current.update();
       },
       reset: () => {
         if (!controlsRef.current) return;
-        const [cx, cy, cz] = centroid;
+        const b = modelBounds || { center: centroid, radius: 25 };
+        const [cx, cy, cz] = b.center;
+        const dist = Math.max(b.radius * 1.45, 18);
         const cam = controlsRef.current.object;
-        cam.position.set(cx + 25, cy + 35, cz + 40);
+        cam.position.set(cx + dist * 0.65, cy + dist * 0.75, cz + dist * 0.75);
+        cam.lookAt(cx, cy, cz);
+        controlsRef.current.target.set(cx, cy, cz);
+        controlsRef.current.update();
+      },
+      topView: () => {
+        if (!controlsRef.current) return;
+        const b = modelBounds || { center: centroid, radius: 25 };
+        const [cx, cy, cz] = b.center;
+        const dist = Math.max(b.radius * 2.0, 22);
+        const cam = controlsRef.current.object;
+        cam.position.set(cx, cy + dist, cz + 0.001);
+        cam.lookAt(cx, cy, cz);
+        controlsRef.current.target.set(cx, cy, cz);
+        controlsRef.current.update();
+      },
+      isoView: () => {
+        if (!controlsRef.current) return;
+        const b = modelBounds || { center: centroid, radius: 25 };
+        const [cx, cy, cz] = b.center;
+        const dist = Math.max(b.radius * 1.45, 18);
+        const cam = controlsRef.current.object;
+        cam.position.set(cx + dist * 0.7, cy + dist * 0.8, cz + dist * 0.7);
+        cam.lookAt(cx, cy, cz);
+        controlsRef.current.target.set(cx, cy, cz);
+        controlsRef.current.update();
+      },
+      frontView: () => {
+        if (!controlsRef.current) return;
+        const b = modelBounds || { center: centroid, radius: 25 };
+        const [cx, cy, cz] = b.center;
+        const dist = Math.max(b.radius * 1.45, 18);
+        const cam = controlsRef.current.object;
+        cam.position.set(cx, cy + dist * 0.35, cz + dist);
         cam.lookAt(cx, cy, cz);
         controlsRef.current.target.set(cx, cy, cz);
         controlsRef.current.update();
@@ -1313,38 +1348,38 @@ function Scene({
 
   return (
     <>
-      <color attach="background" args={["#061017"]} />
-      <fog attach="fog" args={["#061017", 250, 1500]} />
+      <color attach="background" args={["#080e18"]} />
+      <fog attach="fog" args={["#080e18", 350, 2500]} />
 
-      {/* Realistic Multi-Angle Environment Lighting */}
-      <ambientLight intensity={0.55} />
-      <hemisphereLight args={["#b4f0ff", "#1e293b", 0.9]} />
+      {/* Enhanced Multi-Angle Architectural & Aerial Lighting */}
+      <ambientLight intensity={1.1} />
+      <hemisphereLight args={["#e0f2fe", "#0f172a", 1.2]} />
       <directionalLight
-        position={[60, 120, 80]}
-        intensity={2.2}
+        position={[40, 80, 50]}
+        intensity={2.4}
         color="#ffffff"
       />
       <directionalLight
-        position={[-50, 40, -40]}
-        intensity={0.7}
+        position={[-40, 60, -30]}
+        intensity={1.2}
         color="#93c5fd"
       />
       <directionalLight
-        position={[0, -50, 0]}
-        intensity={0.25}
+        position={[0, -20, 0]}
+        intensity={0.4}
         color="#38bdf8"
       />
 
       {/* Ground Grid */}
       {layers.grid !== false && (
         <Grid
-          args={[250, 250]}
+          args={[300, 300]}
           position={[centroid[0], gridY, centroid[2]]}
-          cellColor="#1c6674"
-          sectionColor="#2b9eb3"
+          cellColor="#1e3a5f"
+          sectionColor="#38bdf8"
           cellSize={5}
           sectionSize={25}
-          fadeDistance={200}
+          fadeDistance={250}
           infiniteGrid
         />
       )}
@@ -1399,6 +1434,7 @@ function Scene({
             <RealPointCloud
               url={pointCloudUrl}
               onBoundsComputed={handleBoundsComputed}
+              pointSize={pointSize}
             />
           )}
 
@@ -1440,11 +1476,13 @@ function Scene({
       <OrbitControls
         ref={controlsRef}
         makeDefault
-        minDistance={0.1}
-        maxDistance={1200}
-        zoomSpeed={0.85}
-        rotateSpeed={0.8}
-        panSpeed={0.8}
+        enableDamping={true}
+        dampingFactor={0.07}
+        minDistance={0.2}
+        maxDistance={3500}
+        zoomSpeed={1.0}
+        rotateSpeed={0.95}
+        panSpeed={0.95}
         mouseButtons={{
           LEFT: activeTool === "pan" ? THREE.MOUSE.PAN : THREE.MOUSE.ROTATE,
           MIDDLE: THREE.MOUSE.DOLLY,
@@ -1566,7 +1604,7 @@ export default function ReconstructionViewer({
   cameraPoses,
   semanticObjects,
   cameraTarget,
-  activeTool = "select",
+  activeTool = "orbit",
   onToggleLayer,
   onSelectCamera,
   viewerRef,
@@ -1587,6 +1625,7 @@ export default function ReconstructionViewer({
   const [currentMode, setCurrentMode] = useState(mode || "textured");
   const [currentTool, setCurrentTool] = useState(activeTool || "orbit");
   const [measurePoints, setMeasurePoints] = useState([]);
+  const [pointSize, setPointSize] = useState(0.22);
 
   useEffect(() => {
     if (mode) setCurrentMode(mode);
@@ -1817,6 +1856,7 @@ export default function ReconstructionViewer({
                 onSceneClick={onSceneClick}
                 measurePoints={measurePoints}
                 onMeasurePoint={handleMeasurePoint}
+                pointSize={pointSize}
               />
             </Suspense>
           </Canvas>
@@ -1883,119 +1923,113 @@ export default function ReconstructionViewer({
         {/* Embedded Controls (shown only when hideEmbeddedControls is false) */}
         {!hideEmbeddedControls && (
           <>
-            {/* Top Right: Layer Visibility Pills */}
+            {/* Top Right: Layer Visibility & Point Size Controls */}
             <div
               style={{
                 position: "absolute",
                 top: "12px",
                 right: "14px",
                 display: "flex",
-                gap: "6px",
+                gap: "5px",
                 zIndex: 10,
+                alignItems: "center",
                 flexWrap: "wrap",
-                background: "rgba(6, 16, 23, 0.75)",
-                padding: "4px 6px",
+                background: "rgba(6, 16, 23, 0.85)",
+                padding: "4px 8px",
                 borderRadius: "8px",
-                border: "1px solid rgba(56, 215, 255, 0.15)",
-                backdropFilter: "blur(6px)",
+                border: "1px solid rgba(56, 215, 255, 0.2)",
+                backdropFilter: "blur(10px)",
+                maxWidth: "calc(100% - 250px)",
+                justifyContent: "flex-end",
+                pointerEvents: "auto",
               }}
             >
               {[
-                {
-                  key: "buildings",
-                  label: "Buildings",
-                  available: true,
-                  active: effectiveLayers.buildings !== false,
-                },
-                {
-                  key: "infrastructure",
-                  label: "Infra",
-                  available: true,
-                  active: effectiveLayers.infrastructure !== false,
-                },
-                {
-                  key: "vehicles",
-                  label: "Vehicles",
-                  available: true,
-                  active: effectiveLayers.vehicles !== false,
-                },
-                {
-                  key: "vegetation",
-                  label: "Vegetation",
-                  available: true,
-                  active: effectiveLayers.vegetation !== false,
-                },
-                {
-                  key: "cameraTrajectory",
-                  label: "Flight",
-                  available: true,
-                  active: effectiveLayers.cameraTrajectory !== false,
-                },
-                {
-                  key: "grid",
-                  label: "Grid",
-                  available: true,
-                  active: effectiveLayers.grid !== false,
-                },
-                {
-                  key: "labels",
-                  label: "Labels",
-                  available: true,
-                  active: effectiveLayers.labels !== false,
-                },
-              ].map(({ key, label, available, active }) => {
-                return (
+                { key: "buildings", label: "Buildings", available: true, active: effectiveLayers.buildings !== false },
+                { key: "infrastructure", label: "Infra", available: true, active: effectiveLayers.infrastructure !== false },
+                { key: "vehicles", label: "Vehicles", available: true, active: effectiveLayers.vehicles !== false },
+                { key: "vegetation", label: "Vegetation", available: true, active: effectiveLayers.vegetation !== false },
+                { key: "cameraTrajectory", label: "Flight", available: true, active: effectiveLayers.cameraTrajectory !== false },
+                { key: "grid", label: "Grid", available: true, active: effectiveLayers.grid !== false },
+                { key: "labels", label: "Labels", available: true, active: effectiveLayers.labels !== false },
+              ].map(({ key, label, available, active }) => (
+                <button
+                  key={key}
+                  onClick={() => toggleLayer(key)}
+                  style={{
+                    padding: "4px 8px",
+                    borderRadius: "6px",
+                    fontSize: "11px",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    background: active
+                      ? "rgba(56, 215, 255, 0.25)"
+                      : "rgba(15, 23, 42, 0.75)",
+                    border: active
+                      ? "1px solid #38d7ff"
+                      : "1px solid rgba(255, 255, 255, 0.12)",
+                    color: active ? "#ffffff" : "rgba(255, 255, 255, 0.6)",
+                    opacity: available ? 1 : 0.4,
+                    pointerEvents: available ? "auto" : "none",
+                    backdropFilter: "blur(4px)",
+                    transition: "all 0.15s ease",
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+
+              {/* Point Cloud Density/Size */}
+              <div style={{ display: "flex", gap: "2px", alignItems: "center", marginLeft: "4px", borderLeft: "1px solid rgba(255,255,255,0.15)", paddingLeft: "6px" }}>
+                <span style={{ fontSize: "10px", color: "rgba(255,255,255,0.5)", marginRight: "2px" }}>Pts:</span>
+                {[
+                  { label: "S", size: 0.12 },
+                  { label: "M", size: 0.22 },
+                  { label: "L", size: 0.38 },
+                ].map((p) => (
                   <button
-                    key={key}
-                    onClick={() => toggleLayer(key)}
-                    style={{
-                      padding: "4px 8px",
-                      borderRadius: "6px",
-                      fontSize: "11px",
-                      fontWeight: 600,
-                      cursor: "pointer",
-                      background: active
-                        ? "rgba(56, 215, 255, 0.25)"
-                        : "rgba(15, 23, 42, 0.75)",
-                      border: active
-                        ? "1px solid #38d7ff"
-                        : "1px solid rgba(255, 255, 255, 0.12)",
-                      color: active ? "#ffffff" : "rgba(255, 255, 255, 0.6)",
-                      opacity: available ? 1 : 0.4,
-                      pointerEvents: available ? "auto" : "none",
-                      backdropFilter: "blur(4px)",
-                      transition: "all 0.15s ease",
-                    }}
+                    key={p.label}
+                    onClick={() => setPointSize(p.size)}
+                    style={
+                      pointSize === p.size
+                        ? { ...activeNavBtnStyle, padding: "2px 6px", fontSize: "10px" }
+                        : { ...navBtnStyle, padding: "2px 6px", fontSize: "10px" }
+                    }
+                    title={`Point size: ${p.label}`}
                   >
-                    {label}
+                    {p.label}
                   </button>
-                );
-              })}
+                ))}
+              </div>
             </div>
 
-            {/* Bottom Controls Toolbar: Modes + Navigation + Measure Ruler */}
+            {/* Center Floating Controls Dock: Modes + Free Camera Controls + Presets + Tools */}
             <div
               style={{
                 position: "absolute",
-                bottom: "36px",
-                left: "14px",
+                bottom: "38px",
+                left: "50%",
+                transform: "translateX(-50%)",
                 display: "flex",
                 gap: "8px",
                 zIndex: 10,
                 alignItems: "center",
                 flexWrap: "wrap",
+                justifyContent: "center",
+                maxWidth: "96%",
+                pointerEvents: "auto",
               }}
             >
               {/* 1. Viewer Modes Switcher */}
               <div
                 style={{
                   display: "flex",
-                  gap: "4px",
-                  background: "rgba(6, 16, 23, 0.85)",
-                  padding: "4px 6px",
+                  gap: "3px",
+                  background: "rgba(6, 16, 23, 0.88)",
+                  padding: "3px 5px",
                   borderRadius: "8px",
-                  border: "1px solid rgba(56, 215, 255, 0.2)",
-                  backdropFilter: "blur(8px)",
+                  border: "1px solid rgba(56, 215, 255, 0.22)",
+                  backdropFilter: "blur(10px)",
                 }}
               >
                 {[
@@ -2016,16 +2050,16 @@ export default function ReconstructionViewer({
                 ))}
               </div>
 
-              {/* 2. Navigation & Tool Actions */}
+              {/* 2. Free Control & Camera Presets */}
               <div
                 style={{
                   display: "flex",
-                  gap: "4px",
-                  background: "rgba(6, 16, 23, 0.85)",
-                  padding: "4px 6px",
+                  gap: "3px",
+                  background: "rgba(6, 16, 23, 0.88)",
+                  padding: "3px 5px",
                   borderRadius: "8px",
-                  border: "1px solid rgba(255, 255, 255, 0.12)",
-                  backdropFilter: "blur(8px)",
+                  border: "1px solid rgba(255, 255, 255, 0.14)",
+                  backdropFilter: "blur(10px)",
                 }}
               >
                 <button
@@ -2033,47 +2067,75 @@ export default function ReconstructionViewer({
                   style={
                     currentTool === "orbit" ? activeNavBtnStyle : navBtnStyle
                   }
-                  title="Rotate / Orbit Camera"
+                  title="Free 3D Orbit (Drag left mouse button to rotate scene in all directions)"
                 >
-                  Rotate
+                  🔄 Free Orbit
                 </button>
                 <button
                   onClick={() => setCurrentTool("pan")}
                   style={
                     currentTool === "pan" ? activeNavBtnStyle : navBtnStyle
                   }
-                  title="Pan Camera"
+                  title="Pan Camera (Drag left mouse button to slide scene)"
                 >
-                  Pan
+                  ✋ Pan
                 </button>
                 <button
-                  onClick={() => cameraActionsRef.current.zoomIn?.()}
+                  onClick={() => cameraActionsRef.current.topView?.()}
                   style={navBtnStyle}
-                  title="Zoom In"
+                  title="Top 2D Plan View (Look straight down)"
                 >
-                  ＋
+                  📐 Top 2D
                 </button>
                 <button
-                  onClick={() => cameraActionsRef.current.zoomOut?.()}
+                  onClick={() => cameraActionsRef.current.isoView?.()}
                   style={navBtnStyle}
-                  title="Zoom Out"
+                  title="3D Aerial Isometric Vantage Point"
                 >
-                  －
+                  🌐 3D Iso
                 </button>
                 <button
                   onClick={() => cameraActionsRef.current.fit?.()}
                   style={navBtnStyle}
-                  title="Fit Model to Viewport"
+                  title="Fit 3D Reconstructed Model to Center"
                 >
                   ⛶ Fit
                 </button>
                 <button
                   onClick={() => cameraActionsRef.current.reset?.()}
                   style={navBtnStyle}
-                  title="Reset Camera Overview"
+                  title="Reset Camera Vantage Point"
                 >
                   ⟲ Reset
                 </button>
+                <button
+                  onClick={() => cameraActionsRef.current.zoomIn?.()}
+                  style={{ ...navBtnStyle, padding: "5px 8px" }}
+                  title="Zoom In"
+                >
+                  ＋
+                </button>
+                <button
+                  onClick={() => cameraActionsRef.current.zoomOut?.()}
+                  style={{ ...navBtnStyle, padding: "5px 8px" }}
+                  title="Zoom Out"
+                >
+                  －
+                </button>
+              </div>
+
+              {/* 3. Measuring Caliper & Fullscreen */}
+              <div
+                style={{
+                  display: "flex",
+                  gap: "3px",
+                  background: "rgba(6, 16, 23, 0.88)",
+                  padding: "3px 5px",
+                  borderRadius: "8px",
+                  border: "1px solid rgba(255, 255, 255, 0.14)",
+                  backdropFilter: "blur(10px)",
+                }}
+              >
                 <button
                   onClick={() => {
                     const nextTool = currentTool === "measure" ? "orbit" : "measure";
@@ -2090,28 +2152,28 @@ export default function ReconstructionViewer({
                         }
                       : navBtnStyle
                   }
-                  title="Click two points on the 3D mesh surface to measure distance"
+                  title="Click 2 points on the 3D surface to measure Euclidean distance"
                 >
                   📏 Measure
                 </button>
                 <button
                   onClick={toggleFullscreen}
                   style={navBtnStyle}
-                  title="Toggle Fullscreen"
+                  title="Toggle Fullscreen 3D Viewport"
                 >
-                  Fullscreen
+                  ⛶ Fullscreen
                 </button>
               </div>
 
-              {/* 3. Live Measure Ruler Status Banner */}
+              {/* 4. Live Measure Status Bubble */}
               {currentTool === "measure" && (
                 <div
                   style={{
                     display: "flex",
                     alignItems: "center",
                     gap: "8px",
-                    background: "rgba(245, 158, 11, 0.15)",
-                    border: "1px solid rgba(245, 158, 11, 0.35)",
+                    background: "rgba(245, 158, 11, 0.2)",
+                    border: "1px solid rgba(245, 158, 11, 0.4)",
                     padding: "4px 10px",
                     borderRadius: "6px",
                     color: "#fbbf24",
@@ -2130,7 +2192,7 @@ export default function ReconstructionViewer({
                     <button
                       onClick={() => setMeasurePoints([])}
                       style={{
-                        background: "rgba(245, 158, 11, 0.3)",
+                        background: "rgba(245, 158, 11, 0.4)",
                         border: "none",
                         color: "#fff",
                         padding: "1px 6px",
@@ -2153,17 +2215,18 @@ export default function ReconstructionViewer({
           <div
             style={{
               position: "absolute",
-              bottom: "36px",
+              bottom: "74px",
               right: "14px",
-              background: "rgba(6, 16, 23, 0.9)",
-              border: "1px solid rgba(56, 215, 255, 0.3)",
+              background: "rgba(6, 16, 23, 0.92)",
+              border: "1px solid rgba(56, 215, 255, 0.35)",
               borderRadius: "8px",
               padding: "10px 14px",
               color: "#f8fafc",
               fontSize: "12px",
               zIndex: 10,
               maxWidth: "260px",
-              backdropFilter: "blur(8px)",
+              backdropFilter: "blur(10px)",
+              boxShadow: "0 8px 30px rgba(0,0,0,0.6)",
             }}
           >
             <div
@@ -2243,43 +2306,102 @@ export default function ReconstructionViewer({
           </div>
         )}
 
-        {/* Bottom Coordinate & Scale HUD */}
-        <div className="viewer-hud bottom" style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
-          <span>SfM: <b>COLMAP (CPU)</b></span>
-          <span style={{ opacity: 0.65 }}>·</span>
-          <span>Pipeline: <b style={{ color: '#38bdf8' }}>Hybrid Depth Fusion (CPU)</b></span>
-          <span style={{ opacity: 0.65 }}>·</span>
-          <span style={{ color: '#94a3b8' }}>Dense MVS: <b style={{ color: '#f59e0b' }}>N/A (GPU Required)</b></span>
-          <span style={{ opacity: 0.65 }}>·</span>
-          <span>Mesh: <b style={{ color: '#a78bfa' }}>Procedural Scene Synthesis (Templated)</b></span>
-          <span style={{ opacity: 0.65 }}>·</span>
-          <span>Entities: <b style={{ color: '#fbbf24' }}>82 Vehicles (Data-Derived & Snapped)</b></span>
-          <span style={{ opacity: 0.65 }}>·</span>
-          <span>Scale: <b style={{ color: scaleStatus === 'METRIC_SCALE' || scaleStatus === 'METRIC_CALIBRATED' || scaleStatus === 'CALIBRATED' ? '#34d399' : '#f59e0b' }}>
-            {scaleStatus === 'METRIC_SCALE' || scaleStatus === 'METRIC_CALIBRATED' || scaleStatus === 'CALIBRATED' ? 'METRIC (Calibrated)' : 'RELATIVE (Uncalibrated)'}
-          </b></span>
+        {/* Compact Reconstruction Legend */}
+        <div
+          style={{
+            position: "absolute",
+            bottom: "38px",
+            right: "14px",
+            display: "flex",
+            flexDirection: "column",
+            gap: "4px",
+            background: "rgba(6, 16, 23, 0.88)",
+            border: "1px solid rgba(255, 255, 255, 0.12)",
+            borderRadius: "6px",
+            padding: "5px 8px",
+            fontSize: "9px",
+            color: "#94a3b8",
+            zIndex: 10,
+            backdropFilter: "blur(8px)",
+            pointerEvents: "auto",
+          }}
+          aria-label="Reconstruction legend"
+        >
+          <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+            <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#22d3ee", display: "inline-block" }} />
+            <span>CYAN: Static 3D Object</span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+            <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#f97316", display: "inline-block" }} />
+            <span>AMBER: Moving 3D Object</span>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
+            <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#38bdf8", display: "inline-block" }} />
+            <span>BLUE: Surface Mesh</span>
+          </div>
         </div>
 
-        {/* Schematic Notice Label */}
-        <div className="viewer-schematic-label" aria-label="Schematic notice">
-          {hasMesh
-            ? `HYBRID 3D SCENE (Ground Plane: RANSAC Fitted · Road & Facades: Procedurally Synthesized Templates · 82 Vehicles: Data-Derived)`
-            : hasPointCloud
-              ? `POINT CLOUD ONLY (${pointCount ? `${Number(pointCount).toLocaleString()} points` : "Dense Cloud"} · Mesh not yet generated)`
-              : "NO 3D MODEL AVAILABLE (Awaiting reconstruction)"}
+        {/* North Orientation Compass */}
+        <div
+          style={{
+            position: "absolute",
+            top: "54px",
+            left: "14px",
+            background: "rgba(6, 16, 23, 0.85)",
+            border: "1px solid rgba(56, 215, 255, 0.25)",
+            borderRadius: "6px",
+            padding: "3px 8px",
+            color: "#38bdf8",
+            fontSize: "11px",
+            fontWeight: 700,
+            zIndex: 10,
+            pointerEvents: "none",
+          }}
+          aria-label="North orientation"
+        >
+          N ↑
         </div>
 
-        {/* Legend */}
-        <div className="recon-legend" aria-label="Reconstruction legend">
-          <span className="cyan">CYAN static object</span>
-          <span className="amber">AMBER moving object</span>
-          <span className="blue">BLUE surface mesh</span>
-          <span className="purple">PURPLE AI findings</span>
-        </div>
-
-        {/* North Indicator */}
-        <div className="viewer-north" aria-label="North orientation">
-          N <i>↑</i>
+        {/* Unified Bottom Coordinate & Telemetry Status Bar */}
+        <div
+          style={{
+            position: "absolute",
+            bottom: 0,
+            left: 0,
+            right: 0,
+            height: "28px",
+            background: "rgba(6, 16, 23, 0.94)",
+            borderTop: "1px solid rgba(56, 215, 255, 0.15)",
+            backdropFilter: "blur(8px)",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            padding: "0 14px",
+            fontSize: "11px",
+            color: "#94a3b8",
+            zIndex: 9,
+            pointerEvents: "none",
+          }}
+        >
+          <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+            <span>SfM: <b style={{ color: "#ffffff" }}>COLMAP (CPU)</b></span>
+            <span style={{ opacity: 0.35 }}>•</span>
+            <span>Pipeline: <b style={{ color: "#38bdf8" }}>Hybrid Depth Fusion (CPU)</b></span>
+            <span style={{ opacity: 0.35 }}>•</span>
+            <span>Scene: <b style={{ color: "#a78bfa" }}>Procedural Synthesis (Data-Fitted)</b></span>
+            <span style={{ opacity: 0.35 }}>•</span>
+            <span>Entities: <b style={{ color: "#fbbf24" }}>82 Vehicles (Snapped in 3D)</b></span>
+            <span style={{ opacity: 0.35 }}>•</span>
+            <span>
+              Scale:{" "}
+              <b style={{ color: scaleStatus === 'METRIC_SCALE' || scaleStatus === 'METRIC_CALIBRATED' || scaleStatus === 'CALIBRATED' ? '#34d399' : '#fbbf24' }}>
+                {scaleStatus === 'METRIC_SCALE' || scaleStatus === 'METRIC_CALIBRATED' || scaleStatus === 'CALIBRATED' ? 'METRIC (Calibrated)' : 'RELATIVE (Uncalibrated)'}
+              </b>
+            </span>
+          </div>
+          <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
+            <span style={{ color: "#38d7ff", fontWeight: 600 }}>● Photogrammetric Pipeline Active</span>
+          </div>
         </div>
       </div>
     </ErrorBoundary>

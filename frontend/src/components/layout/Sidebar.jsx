@@ -113,16 +113,16 @@ export default function Sidebar({
         <div className="sidebar-spacer" />
 
         <div className="engine">
-          <header>
+          <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span>
               <i /> AI ENGINE
             </span>
-            <b>ONLINE</b>
+            <b style={{ color: '#38bdf8' }}>ONLINE</b>
           </header>
           {["Reconstruction", "Detection", "Geospatial"].map((x) => (
-            <div key={x}>
+            <div key={x} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '3px 0' }}>
               <span>{x}</span>
-              <b>READY</b>
+              <b style={{ color: '#10b981', fontSize: '10px', background: 'rgba(16, 185, 129, 0.12)', padding: '1px 6px', borderRadius: '4px' }}>READY</b>
             </div>
           ))}
         </div>
