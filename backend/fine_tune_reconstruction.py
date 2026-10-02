@@ -1,8 +1,14 @@
 import os
 from pathlib import Path
 import numpy as np
-import open3d as o3d
-import pycolmap
+try:
+    import open3d as o3d
+except ImportError:
+    o3d = None
+try:
+    import pycolmap
+except ImportError:
+    pycolmap = None
 import json
 
 MISSIONS_DIR = Path("data/missions")

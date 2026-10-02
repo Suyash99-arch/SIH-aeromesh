@@ -33,7 +33,10 @@ if os.environ.get("AEROMESH_OFFLINE") == "1" or os.environ.get("OFFLINE") == "1"
     os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
 os.environ.setdefault("YOLO_VERBOSE", "False")
 
-import cv2
+try:
+    import cv2
+except ImportError:
+    cv2 = None
 import numpy as np
 from fastapi import (
     BackgroundTasks,
@@ -188,7 +191,7 @@ if configured_engine is not None:
 # ============================================================
 
 app = FastAPI(
-    title="AeroMesh Backend",
+    title="Hexa Spark API",
     description="Single-Pass Drone Video to 3D Reconstruction",
     version="1.0.0",
 )
@@ -801,12 +804,48 @@ async def root():
         ]
     }
 
+def is_pipeline_enabled() -> bool:
+    return os.getenv("PIPELINE_ENABLED", "false").strip().lower() in ("1", "true", "yes", "on")
+
+def is_api_profile() -> bool:
+    profile = os.getenv("PROFILE", "").strip().lower()
+    if profile in ("worker", "ml", "pipeline"):
+        return False
+    return not is_pipeline_enabled()
+
+def get_git_commit() -> str:
+    commit = os.getenv("RENDER_GIT_COMMIT") or os.getenv("GIT_COMMIT")
+    if commit:
+        return commit[:8]
+    try:
+        import subprocess
+        res = subprocess.run(["git", "rev-parse", "--short", "HEAD"], capture_output=True, text=True, timeout=2)
+        if res.returncode == 0 and res.stdout.strip():
+            return res.stdout.strip()
+    except Exception:
+        pass
+    return "unknown"
+
 _detected_compute_device = None
 
 def detect_compute_device() -> Dict[str, Any]:
     """Detect execution device at startup and report honest compute profile."""
     global _detected_compute_device
     if _detected_compute_device is not None:
+        return _detected_compute_device
+
+    # In API profile, NEVER import torch to avoid pulling heavy CUDA/runtime into memory
+    if is_api_profile():
+        _detected_compute_device = {
+            "execution_device": "cpu",
+            "cuda_available": False,
+            "device_name": "API Profile (Lightweight CPU)",
+            "vram_mb": 0,
+            "compute_path": "API Gateway — worker pipeline offloaded",
+            "estimated_duration": "N/A",
+            "compute_budget": "Host RAM & CPU (0 MB VRAM)",
+            "budget_detail": "FastAPI Web Service"
+        }
         return _detected_compute_device
 
     cuda_avail = False
@@ -838,7 +877,7 @@ def detect_compute_device() -> Dict[str, Any]:
             else:
                 device_name = "Intel(R) UHD Graphics"
         except Exception:
-            device_name = "Intel(R) UHD Graphics"
+            device_name = "Host CPU"
 
     _detected_compute_device = {
         "execution_device": "cuda" if cuda_avail else "cpu",
@@ -855,15 +894,25 @@ def detect_compute_device() -> Dict[str, Any]:
 
 @app.on_event("startup")
 async def startup_hardware_detection():
-    env_info = verify_environment()
-    logger.info("Environment verified: OpenCV=%s, FFmpeg=%s", env_info["opencv"]["version"], env_info["ffmpeg"]["ffmpeg_path"])
-    dev = detect_compute_device()
-    logger.info("Compute hardware initialized: %s (CUDA available: %s)", dev.get("device_name"), dev.get("cuda_available"))
+    # OpenCV/ffmpeg environment check runs strictly only when PIPELINE_ENABLED=true
+    if is_pipeline_enabled():
+        env_info = verify_environment(strict=True)
+        logger.info("Environment verified (pipeline enabled): OpenCV=%s, FFmpeg=%s", env_info["opencv"]["version"], env_info["ffmpeg"]["ffmpeg_path"])
+        dev = detect_compute_device()
+        logger.info("Compute hardware initialized: %s (CUDA available: %s)", dev.get("device_name"), dev.get("cuda_available"))
+    else:
+        # In API profile: OpenCV/ffmpeg check is a warning at most
+        env_info = verify_environment(strict=False)
+        logger.info("API profile initialized (PIPELINE_ENABLED=false): OpenCV=%s, FFmpeg=%s",
+                    env_info.get("opencv", {}).get("version") or "headless/absent",
+                    env_info.get("ffmpeg", {}).get("ffmpeg_path") or "absent")
+        dev = detect_compute_device()
+        logger.info("API compute profile: %s", dev.get("device_name"))
 
 
 
 @app.get("/api/v1/system/compute-device")
-@app.get("/api/system/compute-device")
+@app.get("/api/system/compute-device", deprecated=True)
 async def get_system_compute_device():
     """Expose real execution device and hardware compute profile."""
     return {
@@ -873,20 +922,54 @@ async def get_system_compute_device():
 
 
 @app.get("/health")
-@app.get("/api/health")
+@app.get("/api/health", deprecated=True)
 @app.get("/api/v1/health")
 async def health():
     database_engine = get_configured_engine()
     database_configured = database_engine is not None
     database_ready = check_database(database_engine) if database_configured else False
-    cv_status = check_opencv_environment()
-    ff_status = check_ffmpeg_environment()
+    db_status = "ready" if database_ready else ("configured_unavailable" if database_configured else "json_fallback")
+    
+    cv_status = check_opencv_environment(strict=False)
+    ff_status = check_ffmpeg_environment(strict=False)
+
+    storage_status = "ready"
+    try:
+        storage = get_storage(DATA_DIR / "objects")
+        storage_status = "ready" if storage is not None else "unavailable"
+    except Exception:
+        storage_status = "unavailable"
+
+    pipeline_on = is_pipeline_enabled()
+    git_commit = get_git_commit()
+
+    # Mounted route prefixes calculation
+    prefixes = set()
+    for route in app.routes:
+        path = getattr(route, "path", None)
+        if path:
+            parts = [p for p in path.split("/") if p]
+            if len(parts) >= 2 and parts[0] == "api" and parts[1] == "v1":
+                prefixes.add("/api/v1")
+            elif len(parts) >= 1 and parts[0] == "api":
+                prefixes.add("/api")
+            elif len(parts) >= 1:
+                prefixes.add(f"/{parts[0]}")
+    mounted_prefixes = sorted(list(prefixes))
+
     return {
         "status": "healthy",
+        "version": app.version,
+        "git_commit": git_commit,
+        "db": db_status,
+        "storage": storage_status,
+        "pipeline_enabled": pipeline_on,
+        "mounted_route_prefixes": mounted_prefixes,
+        # Backward-compatible fields
         "backend": "ready",
+        "database": db_status,
         "processing_engine": "ready",
         "reconstruction_engine": "ready",
-        "database": "ready" if database_ready else ("configured_unavailable" if database_configured else "json_fallback"),
         "compute_device": detect_compute_device(),
         "opencv_status": cv_status,
         "ffmpeg_status": ff_status,
@@ -4894,6 +4977,12 @@ def export_mission_pdf(
 
 
 
+
+# Mark all legacy /api/... routes (excluding /api/v1/...) as deprecated aliases in OpenAPI docs
+for _route in app.routes:
+    _rpath = getattr(_route, "path", "")
+    if _rpath.startswith("/api/") and not _rpath.startswith("/api/v1/"):
+        setattr(_route, "deprecated", True)
 
 # ============================================================
 # RUN

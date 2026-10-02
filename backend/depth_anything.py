@@ -4,9 +4,15 @@ import os
 from pathlib import Path
 from typing import Any
 
-import cv2
+try:
+    import cv2
+except ImportError:
+    cv2 = None
 import numpy as np
-import torch
+try:
+    import torch
+except ImportError:
+    torch = None
 from PIL import Image
 
 
@@ -32,7 +38,7 @@ class DepthAnythingV2Runner:
     """Thin, reusable wrapper around the Depth Anything V2 pretrained model."""
 
     def __init__(self, model_name: str | None = None, device: str | None = None, cache_dir: str | None = None):
-        self.device = device or ("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = device or ("cuda" if (torch is not None and torch.cuda.is_available()) else "cpu")
         self.model_name = model_name or MODEL_CANDIDATES[0]
         self.cache_dir = cache_dir or str(Path(__file__).resolve().parent.parent / ".hf_cache")
         self.model = None
@@ -40,6 +46,8 @@ class DepthAnythingV2Runner:
         self._load_model()
 
     def _load_model(self):
+        if torch is None:
+            raise RuntimeError("PyTorch is required for DepthAnythingV2Runner")
         os.makedirs(self.cache_dir, exist_ok=True)
         from transformers import AutoImageProcessor, AutoModelForDepthEstimation
         

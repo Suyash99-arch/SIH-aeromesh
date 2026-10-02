@@ -1,5 +1,5 @@
 # ==============================================================================
-# Hexa Spark / AeroMesh API Production Dockerfile (Default)
+# Hexa Spark / AeroMesh API Production Dockerfile
 # Python 3.11-slim, non-root user, $PORT binding, <512MB RAM budget
 # ==============================================================================
 

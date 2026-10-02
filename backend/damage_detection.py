@@ -3,7 +3,10 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-import cv2
+try:
+    import cv2
+except ImportError:
+    cv2 = None
 import numpy as np
 
 BASE_DIR = Path(__file__).resolve().parent.parent

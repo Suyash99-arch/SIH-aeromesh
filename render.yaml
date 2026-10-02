@@ -1,0 +1,29 @@
+services:
+  - type: web
+    name: hexaspark-aeromesh-api
+    runtime: docker
+    dockerfilePath: Dockerfile.api
+    plan: free
+    region: oregon
+    healthCheckPath: /api/v1/health
+    envVars:
+      - key: PORT
+        value: "8000"
+      - key: PIPELINE_ENABLED
+        value: "false"
+      - key: PROFILE
+        value: "api"
+      - key: PYTHONUNBUFFERED
+        value: "1"
+      - key: PYTHONDONTWRITEBYTECODE
+        value: "1"
+      - key: AEROMESH_OFFLINE
+        value: "1"
+      - key: MALLOC_ARENA_MAX
+        value: "2"
+      - key: OMP_NUM_THREADS
+        value: "1"
+      - key: OPENBLAS_NUM_THREADS
+        value: "1"
+      - key: MKL_NUM_THREADS
+        value: "1"

@@ -6,7 +6,10 @@ import shutil
 import subprocess
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional, Tuple
-import cv2
+try:
+    import cv2
+except ImportError:
+    cv2 = None
 
 logger = logging.getLogger(__name__)
 

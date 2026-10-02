@@ -1,13 +1,13 @@
 # ==============================================================================
-# Hexa Spark / AeroMesh API Production Dockerfile (Default)
-# Python 3.11-slim, non-root user, $PORT binding, <512MB RAM budget
+# Hexa Spark / AeroMesh Worker Production Dockerfile
+# Python 3.11-slim, ML + 3D Reconstruction Pipeline, non-root user
 # ==============================================================================
 
 FROM python:3.11-slim AS builder
 
 WORKDIR /install
 
-# Install build-time system packages
+# Install build dependencies
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     curl \
@@ -15,32 +15,31 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements-api.txt .
+COPY requirements-api.txt requirements-ml.txt ./
 
-# Install API profile without any CUDA or heavy ML packages
-RUN pip install --no-cache-dir --prefix=/install -r requirements-api.txt
-
+# Install CPU PyTorch wheel explicitly without CUDA overhead (~3GB) and worker requirements
+RUN pip install --no-cache-dir --prefix=/install --extra-index-url https://download.pytorch.org/whl/cpu -r requirements-ml.txt
 
 # Final runtime image
 FROM python:3.11-slim
 
-# System dependencies for runtime
+# System dependencies for OpenCV, pycolmap, and spatial operations
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libgl1 \
     libglib2.0-0 \
     libgomp1 \
     libpq5 \
+    ffmpeg \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
-# Copy installed python packages from builder
+# Copy python packages from builder
 COPY --from=builder /install /usr/local
 
 # Fix Docker image OpenCV conflict:
-# Ensure no conflicting opencv-python or opencv-contrib-python exists,
-# and enforce strictly opencv-python-headless==4.11.0.86
+# Ultralytics or other ML wheels may pull opencv-python; remove conflict and enforce headless
 RUN pip uninstall -y opencv-python opencv-contrib-python || true && \
     pip install --no-cache-dir --force-reinstall --no-deps opencv-python-headless==4.11.0.86
 
@@ -51,7 +50,7 @@ RUN python -c "import importlib.metadata as m; names={d.metadata['Name'].lower()
 RUN groupadd -g 1001 aeromesh && \
     useradd -u 1001 -g aeromesh -s /bin/bash -m aeromesh
 
-# Create data directories and set permissions
+# Create data and storage directories
 RUN mkdir -p /app/data/missions /app/data/objects /app/backend/models && \
     chown -R aeromesh:aeromesh /app
 
@@ -67,19 +66,11 @@ USER aeromesh
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     OBJECT_STORAGE_ROOT=/app/data/objects \
-    PORT=8000 \
-    PIPELINE_ENABLED=false \
-    PROFILE=api \
+    PIPELINE_ENABLED=true \
+    PROFILE=worker \
     MALLOC_ARENA_MAX=2 \
-    OMP_NUM_THREADS=1 \
-    OPENBLAS_NUM_THREADS=1 \
-    MKL_NUM_THREADS=1
+    OMP_NUM_THREADS=2 \
+    OPENBLAS_NUM_THREADS=2
 
-EXPOSE 8000
-
-# Healthcheck against /api/v1/health
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD curl -f http://localhost:${PORT:-8000}/api/v1/health || exit 1
-
-# Execute uvicorn using $PORT dynamically assigned by cloud hosts like Render
-CMD ["sh", "-c", "exec uvicorn backend.main:app --host 0.0.0.0 --port ${PORT:-8000} --workers 1"]
+# Default worker execution command
+CMD ["celery", "-A", "backend.tasks.celery_app", "worker", "--loglevel=info", "--concurrency=1"]

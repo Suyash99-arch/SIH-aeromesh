@@ -21,12 +21,24 @@ import struct
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-import cv2
+try:
+    import cv2
+except ImportError:
+    cv2 = None
 import numpy as np
-import open3d as o3d
-import pycolmap
+try:
+    import open3d as o3d
+except ImportError:
+    o3d = None
+try:
+    import pycolmap
+except ImportError:
+    pycolmap = None
 
-from backend.depth_anything import DepthAnythingV2Runner
+try:
+    from backend.depth_anything import DepthAnythingV2Runner
+except ImportError:
+    DepthAnythingV2Runner = None
 from backend.spatial_fusion import CameraIntrinsics, CameraPose
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")

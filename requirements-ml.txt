@@ -1,0 +1,17 @@
+# AeroMesh Worker / ML Pipeline Profile (GPU / Heavy Compute Stack)
+-r requirements-api.txt
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch>=2.1.0
+torchvision
+ultralytics>=8.3.0
+pycolmap>=3.11.1
+transformers>=4.35.0
+roboflow>=1.0.0
+inference-sdk>=0.16.0
+scipy>=1.12.0
+open3d>=0.18.0
+celery>=5.3,<6.0
+redis>=5.0,<6.0
+plyfile>=1.0.3
+trimesh>=4.1.0
+Pillow>=10.0.0

@@ -1,9 +1,13 @@
+import logging
 import os
 from contextlib import contextmanager
+from pathlib import Path
 from typing import Iterator
 
 from sqlalchemy import create_engine, text
 from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
+
+logger = logging.getLogger(__name__)
 
 
 class Base(DeclarativeBase):
@@ -11,8 +15,13 @@ class Base(DeclarativeBase):
 
 
 def get_database_url() -> str | None:
-    value = os.getenv("DATABASE_URL", "").strip()
-    return value or None
+    raw = os.getenv("DATABASE_URL", "").strip()
+    if not raw:
+        return None
+    # Fix Render / Heroku legacy postgres:// schema to SQLAlchemy 2.0 compatible postgresql://
+    if raw.startswith("postgres://"):
+        raw = "postgresql://" + raw[len("postgres://"):]
+    return raw
 
 
 def create_database_engine(database_url: str | None = None):
@@ -21,10 +30,6 @@ def create_database_engine(database_url: str | None = None):
         return None
     connect_args = {"check_same_thread": False} if url.startswith("sqlite") else {}
     return create_engine(url, future=True, pool_pre_ping=True, connect_args=connect_args)
-
-
-engine = create_database_engine()
-SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False) if engine else None
 
 
 _cached_engine = None
@@ -67,6 +72,35 @@ def init_database(database_engine=None) -> None:
     from .models import Base as ModelBase
 
     ModelBase.metadata.create_all(active_engine)
+
+
+def run_database_migrations(database_url: str | None = None) -> bool:
+    """Run Alembic database migrations programmatically at startup."""
+    url = database_url or get_database_url()
+    if not url:
+        return False
+    try:
+        from alembic import command
+        from alembic.config import Config
+        root_dir = Path(__file__).resolve().parent.parent
+        alembic_cfg_path = root_dir / "alembic.ini"
+        if not alembic_cfg_path.exists():
+            alembic_cfg_path = Path(__file__).resolve().parent / "alembic.ini"
+        if alembic_cfg_path.exists():
+            alembic_cfg = Config(str(alembic_cfg_path))
+            alembic_cfg.set_main_option("sqlalchemy.url", url)
+            command.upgrade(alembic_cfg, "head")
+            logger.info("Alembic database migrations applied successfully")
+            return True
+    except Exception as exc:
+        logger.warning("Alembic programmatic migration skipped: %s; creating tables via metadata", exc)
+        try:
+            init_database()
+            return True
+        except Exception as e:
+            logger.error("Failed to initialize database tables: %s", e)
+            return False
+    return False
 
 
 def check_database(database_engine=None) -> bool:
