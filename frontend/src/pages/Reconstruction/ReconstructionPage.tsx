@@ -38,21 +38,34 @@ import {
 } from '../../api/client.ts';
 import { exportDetectionsToGeoJSON } from '../../utils/geojson.ts';
 
-const SCENES_LIST = [
-  { id: 'north-ridge-01', label: 'North Ridge · Sector 01' },
-  { id: 'downtown-perimeter-grid', label: 'Downtown Perimeter Grid' },
-  { id: 'harbor-coastal-approach', label: 'Harbor Coastal Approach' },
-];
-
 export const ReconstructionPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
 
-  const urlScene = searchParams.get('scene') || 'north-ridge-01';
+  const [availableScenes, setAvailableScenes] = useState<{ id: string; label: string }[]>([]);
+  const urlScene = searchParams.get('scene') || '';
   const [sceneId, setSceneId] = useState<string>(urlScene);
 
   useEffect(() => {
-    if (urlScene !== sceneId) {
+    let active = true;
+    import('../../api/missions.js').then(({ listMissions }) => {
+      listMissions().then((missions: any[]) => {
+        if (!active || !missions) return;
+        const mapped = missions.map((m) => ({
+          id: m.id,
+          label: `${m.name || m.id} ${m.sector ? `· ${m.sector}` : ''}`,
+        }));
+        setAvailableScenes(mapped);
+        if (!urlScene && mapped.length > 0) {
+          setSceneId(mapped[0].id);
+        }
+      });
+    });
+    return () => { active = false; };
+  }, [urlScene]);
+
+  useEffect(() => {
+    if (urlScene && urlScene !== sceneId) {
       setSceneId(urlScene);
     }
   }, [urlScene]);
@@ -244,7 +257,7 @@ export const ReconstructionPage: React.FC = () => {
                       onChange={(e) => handleSceneChange(e.target.value)}
                       aria-label="Select Sortie Reconstruction Scene"
                     >
-                      {SCENES_LIST.map((s) => (
+                      {availableScenes.map((s) => (
                         <option key={s.id} value={s.id} style={{ background: '#090d16', color: '#eef3fb' }}>
                           {s.label}
                         </option>

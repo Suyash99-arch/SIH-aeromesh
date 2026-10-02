@@ -926,7 +926,7 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
                 : mission?.assets?.mesh
                   ? resolveAssetUrl(mission.assets.mesh)
                   : missionId
-                    ? resolveAssetUrl(`/api/missions/${missionId}/reconstruction/mesh`)
+                    ? resolveAssetUrl(`/api/v1/missions/${missionId}/reconstruction/mesh`)
                     : mission?.assets?.model
                       ? resolveAssetUrl(mission.assets.model)
                       : null
@@ -939,7 +939,7 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
                 : mission?.assets?.pointCloud
                   ? resolveAssetUrl(mission.assets.pointCloud)
                   : missionId
-                    ? resolveAssetUrl(`/api/missions/${missionId}/reconstruction/pointcloud`)
+                    ? resolveAssetUrl(`/api/v1/missions/${missionId}/reconstruction/pointcloud`)
                     : null
           }
           reconstructionMeta={reconstructionMeta}
@@ -1358,7 +1358,7 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
                     </button>
                     <button
                       className="action-btn-secondary"
-                      onClick={() => handleFlyToObject(selectedObject)}
+                      onClick={() => setSelectedObject(selectedObject)}
                     >
                       Focus Camera on Object
                     </button>

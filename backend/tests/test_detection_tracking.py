@@ -1,3 +1,4 @@
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -144,11 +145,18 @@ def test_scene_profile_resolution():
         resolve_allowed_classes("unknown_space_station")
 
 
-def test_phase4_authoritative_artifact_is_not_mutated():
+def _get_validation_dir() -> Path:
     from pathlib import Path
+    repo_root = Path(__file__).resolve().parent.parent.parent
+    if (repo_root / "data" / "validation").exists():
+        return repo_root / "data" / "validation"
+    return Path("data/validation")
+
+
+def test_phase4_authoritative_artifact_is_not_mutated():
     import json
 
-    artifact_path = Path("data/validation/phase4/phase4_validation.json")
+    artifact_path = _get_validation_dir() / "phase4" / "phase4_validation.json"
     assert artifact_path.exists(), "Phase 4.5 validation artifact must exist"
 
     with artifact_path.open("r", encoding="utf-8") as f:
@@ -164,10 +172,9 @@ def test_phase4_authoritative_artifact_is_not_mutated():
 
 
 def test_phase_b_authoritative_artifact_is_not_mutated():
-    from pathlib import Path
     import json
 
-    artifact_path = Path("data/validation/accuracy_remediation/phase_b_sampling_benchmark.json")
+    artifact_path = _get_validation_dir() / "accuracy_remediation" / "phase_b_sampling_benchmark.json"
     assert artifact_path.exists(), "Phase B benchmark artifact must exist"
 
     with artifact_path.open("r", encoding="utf-8") as f:
@@ -338,8 +345,7 @@ def test_default_tile_inference_is_false():
 
 
 def test_no_mutation_of_authoritative_validation_artifacts():
-    from pathlib import Path
-    base = Path("data/validation")
+    base = _get_validation_dir()
     assert (base / "accuracy_remediation" / "phase_b_sampling_benchmark.json").exists()
     assert (base / "accuracy_remediation" / "phase_c_tracking_benchmark.json").exists()
     assert (base / "accuracy_remediation" / "phase_e_40keyframe_reconstruction.json").exists()

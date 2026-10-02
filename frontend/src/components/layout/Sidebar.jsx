@@ -71,7 +71,7 @@ export default function Sidebar({
             <Icon name="Radar" size={21} />
           </div>
           <section>
-            <strong>AEROMESH</strong>
+            <strong>HEXA SPARK</strong>
             <small>AERIAL INTELLIGENCE PLATFORM</small>
           </section>
         </div>
@@ -133,7 +133,7 @@ export default function Sidebar({
           {...{ activePage, navigate }}
         />
         <footer>
-          AEROMESH v0.9.0 <i>•</i> SIH BUILD
+          HEXA SPARK v0.9.0 <i>•</i> SIH BUILD
         </footer>
       </aside>
 

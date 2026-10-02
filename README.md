@@ -21,7 +21,7 @@ AEROMESH is a professional photogrammetric and geospatial intelligence platform 
 
 ### 1. Start the Backend API
 ```powershell
-& "d:\SIH\SIH-aeromesh\.venv312\Scripts\python.exe" -m uvicorn backend.main:app --host 127.0.0.1 --port 8000
+& "backend\.venv\Scripts\python.exe" -m uvicorn backend.main:app --host 127.0.0.1 --port 8000
 ```
 
 ### 2. Start the Frontend Application
@@ -43,7 +43,7 @@ For detailed production deployment instructions, see [DEPLOYMENT.md](file:///d:/
 
 ### Run Backend Tests (75 tests including Phase 10 security)
 ```powershell
-& "d:\SIH\SIH-aeromesh\.venv312\Scripts\python.exe" -m pytest backend/tests -v
+& "backend\.venv\Scripts\python.exe" -m pytest backend/tests -v
 ```
 
 ### Run Frontend Production Build

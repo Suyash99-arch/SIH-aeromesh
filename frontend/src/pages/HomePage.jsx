@@ -1,12 +1,10 @@
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import Icon from "../components/ui/Icon";
-import ReconstructionViewer from "../components/reconstruction/ReconstructionViewer";
 import HeroCompassReconstruction from "../components/hero/HeroCompassReconstruction";
 import FloatingWord from "../components/hero/FloatingWord";
 import NarrativePipelineSequence from "../components/narrative/NarrativePipelineSequence";
-import { listMissions, BACKEND_URL, resolveAssetUrl } from "../api/missions";
-import { missions as seedMissions } from "../data/missions";
+import { BACKEND_URL, loginGuest } from "../api/missions";
 import "../styles/homepage.css";
 
 // 11 Operational Workflow Stages with Rigorous Technical Architecture
@@ -180,7 +178,7 @@ const WORKFLOW_STAGES = [
     subtitle:
       "Resolves monocular Structure-from-Motion scale ambiguity to convert arbitrary coordinates into certified metric meters.",
     technicalExplanation:
-      "Pure monocular photogrammetry is inherently scale-ambiguous. By specifying a known physical reference distance (e.g. 10m road lane or survey marker), AEROMESH computes the exact metric scaling tensor S, upgrading unreferenced coordinates into certified meters with formal uncertainty bounds.",
+      "Pure monocular photogrammetry is inherently scale-ambiguous. By specifying a known physical reference distance (e.g. 10m road lane or survey marker), HEXA SPARK computes the exact metric scaling tensor S, upgrading unreferenced coordinates into certified meters with formal uncertainty bounds.",
     mathSpecs: "Scale Factor: S = d_{known} / ||P_A - P_B||₂ · Metric Distance: D = S · ||P_1 - P_2||₂",
     inputsOutputs: "Input: Known Baseline Distance · Output: Metric Calibrated Spatial Geometry (m)",
     tech: ["Baseline Calibration", "Scale Ambiguity Solver", "Certified Meters", "Uncertainty Bounds"],
@@ -1143,7 +1141,7 @@ function StageVisualCanvas({ stageIndex }) {
             fontSize="9"
             fontFamily="monospace"
           >
-            AEROMESH CERTIFIED
+            HEXA SPARK CERTIFIED
           </text>
           <text
             x="110"
@@ -1202,28 +1200,11 @@ export default function HomePage({ onNavigateDashboard, onStartMission, currentU
     };
   }, [isPlaying]);
 
-  const demoVideoUrl = resolveAssetUrl(
-    missionsList[0]?.assets?.video || missionsList[0]?.video?.url || "",
-  );
-
-  // Load real backend missions & health
+  // Load real backend health status
   useEffect(() => {
     let active = true;
 
-    listMissions()
-      .then((m) => {
-        if (!active) return;
-        if (Array.isArray(m) && m.length > 0) {
-          setMissionsList(m.slice(0, 5));
-        } else {
-          setMissionsList(seedMissions.slice(0, 5));
-        }
-      })
-      .catch(() => {
-        if (active) setMissionsList(seedMissions.slice(0, 5));
-      });
-
-    fetch(`${BACKEND_URL}/api/health`)
+    fetch(`${BACKEND_URL}/health`)
       .then((res) => res.json())
       .then((data) => {
         if (!active) return;
@@ -1272,93 +1253,116 @@ export default function HomePage({ onNavigateDashboard, onStartMission, currentU
             <Icon name="Radar" size={18} />
           </div>
           <div className="logo-text">
-            <strong>AEROMESH</strong>
-            <small>AERIAL INTELLIGENCE</small>
+            <strong>HEXA SPARK</strong>
+            <small>AERIAL 3D INTELLIGENCE</small>
           </div>
         </div>
 
         <div className="nav-menu">
-          <a href="#top">Home</a>
-          <a
-            href="#mission-command"
-            onClick={(e) => {
-              e.preventDefault();
-              onNavigateDashboard("overview");
-            }}
-          >
-            Mission Command
-          </a>
-          <a
-            href="#history"
-            onClick={(e) => {
-              e.preventDefault();
-              onNavigateDashboard("missions");
-            }}
-          >
-            History
-          </a>
+          <a href="#hero">Overview</a>
           <a href="#pipeline-narrative">Pipeline Motion</a>
           <a href="#workflow">11-Step Workflow</a>
+          <a href="#capabilities">Capabilities</a>
+          <a href="#security">Sovereign Security</a>
         </div>
 
         <div className="nav-actions">
           {currentUser ? (
-            <button
-              onClick={() => onNavigateDashboard("profile")}
-              className="status-badge valid"
-              style={{
-                fontSize: 11,
-                padding: "4px 12px",
-                cursor: "pointer",
-                background: "rgba(14,165,233,0.15)",
-                border: "1px solid rgba(14,165,233,0.3)",
-                color: "#38bdf8",
-              }}
-              title="View your Operator Profile"
-            >
-              <span className="pulse-dot-cyan" />
-              <span>{currentUser.full_name} ({currentUser.role})</span>
-            </button>
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <button
+                onClick={() => onNavigateDashboard("profile")}
+                className="status-badge valid"
+                style={{
+                  fontSize: 11,
+                  padding: "4px 12px",
+                  cursor: "pointer",
+                  background: "rgba(14,165,233,0.15)",
+                  border: "1px solid rgba(14,165,233,0.3)",
+                  color: "#38bdf8",
+                  borderRadius: "20px",
+                }}
+                title="View your Operator Profile"
+              >
+                <span className="pulse-dot-cyan" />
+                <span>{currentUser.full_name} ({currentUser.organization_name || currentUser.role})</span>
+              </button>
+              <button
+                className="hero-btn-pill hero-btn-pill-primary"
+                style={{ height: 36, padding: "0 18px", fontSize: 12 }}
+                onClick={() => onNavigateDashboard("overview")}
+                id="btn-nav-dashboard"
+              >
+                <Icon name="Box" size={13} />
+                Open Dashboard
+              </button>
+            </div>
           ) : (
-            <button
-              onClick={onOpenAuth}
-              id="btn-nav-login"
-              style={{
-                background: "rgba(56, 189, 248, 0.12)",
-                border: "1px solid rgba(56, 189, 248, 0.3)",
-                color: "#38bdf8",
-                padding: "6px 14px",
-                borderRadius: "20px",
-                fontSize: "12px",
-                fontWeight: 600,
-                cursor: "pointer",
-                display: "inline-flex",
-                alignItems: "center",
-                gap: "6px",
-              }}
-            >
-              <span>🔒</span>
-              <span>Operator Login</span>
-            </button>
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <button
+                onClick={() => onOpenAuth("gov")}
+                id="btn-nav-gov-portal"
+                style={{
+                  background: "rgba(14, 165, 233, 0.15)",
+                  border: "1px solid rgba(14, 165, 233, 0.4)",
+                  color: "#38bdf8",
+                  padding: "6px 14px",
+                  borderRadius: "20px",
+                  fontSize: "12px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                }}
+              >
+                <span>🏛️</span>
+                <span>Gov / Org</span>
+              </button>
+              <button
+                onClick={() => onOpenAuth("indiv")}
+                id="btn-nav-indiv-portal"
+                style={{
+                  background: "rgba(168, 85, 247, 0.15)",
+                  border: "1px solid rgba(168, 85, 247, 0.4)",
+                  color: "#c084fc",
+                  padding: "6px 14px",
+                  borderRadius: "20px",
+                  fontSize: "12px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                }}
+              >
+                <span>👤</span>
+                <span>Individual</span>
+              </button>
+              <button
+                onClick={async () => {
+                  const res = await loginGuest();
+                  if (res.success) onNavigateDashboard("overview");
+                }}
+                id="btn-nav-guest"
+                style={{
+                  background: "rgba(16, 185, 129, 0.15)",
+                  border: "1px solid rgba(16, 185, 129, 0.4)",
+                  color: "#34d399",
+                  padding: "6px 14px",
+                  borderRadius: "20px",
+                  fontSize: "12px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                }}
+              >
+                <span>⚡</span>
+                <span>Guest Mode</span>
+              </button>
+            </div>
           )}
-          <button
-            className="hero-btn-pill hero-btn-pill-secondary"
-            style={{ height: 36, padding: "0 16px", fontSize: 12 }}
-            onClick={() => onNavigateDashboard("missions")}
-            id="btn-nav-history"
-          >
-            <Icon name="Clock" size={13} />
-            History
-          </button>
-          <button
-            className="hero-btn-pill hero-btn-pill-primary"
-            style={{ height: 36, padding: "0 18px", fontSize: 12 }}
-            onClick={onStartMission}
-            id="btn-nav-new-analysis"
-          >
-            <Icon name="Plus" size={13} />
-            New Analysis
-          </button>
         </div>
       </nav>
 
@@ -1368,51 +1372,58 @@ export default function HomePage({ onNavigateDashboard, onStartMission, currentU
           <div className="hero-text">
             <span className="hero-badge">
               <span className="pulse-dot-cyan" />
-              COMMERCIAL AERIAL INTELLIGENCE & GIS
+              COMMERCIAL & DEFENCE AERIAL RECONSTRUCTION
             </span>
 
             {/* Glowing AEROMESH Wordmark with Shimmer Sweep */}
             <div className="hero-wordmark-container">
-              <h1 className="hero-wordmark-title" data-text="AEROMESH">
-                <FloatingWord sparkColor="cyan">AEROMESH</FloatingWord>
+              <h1 className="hero-wordmark-title" data-text="HEXA SPARK">
+                <FloatingWord sparkColor="cyan">HEXA SPARK</FloatingWord>
               </h1>
               <div className="hero-wordmark-tagline">
-                From Drone Footage <FloatingWord sparkColor="violet"><span>to 3D Intelligence</span></FloatingWord>
+                From Drone Video <FloatingWord sparkColor="violet"><span>to 3D Geospatial Intelligence</span></FloatingWord>
               </div>
             </div>
 
             <p className="hero-subtitle">
-              Transform single-pass UAV video footage into millimeter-calibrated 3D point clouds,
-              photogrammetric meshes, neural object tracks, and survey-grade GIS intelligence.
+              Transform uncalibrated single-pass UAV video footage into millimeter-calibrated 3D point clouds,
+              Poisson surface meshes, neural object tracking, and certified GIS engineering reports.
             </p>
 
             {/* Reference-Style Glowing Pill Buttons */}
             <div className="hero-pill-buttons">
               <button
                 className="hero-btn-pill hero-btn-pill-primary"
-                onClick={onStartMission}
-                id="btn-hero-new-analysis"
+                onClick={() => onOpenAuth("gov")}
+                id="btn-hero-gov-portal"
               >
-                <Icon name="Plus" size={16} />
-                New Analysis
+                <span>🏛️</span>
+                <span>Government & Org Portal</span>
               </button>
 
               <button
                 className="hero-btn-pill hero-btn-pill-secondary"
-                onClick={() => onNavigateDashboard("missions")}
-                id="btn-hero-history"
+                onClick={() => onOpenAuth("indiv")}
+                id="btn-hero-indiv-portal"
               >
-                <Icon name="Clock" size={15} />
-                History (Missions)
+                <span>👤</span>
+                <span>Individual Portal</span>
               </button>
 
               <button
                 className="hero-btn-pill hero-btn-pill-secondary"
-                onClick={() => onNavigateDashboard("overview")}
-                id="btn-hero-command"
+                onClick={async () => {
+                  const res = await loginGuest();
+                  if (res.success) onNavigateDashboard("overview");
+                }}
+                id="btn-hero-guest"
+                style={{
+                  borderColor: "rgba(16, 185, 129, 0.4)",
+                  color: "#34d399",
+                }}
               >
-                <Icon name="Radio" size={15} />
-                Mission Command
+                <span>⚡</span>
+                <span>Try It Now (Guest Sandbox)</span>
               </button>
             </div>
 
@@ -1514,7 +1525,7 @@ export default function HomePage({ onNavigateDashboard, onStartMission, currentU
         ref={workflowRef}
       >
         <div className="section-header-center">
-          <span className="eyebrow">AEROMESH MISSION LIFECYCLE</span>
+          <span className="eyebrow">HEXA SPARK MISSION LIFECYCLE</span>
           <h2>The 11-Stage Aerial Intelligence Pipeline</h2>
           <p>
             From drone video ingestion to survey-grade 3D environment
@@ -1644,33 +1655,10 @@ export default function HomePage({ onNavigateDashboard, onStartMission, currentU
                 </div>
               </div>
 
-              {/* Right Column: Visual Graphic, Real Drone Video, or Real 3D Mesh */}
+              {/* Right Column: Procedural 3D Stage Simulation */}
               <div className="stage-visual-column">
                 <div className="stage-canvas-wrapper" aria-live="polite">
-                  {activeStep === 1 && demoVideoUrl ? (
-                    <div className="stage-video-preview">
-                      <video
-                        src={demoVideoUrl}
-                        muted
-                        loop
-                        autoPlay
-                        playsInline
-                        controls
-                        aria-label="Mission drone footage preview"
-                      />
-                      <span className="stage-video-label">LIVE MISSION SOURCE VIDEO</span>
-                    </div>
-                  ) : (activeStep === 4 || activeStep === 5) && missionsList[0] ? (
-                    <div className="stage-recon-preview">
-                      <ReconstructionViewer
-                        mission={missionsList[0]}
-                        hideEmbeddedControls={true}
-                      />
-                      <span className="stage-video-label">LIVE 3D RECONSTRUCTION PREVIEW</span>
-                    </div>
-                  ) : (
-                    <StageVisualCanvas stageIndex={activeStep} />
-                  )}
+                  <StageVisualCanvas stageIndex={activeStep} />
                 </div>
               </div>
             </motion.div>
@@ -1739,10 +1727,64 @@ export default function HomePage({ onNavigateDashboard, onStartMission, currentU
         </div>
       </section>
 
+      {/* 5. TRUST, SECURITY & SOVEREIGN DEPLOYMENT */}
+      <section className="security-section" id="security" style={{ padding: "80px 24px", maxWidth: "1280px", margin: "0 auto" }}>
+        <div className="section-header-center">
+          <span className="eyebrow" style={{ color: "#38bdf8", letterSpacing: "0.1em" }}>SOVEREIGN DATA ASSURANCE & COMPLIANCE</span>
+          <h2 style={{ fontSize: "2.2rem", fontWeight: 800, margin: "12px 0 16px" }}>Enterprise Security & Multi-Tenant Isolation</h2>
+          <p style={{ color: "#94a3b8", maxWidth: "680px", margin: "0 auto", fontSize: "1rem" }}>
+            Engineered for defence commands, emergency responders, and enterprise surveying units.
+            Zero cloud leakage with certified cryptographic tenant isolation.
+          </p>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "24px", marginTop: "48px" }}>
+          <div className="feature-glass-card glass" style={{ padding: "28px 24px", borderRadius: "16px", border: "1px solid rgba(56, 189, 248, 0.2)" }}>
+            <div className="glowing-icon-circle lg" style={{ marginBottom: "16px" }}>
+              <Icon name="Shield" size={24} />
+            </div>
+            <h4 style={{ fontSize: "1.15rem", fontWeight: 700, margin: "0 0 10px", color: "#f8fafc" }}>Multi-Tenant Data Isolation</h4>
+            <p style={{ color: "#94a3b8", fontSize: "0.9rem", lineHeight: "1.6", margin: 0 }}>
+              Strict database and object storage partitioning ensures government departments, organizations, and individual analysts operate in isolated, access-controlled security enclaves.
+            </p>
+          </div>
+
+          <div className="feature-glass-card glass" style={{ padding: "28px 24px", borderRadius: "16px", border: "1px solid rgba(168, 85, 247, 0.2)" }}>
+            <div className="glowing-icon-circle lg" style={{ marginBottom: "16px" }}>
+              <Icon name="Lock" size={24} />
+            </div>
+            <h4 style={{ fontSize: "1.15rem", fontWeight: 700, margin: "0 0 10px", color: "#f8fafc" }}>Argon2id & httpOnly Auth</h4>
+            <p style={{ color: "#94a3b8", fontSize: "0.9rem", lineHeight: "1.6", margin: 0 }}>
+              Armed with state-of-the-art Argon2id password derivation, dual JWT access and refresh rotation, optional Two-Factor OTP challenges, and secure httpOnly cookie transports.
+            </p>
+          </div>
+
+          <div className="feature-glass-card glass" style={{ padding: "28px 24px", borderRadius: "16px", border: "1px solid rgba(16, 185, 129, 0.2)" }}>
+            <div className="glowing-icon-circle lg" style={{ marginBottom: "16px" }}>
+              <Icon name="Server" size={24} />
+            </div>
+            <h4 style={{ fontSize: "1.15rem", fontWeight: 700, margin: "0 0 10px", color: "#f8fafc" }}>Air-Gapped Sovereign Readiness</h4>
+            <p style={{ color: "#94a3b8", fontSize: "0.9rem", lineHeight: "1.6", margin: 0 }}>
+              Capable of 100% offline deployment on dedicated GPU workstations, tactical forward operating servers, or private national sovereign clouds with zero external telemetry callbacks.
+            </p>
+          </div>
+
+          <div className="feature-glass-card glass" style={{ padding: "28px 24px", borderRadius: "16px", border: "1px solid rgba(245, 158, 11, 0.2)" }}>
+            <div className="glowing-icon-circle lg" style={{ marginBottom: "16px" }}>
+              <Icon name="FileCheck" size={24} />
+            </div>
+            <h4 style={{ fontSize: "1.15rem", fontWeight: 700, margin: "0 0 10px", color: "#f8fafc" }}>Tamper-Evident Audit Trails</h4>
+            <p style={{ color: "#94a3b8", fontSize: "0.9rem", lineHeight: "1.6", margin: 0 }}>
+              Every video ingestion, measurement, team invitation, and spatial model export is cryptographically logged with timestamps and operator signatures for formal compliance verification.
+            </p>
+          </div>
+        </div>
+      </section>
+
       {/* 6. CALL TO ACTION BANNER */}
       <section className="cta-banner" id="architecture">
         <div className="cta-banner-content">
-          <span className="hero-badge">AEROMESH SIH DEMONSTRATION READY</span>
+          <span className="hero-badge">HEXA SPARK DEPLOYMENT READY</span>
           <h2>Transform Aerial Footage into 3D Intelligence</h2>
           <p>
             Experience the complete end-to-end pipeline: video ingestion, neural
@@ -1750,16 +1792,19 @@ export default function HomePage({ onNavigateDashboard, onStartMission, currentU
             engineering reports.
           </p>
           <div className="hero-buttons" style={{ justifyContent: "center" }}>
-            <button className="hero-btn-primary" onClick={onStartMission}>
-              <Icon name="Plus" size={16} />
-              Start New Mission
+            <button className="hero-btn-primary" onClick={() => onOpenAuth("gov")}>
+              <span>🏛️</span>
+              <span>Organization Gateway</span>
             </button>
             <button
               className="hero-btn-secondary"
-              onClick={onNavigateDashboard}
+              onClick={async () => {
+                const res = await loginGuest();
+                if (res.success) onNavigateDashboard("overview");
+              }}
             >
-              <Icon name="Box" size={16} />
-              Explore Demo
+              <span>⚡</span>
+              <span>Launch Guest Sandbox</span>
             </button>
           </div>
         </div>
@@ -1769,7 +1814,7 @@ export default function HomePage({ onNavigateDashboard, onStartMission, currentU
       <footer className="homepage-footer">
         <div>
           <strong style={{ color: "#ffffff", letterSpacing: "0.08em" }}>
-            AEROMESH
+            HEXA SPARK
           </strong>
           <span style={{ marginLeft: "8px", color: "#64748b" }}>
             Single-Pass Drone Video to 3D Reconstruction Platform

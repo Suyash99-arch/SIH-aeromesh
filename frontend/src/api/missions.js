@@ -5,16 +5,25 @@
 
 import { missions as seededMissions } from "../data/missions";
 
-// API base URL - supports VITE_API_URL, VITE_API_BASE_URL, and relative /api for Vercel and local dev proxy
-const API_BASE =
-  (typeof import.meta !== "undefined" &&
-    (import.meta.env?.VITE_API_URL || import.meta.env?.VITE_API_BASE_URL)) ||
-  (typeof window !== "undefined" ? "/api" : "http://localhost:8000/api");
+export function getApiBase() {
+  const envUrl =
+    (typeof import.meta !== "undefined" &&
+      (import.meta.env?.VITE_API_BASE_URL || import.meta.env?.VITE_API_URL)) ||
+    (typeof window !== "undefined" ? "/api/v1" : "http://localhost:8000/api/v1");
+  const clean = String(envUrl).replace(/\/+$/, "");
+  if (clean.endsWith("/api/v1") || clean.endsWith("/api")) {
+    return clean;
+  }
+  return `${clean}/api/v1`;
+}
+
+export const API_BASE = getApiBase();
+export const BACKEND_URL = API_BASE.replace(/\/api(\/v1)?$/, "");
 
 const fallbackMission = {
-  id: "sector-04",
-  name: "Disaster Response",
-  sector: "Sector 04",
+  id: "",
+  name: "Active Mission",
+  sector: "Aerial Sector",
   status: "ready",
   priority: "medium",
   type: "Single-Pass Aerial Reconstruction",
@@ -70,10 +79,8 @@ const fallbackMission = {
     uncertainty: "N/A",
   },
   findings: [],
-  recommendations: ["Upload a drone video to start automatic analysis."],
+  recommendations: ["Upload an aerial video to initiate photogrammetric reconstruction."],
 };
-
-export const BACKEND_URL = API_BASE.replace(/\/api$/, "");
 
 export function resolveAssetUrl(url) {
   if (!url || typeof url !== "string") return "";
@@ -85,21 +92,26 @@ export function resolveAssetUrl(url) {
   ) {
     return url;
   }
-  // Static frontend assets served by Vite directly
-  if (url.startsWith("/assets/")) {
-    return url;
-  }
   if (url.startsWith("/")) {
     return `${BACKEND_URL}${url}`;
   }
   return `${BACKEND_URL}/${url}`;
 }
 
+export async function fetchArtifactsStatus(missionId) {
+  if (!missionId) return null;
+  try {
+    const res = await fetch(`${API_BASE}/missions/${missionId}/artifacts`);
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+}
+
 function normalizeMission(rawMission = {}) {
   const mId = rawMission.id || rawMission.mission_id || "";
-  const seeded = getSeededMission(mId);
-  const baseDefaults = seeded || fallbackMission;
-
+  const baseDefaults = fallbackMission;
   const videoUrl = rawMission.video?.url || rawMission.videoUrl || "";
 
   let duration = rawMission.duration;
@@ -121,12 +133,12 @@ function normalizeMission(rawMission = {}) {
     rawMission.frames ||
     rawMission.video?.total_frames ||
     rawMission.video?.totalFrames ||
-    baseDefaults.frames ||
-    125;
+    0;
 
   const mission = {
     ...baseDefaults,
     ...rawMission,
+    id: mId,
     frames,
     duration,
     objects: { ...baseDefaults.objects, ...(rawMission.objects || {}) },
@@ -143,29 +155,26 @@ function normalizeMission(rawMission = {}) {
       ...baseDefaults.measurements,
       ...(rawMission.measurements || {}),
     },
-    findings: Array.isArray(rawMission.findings) && rawMission.findings.length > 0
+    findings: Array.isArray(rawMission.findings)
       ? rawMission.findings
       : (baseDefaults.findings || []),
-    recommendations: Array.isArray(rawMission.recommendations) && rawMission.recommendations.length > 0
+    recommendations: Array.isArray(rawMission.recommendations)
       ? rawMission.recommendations
       : (baseDefaults.recommendations || fallbackMission.recommendations),
     assets: {
       ...(baseDefaults.assets || {}),
       ...(rawMission.assets || {}),
-      video: resolveAssetUrl(videoUrl || (mId ? `/api/missions/${mId}/video` : "") || rawMission.assets?.video || baseDefaults.assets?.video || ""),
+      video: resolveAssetUrl(videoUrl || rawMission.assets?.video || (mId ? `${API_BASE}/missions/${mId}/video` : "")),
       pointCloud: resolveAssetUrl(
         rawMission.reconstruction?.point_cloud_url ||
-          (mId ? `/api/missions/${mId}/reconstruction/pointcloud` : "") ||
+          (mId ? `${API_BASE}/missions/${mId}/reconstruction/pointcloud` : "") ||
           rawMission.assets?.pointCloud ||
-          rawMission.reconstruction?.pointCloud ||
-          baseDefaults.assets?.pointCloud ||
           "",
       ),
       mesh: resolveAssetUrl(
         rawMission.reconstruction?.mesh_url ||
-          (mId ? `/api/missions/${mId}/reconstruction/mesh` : "") ||
+          (mId ? `${API_BASE}/missions/${mId}/reconstruction/mesh` : "") ||
           rawMission.assets?.mesh ||
-          baseDefaults.assets?.mesh ||
           "",
       ),
     },
@@ -285,19 +294,7 @@ export async function getMission(missionId, forceRefresh = false) {
     });
 
     if (response.status === 404) {
-      // Mission not found on backend
-      // IMPORTANT: Only return seeded mission if missionId exactly matches a seeded mission ID
-      const seeded = getSeededMission(missionId);
-      if (seeded) {
-        console.log(
-          `[Mission] API returned 404 but found seeded mission ${missionId}`,
-        );
-        return normalizeMission(seeded);
-      }
-      // Real mission not found - return error state, NOT another mission
-      console.warn(
-        `[Mission] Mission ${missionId} not found on backend or in seeded data`,
-      );
+      console.warn(`[Mission] Mission ${missionId} not found on backend`);
       return {
         id: missionId,
         name: `Mission Not Found: ${missionId}`,
@@ -310,11 +307,10 @@ export async function getMission(missionId, forceRefresh = false) {
 
     const data = await parseResponse(response);
     if (data.success) {
-      const seeded = getSeededMission(missionId);
-      const mission = normalizeMission({ ...(seeded || {}), ...(data.mission || {}) });
+      const mission = normalizeMission(data.mission);
       missionCache.set(missionId, mission);
       console.log(`[Mission] Loaded mission ${missionId} from API`, {
-        video: mission.video?.url || "no video",
+        video: mission.assets?.video || "no video",
       });
       return mission;
     }
@@ -401,11 +397,129 @@ export async function uploadVideo(missionId, file) {
       return data;
     }
     console.error(`[Upload] Upload failed for mission ${missionId}:`, data);
-    throw new Error(data.message || "Upload failed");
+    throw new Error(data.message || data.detail || "Upload failed");
   } catch (error) {
     console.error(`[Upload] Upload error for mission ${missionId}:`, error);
     throw error;
   }
+}
+
+export async function uploadVideoChunk(missionId, file, onProgress, signal) {
+  const CHUNK_SIZE = 2 * 1024 * 1024; // 2 MB chunks
+  const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
+  const uploadId = `upl_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+  let startTime = Date.now();
+
+  for (let i = 0; i < totalChunks; i++) {
+    if (signal?.aborted) {
+      throw new Error("Upload cancelled by user");
+    }
+
+    const start = i * CHUNK_SIZE;
+    const end = Math.min(file.size, start + CHUNK_SIZE);
+    const chunkBlob = file.slice(start, end);
+
+    const formData = new FormData();
+    formData.append("chunk", chunkBlob, file.name);
+
+    const url = `${API_BASE}/missions/${missionId}/upload/chunk?chunk_index=${i}&total_chunks=${totalChunks}&upload_id=${uploadId}&filename=${encodeURIComponent(file.name)}`;
+
+    const response = await fetch(url, {
+      method: "POST",
+      headers: getAuthHeaders(),
+      body: formData,
+      signal,
+    });
+
+    const data = await response.json();
+    if (!response.ok || !data.success) {
+      throw new Error(data.detail || data.message || `Chunk ${i + 1} upload failed`);
+    }
+
+    const elapsed = (Date.now() - startTime) / 1000;
+    const uploadedBytes = end;
+    const speedMBps = elapsed > 0 ? (uploadedBytes / (1024 * 1024)) / elapsed : 0;
+
+    if (onProgress) {
+      onProgress({
+        progress: Math.round((uploadedBytes / file.size) * 100),
+        uploadedBytes,
+        totalBytes: file.size,
+        speedMBps: speedMBps.toFixed(2),
+        chunkIndex: i + 1,
+        totalChunks,
+      });
+    }
+
+    if (i === totalChunks - 1) {
+      missionCache.delete(missionId);
+      return data;
+    }
+  }
+}
+
+export async function deleteMission(missionId) {
+  const response = await fetch(`${API_BASE}/missions/${missionId}`, {
+    method: "DELETE",
+    headers: getAuthHeaders(),
+  });
+  const data = await response.json();
+  if (!response.ok || !data.success) {
+    throw new Error(data.detail || data.message || "Failed to delete mission");
+  }
+  missionCache.delete(missionId);
+  return data;
+}
+
+export async function compareMissions(baseId, targetId) {
+  const response = await fetch(`${API_BASE}/missions/compare?base_id=${baseId}&target_id=${targetId}`, {
+    headers: getAuthHeaders(),
+  });
+  const data = await response.json();
+  if (!response.ok || !data.success) {
+    throw new Error(data.detail || data.message || "Failed to compare missions");
+  }
+  return data;
+}
+
+export async function pauseMission(missionId) {
+  const response = await fetch(`${API_BASE}/missions/${missionId}/pause`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+  });
+  return response.json();
+}
+
+export async function resumeMission(missionId) {
+  const response = await fetch(`${API_BASE}/missions/${missionId}/resume`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+  });
+  return response.json();
+}
+
+export async function cancelMission(missionId) {
+  const response = await fetch(`${API_BASE}/missions/${missionId}/cancel`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+  });
+  return response.json();
+}
+
+export async function retryMission(missionId) {
+  const response = await fetch(`${API_BASE}/missions/${missionId}/retry`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+  });
+  return response.json();
+}
+
+export async function createShareLink(missionId, days = 7) {
+  const response = await fetch(`${API_BASE}/missions/${missionId}/share?days=${days}`, {
+    method: "POST",
+    headers: getAuthHeaders(),
+  });
+  return response.json();
 }
 
 export async function getProcessingStatus(missionId) {
@@ -850,6 +964,8 @@ export function setAuthToken(token) {
 export function clearAuthToken() {
   localStorage.removeItem("aeromesh_auth_token");
   localStorage.removeItem("aeromesh_current_user");
+  localStorage.removeItem("aeromesh_active_mission_id");
+  missionCache.clear();
 }
 
 export function getStoredUser() {
@@ -878,12 +994,23 @@ export function getAuthHeaders(customHeaders = {}) {
   return headers;
 }
 
-export async function registerUser(email, password, fullName = "", role = "OPERATOR") {
+export async function registerUser(optionsOrEmail, maybePassword, maybeFullName = "", maybeRole = "OPERATOR") {
   try {
+    const payload = typeof optionsOrEmail === "object" && optionsOrEmail !== null
+      ? optionsOrEmail
+      : {
+          email: optionsOrEmail,
+          password: maybePassword,
+          full_name: maybeFullName,
+          role: maybeRole,
+          portal_type: "INDIVIDUAL",
+        };
+
     const response = await fetch(`${API_BASE}/auth/register`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password, full_name: fullName, role }),
+      credentials: "include",
+      body: JSON.stringify(payload),
     });
     const data = await response.json();
     if (response.ok && data.access_token) {
@@ -898,18 +1025,34 @@ export async function registerUser(email, password, fullName = "", role = "OPERA
   }
 }
 
-export async function loginUser(email, password) {
+export async function loginUser(email, password, portalType = null, mfaCode = null) {
   try {
     const response = await fetch(`${API_BASE}/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ email, password }),
+      credentials: "include",
+      body: JSON.stringify({
+        email,
+        password,
+        portal_type: portalType,
+        mfa_code: mfaCode,
+      }),
     });
     const data = await response.json();
-    if (response.ok && data.access_token) {
-      setAuthToken(data.access_token);
-      setStoredUser(data.user);
-      return { success: true, user: data.user, token: data.access_token };
+    if (response.ok) {
+      if (data.mfa_required) {
+        return {
+          success: false,
+          mfa_required: true,
+          email: data.email,
+          message: data.message,
+        };
+      }
+      if (data.access_token) {
+        setAuthToken(data.access_token);
+        setStoredUser(data.user);
+        return { success: true, user: data.user, token: data.access_token };
+      }
     }
     return { success: false, error: data.detail || "Authentication failed" };
   } catch (error) {
@@ -918,8 +1061,89 @@ export async function loginUser(email, password) {
   }
 }
 
-export function logoutUser() {
-  clearAuthToken();
+export async function loginGuest() {
+  try {
+    const response = await fetch(`${API_BASE}/auth/guest`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+    });
+    const data = await response.json();
+    if (response.ok && data.access_token) {
+      setAuthToken(data.access_token);
+      setStoredUser(data.user);
+      return { success: true, user: data.user, token: data.access_token };
+    }
+    return { success: false, error: data.detail || "Guest session initialization failed" };
+  } catch (error) {
+    console.error("loginGuest error:", error);
+    return { success: false, error: error.message };
+  }
+}
+
+export async function refreshSession() {
+  try {
+    const response = await fetch(`${API_BASE}/auth/refresh`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+    });
+    const data = await response.json();
+    if (response.ok && data.access_token) {
+      setAuthToken(data.access_token);
+      setStoredUser(data.user);
+      return { success: true, user: data.user, token: data.access_token };
+    }
+    return { success: false };
+  } catch {
+    return { success: false };
+  }
+}
+
+export async function logoutUser() {
+  try {
+    await fetch(`${API_BASE}/auth/logout`, {
+      method: "POST",
+      credentials: "include",
+    });
+  } catch (err) {
+    console.warn("logoutUser network error:", err);
+  } finally {
+    clearAuthToken();
+  }
+}
+
+export async function inviteTeamMember(inviteData) {
+  try {
+    const response = await fetch(`${API_BASE}/auth/invite`, {
+      method: "POST",
+      headers: getAuthHeaders({ "Content-Type": "application/json" }),
+      credentials: "include",
+      body: JSON.stringify(inviteData),
+    });
+    const data = await response.json();
+    if (response.ok && data.success) {
+      return { success: true, data };
+    }
+    return { success: false, error: data.detail || "Team invite failed" };
+  } catch (error) {
+    console.error("inviteTeamMember error:", error);
+    return { success: false, error: error.message };
+  }
+}
+
+export async function fetchAuditLog() {
+  try {
+    const response = await fetch(`${API_BASE}/auth/audit-log`, {
+      headers: getAuthHeaders(),
+      credentials: "include",
+    });
+    const data = await response.json();
+    return data.events || [];
+  } catch (error) {
+    console.error("fetchAuditLog error:", error);
+    return [];
+  }
 }
 
 export async function fetchCurrentUser() {
@@ -928,6 +1152,7 @@ export async function fetchCurrentUser() {
   try {
     const response = await fetch(`${API_BASE}/auth/me`, {
       headers: getAuthHeaders(),
+      credentials: "include",
     });
     if (!response.ok) {
       clearAuthToken();

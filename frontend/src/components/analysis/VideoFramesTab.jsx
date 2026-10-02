@@ -1,5 +1,7 @@
 import React, { useRef, useState } from "react";
 import Icon from "../ui/Icon";
+import { resolveAssetUrl } from "../../api/missions";
+
 
 function getBoundingBoxStyle(bbox) {
   if (!bbox || !Array.isArray(bbox) || bbox.length < 4) return null;
@@ -57,7 +59,10 @@ export default function VideoFramesTab({
   onSelectKeyframe,
   onSwitchTo3D,
 }) {
-  const videoSrc = `/api/missions/${missionId}/video`;
+  const videoSrc = resolveAssetUrl(
+    mission?.assets?.video || (missionId ? `/api/v1/missions/${missionId}/video` : "")
+  );
+
   const videoRef = useRef(null);
   const [playbackSpeed, setPlaybackSpeed] = useState(1.0);
   const [filterClass, setFilterClass] = useState("all");

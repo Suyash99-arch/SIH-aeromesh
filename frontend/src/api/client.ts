@@ -4,180 +4,254 @@ import {
   SceneManifest,
   SceneStats,
   PointCloudData,
-} from '../types/aerial.ts';
-import { parsePointCloud, generateDemoPointCloud } from './parsers/colmap.ts';
-
-const RAW_BASE = ((import.meta.env.VITE_API_URL || import.meta.env.VITE_API_BASE_URL || '') as string).replace(/\/$/, '');
-const BASE_URL = RAW_BASE.endsWith('/api') ? RAW_BASE.slice(0, -4) : RAW_BASE;
-
-export const DEMO_DETECTIONS: Detection[] = [
-  {
-    id: 'T0032',
-    cls: 'van',
-    state: 'STATIC',
-    conf: 63,
-    pos: [-1.48, -0.28, 14.49],
-    reproj: 13.36,
-    tone: 'amber',
-    screenPos: { top: '30%', left: '22%' },
-  },
-  {
-    id: 'T0011',
-    cls: 'car',
-    state: 'MOVING',
-    conf: 94,
-    pos: [2.05, 0.11, 7.16],
-    reproj: 1.95,
-    tone: 'cyan',
-    screenPos: { top: '58%', left: '68%' },
-  },
-  {
-    id: 'T0044',
-    cls: 'bus',
-    state: 'STATIC',
-    conf: 88,
-    pos: [-4.62, -0.05, 9.82],
-    reproj: 3.41,
-    tone: 'cyan',
-    screenPos: { top: '42%', left: '48%' },
-  },
-  {
-    id: 'T0058',
-    cls: 'van',
-    state: 'STATIC',
-    conf: 71,
-    pos: [0.94, -0.31, 4.28],
-    reproj: 8.02,
-    tone: 'violet',
-    screenPos: { top: '70%', left: '30%' },
-  },
-];
-
-export const DEMO_MANIFEST: SceneManifest = {
-  sceneId: 'north-ridge-01',
-  name: 'North Ridge · Sector 01',
-  sector: 'Sector 01 - Downtown Perimeter',
-  cameraCount: 20,
-  sparsePointCount: 12916,
-  surfaceFaceCount: 56120,
-  meanReprojError: 1.95,
-  scaleMode: 'UNREFERENCED_SCALE',
-  coordSystem: 'LOCAL_ARBITRARY',
-  pointCloudUrl: '/api/scenes/north-ridge-01/points',
-  meshUrl: '/api/scenes/north-ridge-01/mesh',
-  updatedAt: new Date().toISOString(),
-};
+} from '../types/aerial';
+import { parsePointCloud } from './parsers/colmap';
 
 /**
- * Check whether explicit demo mode is requested via URL (?demo=1)
+ * Resolves the canonical API base URL.
+ * Supports VITE_API_BASE_URL, VITE_API_URL, and relative /api/v1 for Vercel/proxies.
  */
-export function isDemoMode(): boolean {
-  if (typeof window === 'undefined') return false;
-  const params = new URLSearchParams(window.location.search);
-  return params.get('demo') === '1' || params.get('demo') === 'true';
+export function getApiBaseUrl(): string {
+  const envUrl =
+    (typeof import.meta !== 'undefined' &&
+      (import.meta.env?.VITE_API_BASE_URL || import.meta.env?.VITE_API_URL)) ||
+    (typeof window !== 'undefined' ? '/api/v1' : 'http://localhost:8000/api/v1');
+
+  const clean = String(envUrl).replace(/\/+$/, '');
+  if (clean.endsWith('/api/v1') || clean.endsWith('/api')) {
+    return clean;
+  }
+  return `${clean}/api/v1`;
+}
+
+export const API_BASE_URL = getApiBaseUrl();
+export const BACKEND_ROOT_URL = API_BASE_URL.replace(/\/api(\/v1)?$/, '');
+
+/**
+ * Custom error class with HTTP status, machine-readable code, and user message.
+ */
+export class ApiError extends Error {
+  public status: number;
+  public code: string;
+  public details?: any;
+
+  constructor(message: string, status: number = 500, code: string = 'API_ERROR', details?: any) {
+    super(message);
+    this.name = 'ApiError';
+    this.status = status;
+    this.code = code;
+    this.details = details;
+  }
+}
+
+type GlobalRequestInit = typeof globalThis extends { RequestInit: infer T } ? T : any;
+
+export interface RequestOptions extends Partial<GlobalRequestInit> {
+  timeoutMs?: number;
+  retries?: number;
+  params?: Record<string, string | number | boolean | undefined>;
 }
 
 /**
- * Fetch scene manifest
+ * Robust HTTP client with configurable timeout, exponential backoff retries,
+ * typed responses, and standardized error parsing.
+ */
+export async function apiClient<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
+  const { timeoutMs = 15000, retries = 2, params, headers: customHeaders, ...fetchOpts } = options;
+
+  let url = endpoint.startsWith('http') || endpoint.startsWith('/') ? endpoint : `${API_BASE_URL}/${endpoint}`;
+  if (!url.startsWith('http') && !url.startsWith('/')) {
+    url = `${API_BASE_URL}/${url}`;
+  }
+
+  if (params) {
+    const searchParams = new URLSearchParams();
+    Object.entries(params).forEach(([k, v]) => {
+      if (v !== undefined && v !== null) searchParams.append(k, String(v));
+    });
+    const qs = searchParams.toString();
+    if (qs) url += (url.includes('?') ? '&' : '?') + qs;
+  }
+
+  const token = typeof window !== 'undefined' ? localStorage.getItem('aeromesh_auth_token') : null;
+  const headers = new Headers(customHeaders);
+  if (!headers.has('Accept')) {
+    headers.set('Accept', 'application/json, text/plain, */*');
+  }
+  if (token && !headers.has('Authorization')) {
+    headers.set('Authorization', `Bearer ${token}`);
+  }
+
+  let attempt = 0;
+  let lastError: Error | null = null;
+
+  while (attempt <= retries) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+      const response = await fetch(url, {
+        ...fetchOpts,
+        headers,
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+
+      const contentType = response.headers.get('content-type') || '';
+
+      if (!response.ok) {
+        let errMessage = `HTTP ${response.status} ${response.statusText}`;
+        let errDetails: any = null;
+        let errCode = `HTTP_${response.status}`;
+
+        if (contentType.includes('application/json')) {
+          try {
+            const json = await response.json();
+            errMessage = json.detail || json.message || errMessage;
+            errCode = json.error || errCode;
+            errDetails = json;
+          } catch (_err) {
+            /* ignore JSON parse error */
+          }
+        } else {
+          try {
+            const text = await response.text();
+            if (text) errMessage = text.slice(0, 300);
+          } catch (_err) {
+            /* ignore text parse error */
+          }
+        }
+
+        // Retry on 502, 503, 504 server errors for idempotent GET
+        const isGet = !fetchOpts.method || fetchOpts.method.toUpperCase() === 'GET';
+        if (isGet && [502, 503, 504].includes(response.status) && attempt < retries) {
+          attempt++;
+          await new Promise((r) => setTimeout(r, 400 * Math.pow(2, attempt)));
+          continue;
+        }
+
+        throw new ApiError(errMessage, response.status, errCode, errDetails);
+      }
+
+      if (contentType.includes('application/json')) {
+        return (await response.json()) as T;
+      }
+      return (await response.text()) as unknown as T;
+    } catch (err: any) {
+      clearTimeout(timeoutId);
+      if (err.name === 'AbortError') {
+        lastError = new ApiError(`Request to ${endpoint} timed out after ${timeoutMs}ms`, 408, 'TIMEOUT');
+      } else if (err instanceof ApiError) {
+        lastError = err;
+        break; // Do not retry explicit 4xx errors
+      } else {
+        lastError = new ApiError(err.message || 'Network communication failure', 0, 'NETWORK_ERROR');
+      }
+
+      attempt++;
+      if (attempt <= retries && (!fetchOpts.method || fetchOpts.method.toUpperCase() === 'GET')) {
+        await new Promise((r) => setTimeout(r, 400 * Math.pow(2, attempt)));
+      } else {
+        break;
+      }
+    }
+  }
+
+  throw lastError || new ApiError('Unknown API request error', 500);
+}
+
+/**
+ * Health check probe
+ */
+export async function checkHealth(): Promise<{ status: string; backend: string; processing_engine?: string }> {
+  return apiClient<{ status: string; backend: string; processing_engine?: string }>('health');
+}
+
+/**
+ * Fetch scene manifest from backend
  */
 export async function fetchSceneManifest(sceneId: string): Promise<SceneManifest> {
-  if (isDemoMode()) {
-    return DEMO_MANIFEST;
-  }
-
-  // Primary endpoint: /api/scenes/:sceneId
-  // Secondary fallback endpoint: /api/missions/:sceneId
   try {
-    const res = await fetch(`${BASE_URL}/api/scenes/${encodeURIComponent(sceneId)}`);
-    if (res.ok) {
-      return (await res.json()) as SceneManifest;
-    }
+    const res = await apiClient<SceneManifest>(`scenes/${encodeURIComponent(sceneId)}`);
+    if (res && res.sceneId) return res;
   } catch (_e) {
-    // try fallback to existing missions endpoint
+    // fallback to missions endpoint
   }
 
-  const altRes = await fetch(`${BASE_URL}/api/missions/${encodeURIComponent(sceneId)}`);
-  if (!altRes.ok) {
-    throw new Error(`Failed to load scene manifest for "${sceneId}": HTTP ${altRes.status}`);
-  }
-  const mission = await altRes.json();
-  const recon = mission.reconstruction || {};
+  const mission = await apiClient<any>(`missions/${encodeURIComponent(sceneId)}`);
+  const m = mission.mission || mission;
+  const recon = m.reconstruction || {};
   return {
-    sceneId: mission.id || sceneId,
-    name: mission.name || 'Aerial Mission',
-    sector: mission.sector || 'Aerial Grid',
-    cameraCount: recon.cameras_registered ?? mission.frames_count ?? 20,
-    sparsePointCount: recon.points_count ?? 12916,
-    surfaceFaceCount: recon.faces_count ?? 56120,
-    meanReprojError: recon.mean_reprojection_error ?? 1.95,
-    scaleMode: recon.scale_calibrated ? 'CALIBRATED' : 'UNREFERENCED_SCALE',
-    coordSystem: 'LOCAL_ARBITRARY',
-    pointCloudUrl: recon.point_cloud_url || `/api/scenes/${sceneId}/points`,
-    meshUrl: recon.mesh_url,
-    updatedAt: mission.updated_at,
+    sceneId: m.id || sceneId,
+    name: m.name || 'Aerial Mission',
+    sector: m.sector || m.location || 'Aerial Grid',
+    cameraCount: recon.cameras_registered ?? m.frames ?? 0,
+    sparsePointCount: recon.points_count ?? recon.point_count ?? 0,
+    surfaceFaceCount: recon.faces_count ?? recon.face_count ?? 0,
+    meanReprojError: recon.mean_reprojection_error ?? 0.0,
+    scaleMode: recon.scale_status === 'METRIC_CALIBRATED' ? 'METRIC_CALIBRATED' : 'RELATIVE_SCALE',
+    coordSystem: recon.coord_system || 'LOCAL_ARBITRARY',
+    pointCloudUrl: `${API_BASE_URL}/missions/${encodeURIComponent(sceneId)}/reconstruction/pointcloud`,
+    meshUrl: `${API_BASE_URL}/missions/${encodeURIComponent(sceneId)}/reconstruction/mesh`,
+    updatedAt: m.updatedAt || m.createdAt,
   };
 }
 
 /**
- * Fetch scene detections
+ * Fetch scene detections from backend
  */
 export async function fetchSceneDetections(sceneId: string): Promise<Detection[]> {
-  if (isDemoMode()) {
-    return DEMO_DETECTIONS;
+  try {
+    const res = await apiClient<any>(`missions/${encodeURIComponent(sceneId)}/objects-3d`);
+    const objects = Array.isArray(res) ? res : res.objects || [];
+    if (objects.length > 0) {
+      return objects.map((d: any, idx: number) => ({
+        id: d.object_id || d.id || `OBJ_${idx + 1}`,
+        cls: d.class_name || d.class || 'object',
+        state: d.motion_state || (d.is_moving ? 'MOVING' : 'STATIC'),
+        conf: Math.round((d.confidence ?? 0.85) * (d.confidence <= 1 ? 100 : 1)),
+        pos: Array.isArray(d.position_3d) ? d.position_3d : [0, 0, 0],
+        reproj: d.reprojection_error_px ?? d.mean_reprojection_error_px ?? 0.0,
+        tone: (d.confidence < 0.7 ? 'amber' : idx % 2 === 0 ? 'cyan' : 'violet') as Detection['tone'],
+        screenPos: d.screenPos,
+      }));
+    }
+  } catch (_e) {
+    /* ignore fallback */
   }
 
   try {
-    const res = await fetch(`${BASE_URL}/api/scenes/${encodeURIComponent(sceneId)}/detections`);
-    if (res.ok) {
-      return (await res.json()) as Detection[];
-    }
-  } catch (_e) {
-    // fallback to missions detection
-  }
-
-  const altRes = await fetch(`${BASE_URL}/api/missions/${encodeURIComponent(sceneId)}/detections`);
-  if (!altRes.ok) {
-    throw new Error(`Failed to load detections for scene "${sceneId}": HTTP ${altRes.status}`);
-  }
-  const data = await altRes.json();
-  const rawList = Array.isArray(data) ? data : data.detections || [];
-  
-  if (rawList.length === 0) {
+    const data = await apiClient<any>(`missions/${encodeURIComponent(sceneId)}/detections`);
+    const rawList = Array.isArray(data) ? data : data.detections || [];
+    return rawList.map((d: any, idx: number) => ({
+      id: d.id || `T00${idx + 10}`,
+      cls: d.class_name || d.class || d.cls || 'vehicle',
+      state: d.state || 'STATIC',
+      conf: Math.round((d.confidence ?? d.conf ?? 0.85) * (d.confidence <= 1 ? 100 : 1)),
+      pos: Array.isArray(d.pos_3d) ? d.pos_3d : Array.isArray(d.pos) ? d.pos : [0, 0, 0],
+      reproj: d.reprojection_error ?? 0.0,
+      tone: (d.confidence < 0.7 ? 'amber' : idx % 2 === 0 ? 'cyan' : 'violet') as Detection['tone'],
+      screenPos: d.screenPos,
+    }));
+  } catch (err: any) {
+    console.warn(`[API] Could not fetch detections for mission ${sceneId}:`, err);
     return [];
   }
-
-  return rawList.map((d: any, idx: number) => ({
-    id: d.id || `T00${idx + 10}`,
-    cls: d.class_name || d.class || d.cls || 'vehicle',
-    state: d.state || (d.velocity && Math.hypot(d.velocity[0], d.velocity[1]) > 0.5 ? 'MOVING' : 'STATIC'),
-    conf: Math.round((d.confidence ?? d.conf ?? 0.85) * (d.confidence <= 1 ? 100 : 1)),
-    pos: Array.isArray(d.pos_3d) ? d.pos_3d : Array.isArray(d.pos) ? d.pos : [0, 0, 0],
-    reproj: d.reprojection_error ?? d.reproj ?? 2.0,
-    tone: (d.confidence < 0.7 ? 'amber' : idx % 2 === 0 ? 'cyan' : 'violet') as Detection['tone'],
-    screenPos: d.screenPos,
-  }));
 }
 
 /**
- * Fetch sparse point cloud
+ * Fetch point cloud data directly from backend storage streaming endpoint
  */
 export async function fetchScenePoints(sceneId: string): Promise<PointCloudData> {
-  if (isDemoMode()) {
-    return generateDemoPointCloud();
+  const url = `${API_BASE_URL}/missions/${encodeURIComponent(sceneId)}/reconstruction/pointcloud`;
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new ApiError(`Reconstruction point cloud unavailable for ${sceneId} (HTTP ${response.status})`, response.status);
   }
 
-  let res = await fetch(`${BASE_URL}/api/scenes/${encodeURIComponent(sceneId)}/points`);
-  if (!res.ok) {
-    res = await fetch(`${BASE_URL}/api/missions/${encodeURIComponent(sceneId)}/reconstruction/pointcloud`);
-  }
-
-  if (!res.ok) {
-    throw new Error(`Failed to load point cloud for scene "${sceneId}": HTTP ${res.status}`);
-  }
-
-  const contentType = res.headers.get('content-type') || '';
+  const contentType = response.headers.get('content-type') || '';
   if (contentType.includes('json')) {
-    const json = await res.json();
+    const json = await response.json();
     if (json.positions && json.colors) {
       return {
         positions: new Float32Array(json.positions),
@@ -187,47 +261,31 @@ export async function fetchScenePoints(sceneId: string): Promise<PointCloudData>
     }
   }
 
-  const rawText = await res.text();
+  const rawText = await response.text();
   const format = rawText.startsWith('ply') ? 'ply' : 'colmap';
   return parsePointCloud(rawText, format);
 }
 
 /**
- * Hook for live telemetry polling / WS updates
+ * Live scene telemetry polling hook
  */
 export function useLiveSceneStats(sceneId: string, intervalMs: number = 3000) {
   const [stats, setStats] = useState<SceneStats | null>(null);
-  const [trackedObjectsCount, setTrackedObjectsCount] = useState<number>(49);
+  const [trackedObjectsCount, setTrackedObjectsCount] = useState<number>(0);
   const [error, setError] = useState<string | null>(null);
   const isMountedRef = useRef(true);
 
   const fetchLive = useCallback(async () => {
-    if (isDemoMode()) {
-      setStats({
-        cameras: 20,
-        sparsePoints: 12916,
-        surfaceFaces: 56120,
-        meanReprojError: 1.95,
-      });
-      setTrackedObjectsCount(49);
-      return;
-    }
-
+    if (!sceneId) return;
     try {
-      const res = await fetch(`${BASE_URL}/api/scenes/${encodeURIComponent(sceneId)}/stats/live`);
-      if (res.ok) {
-        const data = await res.json();
-        if (isMountedRef.current) {
-          setStats(data.stats);
-          if (data.trackedObjectsCount !== undefined) {
-            setTrackedObjectsCount(data.trackedObjectsCount);
-          }
-          setError(null);
-        }
+      const data = await apiClient<any>(`missions/${encodeURIComponent(sceneId)}/object-summary`);
+      if (isMountedRef.current && data) {
+        setTrackedObjectsCount(data.total_objects ?? data.unique_objects ?? 0);
+        setError(null);
       }
     } catch (err: any) {
       if (isMountedRef.current) {
-        setError(err.message || 'Telemetry connection offline');
+        setError(err.message || 'Telemetry unavailable');
       }
     }
   }, [sceneId]);

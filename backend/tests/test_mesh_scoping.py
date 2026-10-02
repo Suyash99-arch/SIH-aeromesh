@@ -11,75 +11,108 @@ from backend.main import app
 client = TestClient(app)
 
 
+import pytest
+from fastapi.testclient import TestClient
+from backend import main
+
+client = TestClient(main.app)
+
+
 def test_reconstruction_metadata_distinct_per_mission():
-    """Verify that different seeded missions return distinct point counts, cameras, and mesh faces."""
-    resp_nr = client.get("/api/missions/north-ridge/reconstruction")
-    assert resp_nr.status_code == 200
-    meta_nr = resp_nr.json()["reconstruction"]
+    """Verify that different missions return distinct point counts, cameras, and mesh faces."""
+    m1_res = client.post("/api/v1/missions?name=Scope_Test_1").json()["mission"]
+    m2_res = client.post("/api/v1/missions?name=Scope_Test_2").json()["mission"]
+    m3_res = client.post("/api/v1/missions?name=Scope_Test_3").json()["mission"]
 
-    resp_ra = client.get("/api/missions/river-approach/reconstruction")
-    assert resp_ra.status_code == 200
-    meta_ra = resp_ra.json()["reconstruction"]
+    m1_id, m2_id, m3_id = m1_res["id"], m2_res["id"], m3_res["id"]
 
-    resp_dg = client.get("/api/missions/downtown-grid/reconstruction")
-    assert resp_dg.status_code == 200
-    meta_dg = resp_dg.json()["reconstruction"]
+    # Write distinct reconstruction metadata
+    for m_id, pts, faces in [(m1_id, 100, 50), (m2_id, 200, 100), (m3_id, 300, 150)]:
+        m_data = main.MissionData(m_id)
+        m_data.update({
+            "reconstruction": {
+                "status": "completed",
+                "sparse_point_count": pts,
+                "point_count": pts,
+                "mean_reprojection_error": float(pts) / 100.0,
+                "mesh": {"face_count": faces},
+            }
+        })
 
-    # Verify point counts are distinct and not hardcoded copy
-    assert meta_nr.get("sparse_point_count") or meta_nr.get("point_count")
-    assert meta_ra.get("sparse_point_count") or meta_ra.get("point_count")
-    assert meta_dg.get("sparse_point_count") or meta_dg.get("point_count")
-    assert meta_nr.get("sparse_point_count") != meta_ra.get("sparse_point_count")
-    assert meta_ra.get("sparse_point_count") != meta_dg.get("sparse_point_count")
+    resp_m1 = client.get(f"/api/v1/missions/{m1_id}/reconstruction")
+    assert resp_m1.status_code == 200
+    meta_m1 = resp_m1.json()["reconstruction"]
 
-    # Verify mesh faces are distinct and not unavailable
-    assert meta_nr.get("mesh", {}).get("face_count", 0) > 0
-    assert meta_ra.get("mesh", {}).get("face_count", 0) > 0
-    assert meta_dg.get("mesh", {}).get("face_count", 0) > 0
+    resp_m2 = client.get(f"/api/v1/missions/{m2_id}/reconstruction")
+    assert resp_m2.status_code == 200
+    meta_m2 = resp_m2.json()["reconstruction"]
+
+    resp_m3 = client.get(f"/api/v1/missions/{m3_id}/reconstruction")
+    assert resp_m3.status_code == 200
+    meta_m3 = resp_m3.json()["reconstruction"]
+
+    # Verify point counts are distinct
+    assert meta_m1.get("sparse_point_count") == 100
+    assert meta_m2.get("sparse_point_count") == 200
+    assert meta_m3.get("sparse_point_count") == 300
+    assert meta_m1.get("sparse_point_count") != meta_m2.get("sparse_point_count")
+
+    # Verify mesh faces are distinct
+    assert meta_m1.get("mesh", {}).get("face_count") == 50
+    assert meta_m2.get("mesh", {}).get("face_count") == 100
+    assert meta_m3.get("mesh", {}).get("face_count") == 150
 
     # Verify reprojection errors are distinct
-    assert meta_nr["mean_reprojection_error"] != meta_ra["mean_reprojection_error"]
+    assert meta_m1["mean_reprojection_error"] != meta_m2["mean_reprojection_error"]
 
 
 def test_reconstruction_mesh_bytes_distinct_per_mission():
     """Verify that GET /reconstruction/mesh returns distinct binary data for different missions."""
-    resp_nr = client.get("/api/missions/north-ridge/reconstruction/mesh")
-    assert resp_nr.status_code == 200
-    bytes_nr = resp_nr.content
-    assert len(bytes_nr) > 0
-    assert bytes_nr.startswith(b"ply")
+    m1_id = client.post("/api/v1/missions?name=Scope_Mesh_1").json()["mission"]["id"]
+    m2_id = client.post("/api/v1/missions?name=Scope_Mesh_2").json()["mission"]["id"]
+    m3_id = client.post("/api/v1/missions?name=Scope_Mesh_3").json()["mission"]["id"]
 
-    resp_ra = client.get("/api/missions/river-approach/reconstruction/mesh")
-    assert resp_ra.status_code == 200
-    bytes_ra = resp_ra.content
-    assert len(bytes_ra) > 0
-    assert bytes_ra.startswith(b"ply")
+    for m_id, tag in [(m1_id, b"mesh_content_111"), (m2_id, b"mesh_content_222222"), (m3_id, b"mesh_content_333333333")]:
+        m_dir = main.MISSIONS_DIR / m_id / "reconstruction"
+        m_dir.mkdir(parents=True, exist_ok=True)
+        (m_dir / "mesh.ply").write_bytes(b"ply\nformat ascii 1.0\nend_header\n" + tag)
+        main.MissionData(m_id).update({"status": "completed"})
 
-    resp_dg = client.get("/api/missions/downtown-grid/reconstruction/mesh")
-    assert resp_dg.status_code == 200
-    bytes_dg = resp_dg.content
-    assert len(bytes_dg) > 0
-    assert bytes_dg.startswith(b"ply")
+    resp_m1 = client.get(f"/api/v1/missions/{m1_id}/reconstruction/mesh")
+    assert resp_m1.status_code == 200
+    bytes_m1 = resp_m1.content
 
-    # Content must differ across all missions
-    assert bytes_nr != bytes_ra
-    assert bytes_ra != bytes_dg
-    assert len(bytes_nr) != len(bytes_ra)
+    resp_m2 = client.get(f"/api/v1/missions/{m2_id}/reconstruction/mesh")
+    assert resp_m2.status_code == 200
+    bytes_m2 = resp_m2.content
+
+    resp_m3 = client.get(f"/api/v1/missions/{m3_id}/reconstruction/mesh")
+    assert resp_m3.status_code == 200
+    bytes_m3 = resp_m3.content
+
+    assert bytes_m1 != bytes_m2
+    assert bytes_m2 != bytes_m3
+    assert len(bytes_m1) != len(bytes_m2)
 
 
 def test_reconstruction_pointcloud_bytes_distinct_per_mission():
     """Verify that GET /reconstruction/pointcloud returns distinct binary point clouds."""
-    resp_nr = client.get("/api/missions/north-ridge/reconstruction/pointcloud")
-    assert resp_nr.status_code == 200
-    bytes_nr = resp_nr.content
-    assert len(bytes_nr) > 0
-    assert bytes_nr.startswith(b"ply")
+    m1_id = client.post("/api/v1/missions?name=Scope_PC_1").json()["mission"]["id"]
+    m2_id = client.post("/api/v1/missions?name=Scope_PC_2").json()["mission"]["id"]
 
-    resp_ra = client.get("/api/missions/river-approach/reconstruction/pointcloud")
-    assert resp_ra.status_code == 200
-    bytes_ra = resp_ra.content
-    assert len(bytes_ra) > 0
-    assert bytes_ra.startswith(b"ply")
+    for m_id, tag in [(m1_id, b"pc_content_111"), (m2_id, b"pc_content_222222")]:
+        m_dir = main.MISSIONS_DIR / m_id / "reconstruction"
+        m_dir.mkdir(parents=True, exist_ok=True)
+        (m_dir / "point_cloud.ply").write_bytes(b"ply\nformat ascii 1.0\nend_header\n" + tag)
+        main.MissionData(m_id).update({"status": "completed"})
 
-    assert bytes_nr != bytes_ra
-    assert len(bytes_nr) != len(bytes_ra)
+    resp_m1 = client.get(f"/api/v1/missions/{m1_id}/reconstruction/pointcloud")
+    assert resp_m1.status_code == 200
+    bytes_m1 = resp_m1.content
+
+    resp_m2 = client.get(f"/api/v1/missions/{m2_id}/reconstruction/pointcloud")
+    assert resp_m2.status_code == 200
+    bytes_m2 = resp_m2.content
+
+    assert bytes_m1 != bytes_m2
+    assert len(bytes_m1) != len(bytes_m2)

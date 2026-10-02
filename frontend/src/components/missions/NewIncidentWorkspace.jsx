@@ -3,6 +3,7 @@ import Icon from "../ui/Icon";
 import {
   createMission,
   uploadVideo,
+  uploadVideoChunk,
   processVideo,
   getComputeDevice,
 } from "../../api/missions";
@@ -87,15 +88,21 @@ export default function NewIncidentWorkspace({ onClose, onMissionCreated, curren
     };
   }, [videoFile]);
 
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [uploadSpeed, setUploadSpeed] = useState("0.0");
+  const [errorMessage, setErrorMessage] = useState("");
+  const abortControllerRef = useRef(null);
+
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
   const handleFileSelect = (file) => {
+    setErrorMessage("");
     if (!file) return;
     if (!file.type.startsWith("video/") && !file.name.match(/\.(mp4|mov|avi|mkv)$/i)) {
-      alert("Please select a valid video file (MP4, MOV, MKV).");
+      setErrorMessage("Please select a valid drone video file (MP4, MOV, MKV).");
       return;
     }
     setVideoFile(file);
@@ -125,14 +132,18 @@ export default function NewIncidentWorkspace({ onClose, onMissionCreated, curren
     setVideoFile(null);
     setVideoPreviewUrl(null);
     setVideoMeta(null);
+    setErrorMessage("");
+    setUploadProgress(0);
+    setUploadSpeed("0.0");
     const yr = new Date().getFullYear();
     const rnd = Math.floor(1000 + Math.random() * 9000);
     setIncidentId(`INC-${yr}-${rnd}`);
   };
 
   const handleSaveDraft = async () => {
+    setErrorMessage("");
     if (!formData.name.trim()) {
-      alert("Please provide at least an Incident Name to save a draft.");
+      setErrorMessage("Please provide at least an Incident Name to save a draft.");
       return;
     }
     setIsSubmitting(true);
@@ -153,26 +164,37 @@ export default function NewIncidentWorkspace({ onClose, onMissionCreated, curren
       notice?.("Incident saved as draft.", "success");
       onClose?.();
     } catch (err) {
-      alert("Failed to save draft: " + err.message);
+      setErrorMessage("Failed to save draft: " + err.message);
     } finally {
       setIsSubmitting(false);
       setStatusMessage("");
     }
   };
 
+  const handleCancelUpload = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    setIsSubmitting(false);
+    setStatusMessage("");
+  };
+
   const handleLaunchPipeline = async (e) => {
     e?.preventDefault();
+    setErrorMessage("");
     if (!formData.name.trim()) {
-      alert("Incident Name is required.");
+      setErrorMessage("Incident Name is required.");
       return;
     }
     if (!videoFile) {
-      alert("Please upload a drone flight video before authorizing the pipeline.");
+      setErrorMessage("Please upload a drone flight video before authorizing the pipeline.");
       return;
     }
 
     setIsSubmitting(true);
     setStatusMessage("Creating incident record in database...");
+    abortControllerRef.current = new AbortController();
+
     try {
       const missionPayload = {
         name: formData.name,
@@ -187,7 +209,21 @@ export default function NewIncidentWorkspace({ onClose, onMissionCreated, curren
       const missionId = created.id;
 
       setStatusMessage("Uploading drone video footage...");
-      await uploadVideo(missionId, videoFile);
+      try {
+        await uploadVideoChunk(
+          missionId,
+          videoFile,
+          (info) => {
+            setUploadProgress(info.progress);
+            setUploadSpeed(info.speedMBps);
+            setStatusMessage(`Uploading chunk ${info.chunkIndex}/${info.totalChunks} (${info.progress}% @ ${info.speedMBps} MB/s)...`);
+          },
+          abortControllerRef.current.signal
+        );
+      } catch (chunkErr) {
+        // Fallback to single upload if chunk fails
+        await uploadVideo(missionId, videoFile);
+      }
 
       setStatusMessage("Authorizing 8-stage photogrammetric pipeline...");
       await processVideo(missionId, {
@@ -203,7 +239,11 @@ export default function NewIncidentWorkspace({ onClose, onMissionCreated, curren
         onMissionCreated(missionId);
       }
     } catch (err) {
-      alert("Pipeline launch error: " + err.message);
+      if (err.name === "AbortError" || err.message?.includes("cancelled")) {
+        setErrorMessage("Upload cancelled by operator.");
+      } else {
+        setErrorMessage(err.message || "Pipeline launch error.");
+      }
       setIsSubmitting(false);
       setStatusMessage("");
     }

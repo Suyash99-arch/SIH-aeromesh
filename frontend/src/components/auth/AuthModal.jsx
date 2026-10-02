@@ -90,7 +90,7 @@ export default function AuthModal({
                 letterSpacing: "-0.01em",
               }}
             >
-              AEROMESH Security & Access Control
+              HEXA SPARK Security & Access Control
             </h2>
             <p
               style={{

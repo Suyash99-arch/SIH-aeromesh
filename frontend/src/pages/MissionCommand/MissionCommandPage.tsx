@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Compass,
@@ -18,45 +18,17 @@ import { Glass } from '../../components/primitives/Glass.tsx';
 
 export const MissionCommandPage: React.FC = () => {
   const navigate = useNavigate();
+  const [missionsList, setMissionsList] = useState<any[]>([]);
 
-  const missions = [
-    {
-      id: 'north-ridge-01',
-      title: 'North Ridge · Sector 01',
-      status: 'RECONSTRUCTION READY',
-      drone: 'AEROMESH V4 · UNIT ALPHA',
-      battery: '88%',
-      signal: '98%',
-      cameras: 20,
-      points: '5,252 pts',
-      error: '0.55 px',
-      highlight: true,
-    },
-    {
-      id: 'downtown-perimeter-grid',
-      title: 'Downtown Perimeter Grid',
-      status: 'VIDEO CAPTURE COMPLETE',
-      drone: 'AEROMESH V4 · UNIT BETA',
-      battery: '64%',
-      signal: '92%',
-      cameras: 20,
-      points: '4,466 pts',
-      error: '0.55 px',
-      highlight: false,
-    },
-    {
-      id: 'harbor-coastal-approach',
-      title: 'Harbor Coastal Approach',
-      status: 'RECONSTRUCTION READY',
-      drone: 'AEROMESH V3 · UNIT GAMMA',
-      battery: '94%',
-      signal: '99%',
-      cameras: 20,
-      points: '2,357 pts',
-      error: '0.49 px',
-      highlight: false,
-    },
-  ];
+  useEffect(() => {
+    let active = true;
+    import('../../api/missions.js').then(({ listMissions }) => {
+      listMissions().then((data: any[]) => {
+        if (active && data) setMissionsList(data);
+      });
+    });
+    return () => { active = false; };
+  }, []);
 
   return (
     <div className="mission-command-layout">
@@ -73,7 +45,7 @@ export const MissionCommandPage: React.FC = () => {
             <button
               type="button"
               className="icon-btn primary-action"
-              onClick={() => navigate('/reconstruction?scene=north-ridge-01')}
+              onClick={() => navigate('/reconstruction')}
             >
               <Box size={14} aria-hidden="true" /> Launch 3D Reconstruction
             </button>
@@ -97,23 +69,9 @@ export const MissionCommandPage: React.FC = () => {
               <button
                 type="button"
                 className="icon-btn primary-action"
-                onClick={() => navigate('/reconstruction?scene=north-ridge-01')}
+                onClick={() => navigate('/reconstruction')}
               >
                 <Eye size={14} aria-hidden="true" /> Open 3D Viewport <ArrowRight size={14} aria-hidden="true" />
-              </button>
-              <button
-                type="button"
-                className="icon-btn"
-                onClick={() => navigate('/reconstruction?scene=downtown-perimeter-grid')}
-              >
-                Open Downtown Grid
-              </button>
-              <button
-                type="button"
-                className="icon-btn"
-                onClick={() => navigate('/reconstruction?scene=harbor-coastal-approach')}
-              >
-                Open Harbor Approach
               </button>
             </div>
           </div>
@@ -158,7 +116,7 @@ export const MissionCommandPage: React.FC = () => {
         </div>
 
         <div className="mission-grid">
-          {missions.map((m) => (
+          {missionsList.map((m) => (
             <Glass
               key={m.id}
               className={`mission-card ${m.highlight ? 'featured' : ''}`}

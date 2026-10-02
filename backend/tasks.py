@@ -215,7 +215,43 @@ else:
 generate_mesh = _register("generate_mesh")
 analyze = _register("analyze")
 generate_report = _register("generate_report")
-run_processing_pipeline = _register("run_processing_pipeline")
+def _real_pipeline_task(job_id: str):
+    from .jobs import get_job, update_job
+    from .main import MissionData, MISSIONS_DIR
+    from pathlib import Path
+
+    job = get_job(job_id)
+    if not job:
+        return None
+    mission_id = job.get("mission_id")
+    if not mission_id:
+        return None
+
+    mission = MissionData(mission_id)
+    video_path = mission.get("video_path")
+    if not video_path or not Path(video_path).exists():
+        cand = MISSIONS_DIR / mission_id / "video.mp4"
+        if cand.exists():
+            video_path = str(cand)
+
+    # 1. Detection & Tracking
+    det_res = _detection_task(job_id, video_path=video_path, sample_fps=2.0)
+    detections = det_res.get("detections", []) if isinstance(det_res, dict) else []
+    track_res = _tracking_task(job_id, detections=detections)
+
+    # 2. 3D Reconstruction
+    recon_res = _reconstruction_task(job_id, mission_id=mission_id, video_path=video_path, max_frames=30)
+
+    # 3. Spatial Fusion & Scale Calibration
+    fuse_res = _fusion_task(job_id, mission_id=mission_id)
+
+    update_job(job_id, status="COMPLETED", stage="COMPLETED", progress_percent=100, message="Full end-to-end processing pipeline completed successfully")
+    return get_job_result(job_id)
+
+if celery_app is not None:
+    _real_pipeline_task = celery_app.task(name="aeromesh.run_processing_pipeline")(_real_pipeline_task)
+
+run_processing_pipeline = _real_pipeline_task
 
 
 def enqueue_processing_job(job_id: str):

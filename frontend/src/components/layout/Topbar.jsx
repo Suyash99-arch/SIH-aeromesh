@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import AuthModal from "../auth/AuthModal";
 import { getStoredUser, fetchCurrentUser } from "../../api/missions";
+import UIControlsToolbar from "./UIControlsToolbar";
 
 export default function Topbar({
   title,
@@ -78,7 +79,9 @@ export default function Topbar({
         <strong>{title}</strong>
       </div>
 
-      <div className="top-actions">
+      <div className="top-actions" style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+        <UIControlsToolbar />
+
         <span className="systems">
           <i /> ALL SYSTEMS OPERATIONAL
         </span>

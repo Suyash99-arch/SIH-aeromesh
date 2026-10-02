@@ -25,6 +25,7 @@ class MissionRepository:
             operator=data.get("operator"),
             created_by=data.get("created_by"),
             owner_id=data.get("owner_id"),
+            organization_name=data.get("organization_name"),
             created_at=_parse_datetime(data.get("createdAt")),
             status=data.get("status", "created"),
             payload=data,
@@ -38,8 +39,27 @@ class MissionRepository:
         mission = self.session.get(Mission, mission_id)
         return _payload(mission) if mission else None
 
-    def list(self) -> list[dict[str, Any]]:
-        missions = self.session.scalars(select(Mission).order_by(Mission.created_at.desc())).all()
+    def list(self, user: Any = None) -> list[dict[str, Any]]:
+        query = select(Mission).order_by(Mission.created_at.desc())
+        if user is not None and getattr(user, "role", "") != "ADMIN":
+            portal = getattr(user, "portal_type", "INDIVIDUAL")
+            org = getattr(user, "organization_name", None)
+            uid = getattr(user, "id", None)
+            email = getattr(user, "email", None)
+            if portal == "GOVERNMENT_ORG" and org:
+                from sqlalchemy import or_
+                query = query.where(or_(
+                    Mission.organization_name == org,
+                    Mission.owner_id == uid,
+                    Mission.created_by == email,
+                ))
+            elif uid or email:
+                from sqlalchemy import or_
+                query = query.where(or_(
+                    Mission.owner_id == uid,
+                    Mission.created_by == email,
+                ))
+        missions = self.session.scalars(query).all()
         return [_payload(mission) for mission in missions]
 
     def update(self, mission_id: str, updates: dict[str, Any]) -> dict[str, Any] | None:

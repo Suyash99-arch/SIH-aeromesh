@@ -36,7 +36,7 @@ jobs:
       - name: Install Python Dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r backend/requirements.txt
+          pip install -r requirements.txt
           pip install pyyaml
 
       - name: Python Syntax Compilation Check
@@ -72,7 +72,11 @@ jobs:
 
       - name: Install Frontend Dependencies
         working-directory: frontend
-        run: npm ci
+        run: npm ci --legacy-peer-deps
+
+      - name: ESLint Code Quality Audit
+        working-directory: frontend
+        run: npm run lint
 
       - name: Production Vite Build
         working-directory: frontend

@@ -11,12 +11,12 @@ import HomePage from "./pages/HomePage";
 import AuthPage from "./pages/AuthPage";
 import ProfilePage from "./pages/ProfilePage";
 import { pageTitles } from "./data/navigation";
-import { getMission as getSeedMission } from "./data/missions";
 import {
   getMission as getApiMission,
   getStoredUser,
   fetchCurrentUser,
   clearAuthToken,
+  listMissions,
 } from "./api/missions";
 import {
   OverviewPage,
@@ -37,18 +37,19 @@ const getInitialMissionId = () => {
     const param = new URLSearchParams(window.location.search).get("mission");
     if (param) return param;
   }
-  return getSeedMission("north-ridge") ? "north-ridge" : "sector-04";
+  return "";
 };
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState(() => getStoredUser() || null);
+  const [authPortal, setAuthPortal] = useState("gov");
 
   const [showHomepage, setShowHomepage] = useState(() => {
     if (typeof window !== "undefined") {
       const params = new URLSearchParams(window.location.search);
       const m = params.get("mission");
       const p = params.get("page");
-      if (p || (m && m !== "north-ridge")) return false;
+      if (p || m) return false;
     }
     return true;
   });
@@ -67,9 +68,20 @@ export default function App() {
     () => localStorage.getItem("aeromesh-theme") || "dark",
   );
   const [showCreateMission, setShowCreateMission] = useState(false);
-  const [mission, setMission] = useState(() =>
-    getSeedMission(getInitialMissionId()) || null,
-  );
+  const [mission, setMission] = useState(null);
+
+  // If no mission is selected, load user's first available mission from the API
+  useEffect(() => {
+    if (!missionId) {
+      listMissions()
+        .then((missions) => {
+          if (Array.isArray(missions) && missions.length > 0) {
+            setMissionId(missions[0].id);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [missionId, currentUser]);
 
   // Auto-restore session from backend on mount or refresh
   useEffect(() => {
@@ -124,25 +136,22 @@ export default function App() {
     let pollTimer = null;
 
     const fetchMission = async (isPoll = false) => {
+      if (!missionId) {
+        setMission(null);
+        return;
+      }
       try {
         const nextMission = await getApiMission(missionId, isPoll);
         if (!active) return;
 
-        const fallbackMission = getSeedMission(missionId) || null;
-        const resolvedMission =
-          nextMission && !nextMission.hasError ? nextMission : fallbackMission;
-
-        if (!isPoll && nextMission?.backendUnavailable) {
-          setToast({
-            message: "Backend unavailable. Showing local mission data.",
-            type: "error",
-          });
+        if (nextMission && !nextMission.hasError) {
+          setMission(nextMission);
+        } else {
+          setMission(null);
         }
 
-        setMission(resolvedMission || fallbackMission);
-
         // If the mission is actively processing or queued, poll every 2.5s
-        if (resolvedMission?.status === "processing" || resolvedMission?.status === "queued") {
+        if (nextMission?.status === "processing" || nextMission?.status === "queued") {
           pollTimer = setTimeout(() => {
             if (active) fetchMission(true);
           }, 2500);
@@ -220,11 +229,16 @@ export default function App() {
       />
     ) : activePage === "auth" ? (
       <AuthPage
+        initialPortal={authPortal}
         onAuthenticated={(user) => {
           setCurrentUser(user);
+          setShowHomepage(false);
           setActivePage("overview");
         }}
-        onCancel={() => setShowHomepage(true)}
+        onCancel={() => {
+          setShowHomepage(true);
+          setActivePage("overview");
+        }}
         notice={notice}
       />
     ) : activePage === "overview" ? (
@@ -244,6 +258,12 @@ export default function App() {
     ) : (
       <IntelligencePage kind={activePage} {...shared} />
     );
+
+  const handleOpenAuth = (portalType = "gov") => {
+    setAuthPortal(portalType);
+    setShowHomepage(false);
+    setActivePage("auth");
+  };
 
   return (
     <div className="aeromesh-app-root">
@@ -267,10 +287,7 @@ export default function App() {
                 currentUser={currentUser}
                 onNavigateDashboard={handleNavigateDashboard}
                 onStartMission={handleStartMission}
-                onOpenAuth={() => {
-                  setShowHomepage(false);
-                  setActivePage("auth");
-                }}
+                onOpenAuth={handleOpenAuth}
               />
             </ErrorBoundary>
           </motion.div>
@@ -283,11 +300,16 @@ export default function App() {
             transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
           >
             <AuthPage
+              initialPortal={authPortal}
               onAuthenticated={(user) => {
                 setCurrentUser(user);
-                if (activePage === "auth") setActivePage("overview");
+                setShowHomepage(false);
+                setActivePage("overview");
               }}
-              onCancel={() => setShowHomepage(true)}
+              onCancel={() => {
+                setShowHomepage(true);
+                setActivePage("overview");
+              }}
               notice={notice}
             />
           </motion.div>

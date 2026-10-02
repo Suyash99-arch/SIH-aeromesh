@@ -67,49 +67,80 @@ ALLOWED_VIDEO_MIMES: Set[str] = {
 ROLE_ADMIN = "ADMIN"
 ROLE_ANALYST = "ANALYST"
 ROLE_OPERATOR = "OPERATOR"
-ALL_ROLES = {ROLE_ADMIN, ROLE_ANALYST, ROLE_OPERATOR}
+ROLE_VIEWER = "VIEWER"
+ALL_ROLES = {ROLE_ADMIN, ROLE_ANALYST, ROLE_OPERATOR, ROLE_VIEWER}
 
-# Role hierarchy: ADMIN includes all; ANALYST can inspect/measure/report; OPERATOR can create/upload/process
+# Portal Types
+PORTAL_GOV_ORG = "GOVERNMENT_ORG"
+PORTAL_INDIVIDUAL = "INDIVIDUAL"
+PORTAL_GUEST = "GUEST"
+ALL_PORTALS = {PORTAL_GOV_ORG, PORTAL_INDIVIDUAL, PORTAL_GUEST}
+
+# Role hierarchy: ADMIN includes all; ANALYST can inspect/measure/report; OPERATOR can create/upload; VIEWER is read-only
 ROLE_HIERARCHY: Dict[str, Set[str]] = {
-    ROLE_ADMIN: {ROLE_ADMIN, ROLE_ANALYST, ROLE_OPERATOR},
-    ROLE_ANALYST: {ROLE_ANALYST},
-    ROLE_OPERATOR: {ROLE_OPERATOR},
+    ROLE_ADMIN: {ROLE_ADMIN, ROLE_ANALYST, ROLE_OPERATOR, ROLE_VIEWER},
+    ROLE_ANALYST: {ROLE_ANALYST, ROLE_VIEWER},
+    ROLE_OPERATOR: {ROLE_OPERATOR, ROLE_VIEWER},
+    ROLE_VIEWER: {ROLE_VIEWER},
 }
 
 
 # ============================================================================
-# Password Hashing & Verification (PBKDF2-HMAC-SHA256)
+# Password Hashing & Verification (Argon2id + Bcrypt + PBKDF2 compatibility)
 # ============================================================================
 
-def hash_password(password: str, salt: Optional[bytes] = None, iterations: int = 100000) -> str:
-    """Hash a password using standard PBKDF2-HMAC-SHA256 with a cryptographically secure salt."""
+def hash_password(password: str) -> str:
+    """Hash a password using modern Argon2id with cryptographically secure parameters."""
     if not password:
         raise ValueError("Password cannot be empty")
-    if salt is None:
-        salt = secrets.token_bytes(16)
-    key = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, iterations)
-    return f"pbkdf2_sha256${iterations}${salt.hex()}${key.hex()}"
+    try:
+        from argon2 import PasswordHasher
+        ph = PasswordHasher(time_cost=2, memory_cost=65536, parallelism=2)
+        return ph.hash(password)
+    except Exception:
+        try:
+            import bcrypt
+            return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+        except Exception:
+            salt = secrets.token_bytes(16)
+            key = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, 100000)
+            return f"pbkdf2_sha256$100000${salt.hex()}${key.hex()}"
 
 
 def verify_password(password: str, hashed: str) -> bool:
-    """Verify a plain password against the stored PBKDF2-HMAC-SHA256 hash."""
+    """Verify a plain password supporting Argon2id, Bcrypt, and PBKDF2-HMAC-SHA256."""
     if not password or not hashed:
         return False
+    # 1. Argon2id / Argon2i
+    if hashed.startswith("$argon2"):
+        try:
+            from argon2 import PasswordHasher
+            return PasswordHasher().verify(hashed, password)
+        except Exception:
+            return False
+    # 2. Bcrypt
+    if hashed.startswith("$2a$") or hashed.startswith("$2b$") or hashed.startswith("$2y$"):
+        try:
+            import bcrypt
+            return bcrypt.checkpw(password.encode("utf-8"), hashed.encode("utf-8"))
+        except Exception:
+            return False
+    # 3. PBKDF2-HMAC-SHA256
     parts = hashed.split("$")
-    if len(parts) != 4 or parts[0] != "pbkdf2_sha256":
-        return False
-    try:
-        iterations = int(parts[1])
-        salt = bytes.fromhex(parts[2])
-        expected_key = bytes.fromhex(parts[3])
-        candidate_key = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, iterations)
-        return hmac.compare_digest(candidate_key, expected_key)
-    except Exception:
-        return False
+    if len(parts) == 4 and parts[0] == "pbkdf2_sha256":
+        try:
+            iterations = int(parts[1])
+            salt = bytes.fromhex(parts[2])
+            expected_key = bytes.fromhex(parts[3])
+            candidate_key = hashlib.pbkdf2_hmac("sha256", password.encode("utf-8"), salt, iterations)
+            return hmac.compare_digest(candidate_key, expected_key)
+        except Exception:
+            return False
+    return False
 
 
 # ============================================================================
-# Seed & Demo Users Store (In-Memory / Default Fallback)
+# User Records & Multi-Portal Store
 # ============================================================================
 
 @dataclass
@@ -119,6 +150,12 @@ class UserRecord:
     full_name: str
     role: str
     hashed_password: str
+    portal_type: str = PORTAL_INDIVIDUAL
+    organization_name: Optional[str] = None
+    department: Optional[str] = None
+    mfa_enabled: bool = False
+    mfa_secret: Optional[str] = None
+    guest_expires_at: Optional[str] = None
     is_active: bool = True
     created_at: str = "2026-09-01T00:00:00Z"
 
@@ -128,6 +165,11 @@ class UserRecord:
             "email": self.email,
             "full_name": self.full_name,
             "role": self.role,
+            "portal_type": self.portal_type,
+            "organization_name": self.organization_name,
+            "department": self.department,
+            "mfa_enabled": self.mfa_enabled,
+            "guest_expires_at": self.guest_expires_at,
             "is_active": self.is_active,
             "created_at": self.created_at,
         }
@@ -140,6 +182,9 @@ DEMO_USERS: Dict[str, UserRecord] = {
         email="admin@aeromesh.internal",
         full_name="System Administrator",
         role=ROLE_ADMIN,
+        portal_type=PORTAL_GOV_ORG,
+        organization_name="Ministry of Defence",
+        department="Strategic Aerial Reconnaissance",
         hashed_password=hash_password(AEROMESH_ADMIN_PASSWORD),
     ),
     "analyst@aeromesh.internal": UserRecord(
@@ -147,6 +192,9 @@ DEMO_USERS: Dict[str, UserRecord] = {
         email="analyst@aeromesh.internal",
         full_name="Mission Analyst",
         role=ROLE_ANALYST,
+        portal_type=PORTAL_GOV_ORG,
+        organization_name="Ministry of Defence",
+        department="Geospatial Intelligence Division",
         hashed_password=hash_password(AEROMESH_ANALYST_PASSWORD),
     ),
     "operator@aeromesh.internal": UserRecord(
@@ -154,6 +202,7 @@ DEMO_USERS: Dict[str, UserRecord] = {
         email="operator@aeromesh.internal",
         full_name="Drone Operator",
         role=ROLE_OPERATOR,
+        portal_type=PORTAL_INDIVIDUAL,
         hashed_password=hash_password(AEROMESH_OPERATOR_PASSWORD),
     ),
 }
@@ -176,6 +225,12 @@ def load_persistent_users() -> Dict[str, UserRecord]:
                     email=item["email"].strip().lower(),
                     full_name=item.get("full_name", item["email"].split("@")[0].title()),
                     role=item.get("role", ROLE_OPERATOR),
+                    portal_type=item.get("portal_type", PORTAL_INDIVIDUAL),
+                    organization_name=item.get("organization_name"),
+                    department=item.get("department"),
+                    mfa_enabled=item.get("mfa_enabled", False),
+                    mfa_secret=item.get("mfa_secret"),
+                    guest_expires_at=item.get("guest_expires_at"),
                     hashed_password=item["hashed_password"],
                     is_active=item.get("is_active", True),
                     created_at=item.get("created_at", "2026-09-01T00:00:00Z"),
@@ -200,6 +255,12 @@ def save_persistent_user(user: UserRecord) -> None:
                     "email": u.email,
                     "full_name": u.full_name,
                     "role": u.role,
+                    "portal_type": u.portal_type,
+                    "organization_name": u.organization_name,
+                    "department": u.department,
+                    "mfa_enabled": u.mfa_enabled,
+                    "mfa_secret": u.mfa_secret,
+                    "guest_expires_at": u.guest_expires_at,
                     "hashed_password": u.hashed_password,
                     "is_active": u.is_active,
                     "created_at": u.created_at,
@@ -215,7 +276,6 @@ def save_persistent_user(user: UserRecord) -> None:
             logging.getLogger(__name__).warning("Failed to save user to %s: %s", USERS_FILE, exc)
 
 
-# Initialize any existing persistent users into DEMO_USERS map
 for _email, _usr in load_persistent_users().items():
     DEMO_USERS[_email] = _usr
 
@@ -235,8 +295,11 @@ def find_user_by_email(email: str) -> Optional[UserRecord]:
 
 
 # ============================================================================
-# JWT Token Issuance and Validation
+# Dual-Token JWT (Access + Refresh) and httpOnly Cookies
 # ============================================================================
+
+REFRESH_TOKEN_EXPIRATION_DAYS = int(os.getenv("REFRESH_TOKEN_EXPIRATION_DAYS", "7"))
+
 
 def create_access_token(data: Dict[str, Any], expires_delta: Optional[timedelta] = None) -> str:
     """Generate a signed JWT access token with claims and expiry."""
@@ -246,6 +309,21 @@ def create_access_token(data: Dict[str, Any], expires_delta: Optional[timedelta]
     to_encode.update({
         "iat": int(now.timestamp()),
         "exp": int(expire.timestamp()),
+        "type": "access",
+        "iss": "aeromesh-auth",
+    })
+    return jwt.encode(to_encode, SECRET_KEY, algorithm=JWT_ALGORITHM)
+
+
+def create_refresh_token(data: Dict[str, Any], expires_delta: Optional[timedelta] = None) -> str:
+    """Generate a signed JWT refresh token with claims and expiry."""
+    to_encode = data.copy()
+    now = datetime.now(timezone.utc)
+    expire = now + (expires_delta if expires_delta else timedelta(days=REFRESH_TOKEN_EXPIRATION_DAYS))
+    to_encode.update({
+        "iat": int(now.timestamp()),
+        "exp": int(expire.timestamp()),
+        "type": "refresh",
         "iss": "aeromesh-auth",
     })
     return jwt.encode(to_encode, SECRET_KEY, algorithm=JWT_ALGORITHM)
@@ -270,6 +348,35 @@ def decode_access_token(token: str) -> Dict[str, Any]:
         )
 
 
+def set_auth_cookies(response: Response, access_token: str, refresh_token: str) -> None:
+    """Set secure httpOnly cookies for session storage."""
+    is_prod = os.getenv("ENVIRONMENT", "").lower() == "production"
+    response.set_cookie(
+        key="access_token",
+        value=access_token,
+        httponly=True,
+        secure=is_prod,
+        samesite="lax",
+        max_age=JWT_EXPIRATION_MINUTES * 60,
+        path="/",
+    )
+    response.set_cookie(
+        key="refresh_token",
+        value=refresh_token,
+        httponly=True,
+        secure=is_prod,
+        samesite="lax",
+        max_age=REFRESH_TOKEN_EXPIRATION_DAYS * 86400,
+        path="/",
+    )
+
+
+def clear_auth_cookies(response: Response) -> None:
+    """Clear session httpOnly cookies."""
+    response.delete_cookie(key="access_token", path="/")
+    response.delete_cookie(key="refresh_token", path="/")
+
+
 # ============================================================================
 # FastAPI Authentication & Authorization Dependencies
 # ============================================================================
@@ -277,11 +384,20 @@ def decode_access_token(token: str) -> Dict[str, Any]:
 bearer_security = HTTPBearer(auto_error=False)
 
 
-def get_current_user_optional(credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_security)) -> Optional[UserRecord]:
-    """Extract authenticated user from Bearer token, or return None if omitted/invalid."""
-    if credentials is None or not credentials.credentials:
+def get_current_user_optional(
+    request: Request,
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_security),
+) -> Optional[UserRecord]:
+    """Extract authenticated user from Bearer header or httpOnly cookie."""
+    token = None
+    if credentials and credentials.credentials:
+        token = credentials.credentials
+    elif request and request.cookies.get("access_token"):
+        token = request.cookies.get("access_token")
+
+    if not token:
         return None
-    token = credentials.credentials
+
     try:
         payload = decode_access_token(token)
     except HTTPException:
@@ -291,33 +407,33 @@ def get_current_user_optional(credentials: Optional[HTTPAuthorizationCredentials
     if not email:
         return None
 
-    # Check in-memory and persistent users
     user = find_user_by_email(email)
     if user:
         return user
 
-    # Construct user record from valid token payload
     return UserRecord(
         id=payload.get("user_id", f"usr_{hashlib.sha256(email.encode()).hexdigest()[:8]}"),
         email=email,
         full_name=payload.get("name", email.split("@")[0].title()),
         role=payload.get("role", ROLE_OPERATOR),
+        portal_type=payload.get("portal_type", PORTAL_INDIVIDUAL),
+        organization_name=payload.get("organization_name"),
+        department=payload.get("department"),
         hashed_password="",
         is_active=True,
     )
 
 
 def get_current_user(
+    request: Request,
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_security),
 ) -> UserRecord:
-    """Enforce authenticated user requirement with backward-compatible demo fallback."""
-    user = get_current_user_optional(credentials)
+    """Enforce authenticated user requirement."""
+    user = get_current_user_optional(request, credentials)
     if user is not None:
         return user
 
-    # If auth optional mode is enabled (for legacy tests or local demo convenience)
     if AUTH_OPTIONAL_MODE:
-        # Default fallback to Admin for seamless local evaluation
         return DEMO_USERS["admin@aeromesh.internal"]
 
     raise HTTPException(
@@ -327,8 +443,8 @@ def get_current_user(
     )
 
 
-def require_roles(*allowed_roles: str) -> Callable[[UserRecord], UserRecord]:
-    """Enforce role-based access control. ADMIN role automatically has access to all resources."""
+def require_roles(*allowed_roles: str) -> Callable:
+    """Enforce role-based access control."""
     def role_checker(user: UserRecord = Depends(get_current_user)) -> UserRecord:
         if user.role == ROLE_ADMIN:
             return user
@@ -345,29 +461,42 @@ def check_mission_access(
     mission_id: str,
     user: Optional[UserRecord] = None,
     mission_owner: Optional[str] = None,
+    mission_org: Optional[str] = None,
 ) -> bool:
-    """Verify that user is authorized to access the given mission."""
-    # The benchmark and validation mission is public/accessible to all users
+    """
+    Enforce strict per-user and per-organization data isolation.
+    - Admins have cross-mission read access.
+    - Government/Org users can access any mission shared within their organization.
+    - Individual and Guest users can strictly access only their own missions.
+    """
     if mission_id == "phase5_drone_validation":
         return True
 
-    # If unauthenticated in auth-optional mode, allow access
     if user is None:
         if AUTH_OPTIONAL_MODE:
             return True
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
 
-    # Admins and Analysts have cross-mission read access
-    if user.role in (ROLE_ADMIN, ROLE_ANALYST):
+    if user.role == ROLE_ADMIN:
         return True
 
-    # Operators can access their own missions or unowned/demo missions
-    if user.role == ROLE_OPERATOR:
-        if not mission_owner or mission_owner in (user.email, user.id, "operator", "operator@aeromesh.internal"):
+    # Government/Org portal sharing
+    if user.portal_type == PORTAL_GOV_ORG and user.organization_name and mission_org:
+        if user.organization_name.strip().lower() == mission_org.strip().lower():
             return True
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access to this mission is restricted to its owner or administrators")
 
-    return False
+    # Direct owner match
+    if mission_owner and mission_owner in (user.id, user.email):
+        return True
+
+    # Auth optional fallback for demo missions
+    if not mission_owner and AUTH_OPTIONAL_MODE:
+        return True
+
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail=f"Access denied: mission '{mission_id}' is isolated to another account or organization.",
+    )
 
 
 # ============================================================================
@@ -422,19 +551,21 @@ def validate_uploaded_file(filename: str, content: bytes, max_size_bytes: int = 
     is_valid_signature = False
     head = content[:64]
 
-    if b"ftyp" in head or b"moov" in head or b"mdat" in head:
+    if b"ftyp" in head or b"moov" in head or b"mdat" in head or b"wide" in head or b"free" in head:
         is_valid_signature = True
-    elif head.startswith(b"RIFF") and b"AVI " in head:
+    elif head.startswith(b"RIFF") or b"AVI " in head or b"WAVE" in head:
         is_valid_signature = True
-    elif head.startswith(b"\x1a\x45\xdf\xa3"):
+    elif head.startswith(b"\x1a\x45\xdf\xa3") or b"matroska" in head or b"webm" in head:
         is_valid_signature = True
-    elif ext in (".mp4", ".mov", ".avi", ".mkv"):
-        # Graceful fallback for synthetic or test fixtures while rejecting plain scripts/executables
-        if not (head.startswith(b"MZ") or head.startswith(b"#!/") or head.startswith(b"<?php") or head.startswith(b"<html")):
+    elif ext in (".mp4", ".mov", ".avi", ".mkv", ".webm") and len(content) >= 16:
+        # Check that it is binary (not ASCII text / HTML / scripts)
+        text_chars = bytearray({7, 8, 9, 10, 12, 13, 27} | set(range(0x20, 0x100)) - {0x7F})
+        is_ascii_text = bool(all(b in text_chars for b in content[:min(len(content), 128)]))
+        if not is_ascii_text and not (head.startswith(b"MZ") or head.startswith(b"#!/") or head.startswith(b"<?php") or head.startswith(b"<html")):
             is_valid_signature = True
 
     if not is_valid_signature:
-        return False, "File content does not match a valid video file signature"
+        return False, "File content does not match a valid video file signature (corrupt or non-video stream)"
 
     return True, None
 

@@ -204,7 +204,7 @@ export function OverviewPage({ mission, navigate }) {
     ? safeMission.objects_3d.filter(
         (o) => o.association_status === "VALID" || (o.evidence_count || 1) >= 2,
       ).length
-    : safeMission?.objects?.valid || safeObjects.total || 23;
+    : safeMission?.objects?.valid || safeObjects.total || 0;
 
   const lowConfCount = safeMission?.objects_3d
     ? safeMission.objects_3d.filter(
@@ -340,8 +340,8 @@ export function OverviewPage({ mission, navigate }) {
             {isProcessing ? "Reconstruction In Progress" : "3D Reconstruction Ready"}
           </strong>
           <p className="dispatch-meta">
-            Surface mesh generated from {safeMission.reconstruction?.camera_count || 20} registered keyframe cameras ·{" "}
-            {(safeMission.reconstruction?.point_count || safeMission.reconstruction?.points || "12,916").toLocaleString()} sparse points
+            Surface mesh generated from {safeMission.reconstruction?.camera_count ?? safeMission.reconstruction?.registered_images ?? 0} registered keyframe cameras ·{" "}
+            {Number(safeMission.reconstruction?.point_count || safeMission.reconstruction?.sparse_point_count || 0).toLocaleString()} sparse points
           </p>
           <div className="dispatch-action-link">
             <span>Open 3D Reconstruction</span>
@@ -481,84 +481,76 @@ export function OverviewPage({ mission, navigate }) {
 export function MissionsPage({ mission, setMission, navigate, notice, onCreateMission }) {
   const shouldReduceMotion = useReducedMotion();
   const [q, setQ] = useState("");
-  const [missionsList, setMissionsList] = useState(missions);
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [sortBy, setSortBy] = useState("newest");
+  const [missionsList, setMissionsList] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [deletingId, setDeletingId] = useState(null);
+
+  const loadMissions = async () => {
+    try {
+      setLoading(true);
+      const backendItems = await listMissions();
+      setMissionsList(backendItems || []);
+    } catch (err) {
+      console.warn("[MissionsPage] Failed to fetch missions list:", err);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    let mounted = true;
-    let pollTimer = null;
-
-    const loadMissions = async () => {
-      try {
-        const backendItems = await listMissions();
-        if (!mounted || !backendItems || !backendItems.length) return;
-
-        const backendMap = new Map(backendItems.map((m) => [m.id, m]));
-        const mergedSeeded = missions.map((s) => {
-          const b = backendMap.get(s.id);
-          if (b) {
-            return {
-              ...s,
-              ...b,
-              status: b.status || s.status,
-              progress: b.progress ?? s.progress,
-            };
-          }
-          return s;
-        });
-
-        const seededIds = new Set(missions.map((s) => s.id));
-        const additional = backendItems
-          .filter((b) => b && b.id && !seededIds.has(b.id))
-          .map((b) => ({
-            id: b.id,
-            name: b.name || `Mission ${b.id}`,
-            sector: b.sector || "Sector Recon",
-            status: b.status || "ready",
-            type: b.type || "Single-Pass Aerial Reconnaissance",
-            drone: b.drone || "AERO-X4",
-            duration: b.duration || "00:45",
-            coverage: b.coverage || "0.45 km²",
-            frames: b.frames || 0,
-            progress: b.progress || 0,
-            confidence: b.confidence || 92,
-            objects: b.objects || { total: 0 },
-            findings: b.findings || [],
-          }));
-
-        const fullList = [...mergedSeeded, ...additional];
-        setMissionsList(fullList);
-
-        const hasProcessing = fullList.some((m) => m.status === "processing");
-        if (hasProcessing && mounted) {
-          pollTimer = setTimeout(loadMissions, 2500);
-        }
-      } catch (err) {
-        console.warn("[MissionsPage] Failed to fetch missions list:", err);
-      }
-    };
-
     loadMissions();
-
-    return () => {
-      mounted = false;
-      if (pollTimer) clearTimeout(pollTimer);
-    };
   }, []);
 
-  const list = useMemo(
-    () =>
-      missionsList.filter((m) =>
-        `${m.name} ${m.sector}`.toLowerCase().includes(q.toLowerCase()),
-      ),
-    [missionsList, q],
-  );
+  const handleDelete = async (mId, e) => {
+    e.stopPropagation();
+    if (!window.confirm(`Are you sure you want to delete mission '${mId}'? This will remove all 3D reconstruction and video files.`)) {
+      return;
+    }
+    try {
+      setDeletingId(mId);
+      const { deleteMission } = await import("../api/missions");
+      await deleteMission(mId);
+      notice?.("Mission deleted successfully", "success");
+      loadMissions();
+    } catch (err) {
+      alert("Failed to delete mission: " + err.message);
+    } finally {
+      setDeletingId(null);
+    }
+  };
+
+  const totalStorageMB = useMemo(() => {
+    return missionsList.reduce((acc, m) => acc + (m.video?.size_mb || 0), 0).toFixed(1);
+  }, [missionsList]);
+
+  const filteredList = useMemo(() => {
+    let result = missionsList.filter((m) => {
+      const textMatch = `${m.name} ${m.sector || m.location || ""}`.toLowerCase().includes(q.toLowerCase());
+      if (!textMatch) return false;
+      if (statusFilter === "all") return true;
+      if (statusFilter === "processing") return m.status === "processing" || m.status === "queued";
+      if (statusFilter === "ready") return m.status === "ready" || m.status === "complete" || m.status === "reconstruction_ready";
+      if (statusFilter === "failed") return m.status === "failed" || m.status === "error";
+      return true;
+    });
+
+    result.sort((a, b) => {
+      if (sortBy === "name") return (a.name || "").localeCompare(b.name || "");
+      if (sortBy === "oldest") return (a.id || "").localeCompare(b.id || "");
+      return (b.id || "").localeCompare(a.id || ""); // newest by ID
+    });
+
+    return result;
+  }, [missionsList, q, statusFilter, sortBy]);
 
   return (
     <>
       <Header
-        kicker="MISSION"
-        title="Mission Switcher"
-        copy="Select any flight context. Every intelligence, reconstruction, and telemetry view synchronizes app-wide to the chosen flight."
+        kicker="MISSION DASHBOARD"
+        title="Flight Missions & 3D Workspaces"
+        copy="Manage your aerial intelligence missions, inspect 3D reconstructions, and dispatch spatial processing jobs."
       >
         {onCreateMission && (
           <Button variant="primary" icon="Plus" onClick={onCreateMission}>
@@ -567,113 +559,208 @@ export function MissionsPage({ mission, setMission, navigate, notice, onCreateMi
         )}
       </Header>
 
-      <Panel className="mission-list">
-        <header className="table-tools">
-          <div>
-            <h3>All Registered Missions ({list.length})</h3>
-            <span>Live status synced with backend background runner</span>
+      {/* Storage Usage & Overview Banner */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: "16px", marginBottom: "20px" }}>
+        <Panel style={{ display: "flex", alignItems: "center", gap: "14px", padding: "16px 20px" }}>
+          <div style={{ width: 40, height: 40, borderRadius: "10px", background: "rgba(14, 165, 233, 0.15)", display: "grid", placeItems: "center", color: "#38bdf8" }}>
+            <Icon name="HardDrive" size={20} />
           </div>
-          <input
-            value={q}
-            onChange={(e) => setQ(e.target.value)}
-            placeholder="Search mission by name or sector..."
-          />
+          <div>
+            <div style={{ fontSize: "11px", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em" }}>Storage Usage</div>
+            <div style={{ fontSize: "18px", fontWeight: 700, color: "#f8fafc" }}>{totalStorageMB} MB</div>
+          </div>
+        </Panel>
+
+        <Panel style={{ display: "flex", alignItems: "center", gap: "14px", padding: "16px 20px" }}>
+          <div style={{ width: 40, height: 40, borderRadius: "10px", background: "rgba(16, 185, 129, 0.15)", display: "grid", placeItems: "center", color: "#34d399" }}>
+            <Icon name="Compass" size={20} />
+          </div>
+          <div>
+            <div style={{ fontSize: "11px", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em" }}>Total Missions</div>
+            <div style={{ fontSize: "18px", fontWeight: 700, color: "#f8fafc" }}>{missionsList.length}</div>
+          </div>
+        </Panel>
+      </div>
+
+      <Panel className="mission-list">
+        <header className="table-tools" style={{ display: "flex", flexWrap: "wrap", gap: "12px", alignItems: "center", justifyContent: "space-between" }}>
+          <div>
+            <h3>Registered Missions ({filteredList.length})</h3>
+            <span>Live status synced with background processing runner</span>
+          </div>
+
+          <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
+            {/* Status Filter Buttons */}
+            <div style={{ display: "flex", background: "rgba(15, 23, 42, 0.6)", padding: "3px", borderRadius: "8px", border: "1px solid rgba(255,255,255,0.08)" }}>
+              {["all", "ready", "processing", "failed"].map((st) => (
+                <button
+                  key={st}
+                  onClick={() => setStatusFilter(st)}
+                  style={{
+                    padding: "4px 10px",
+                    borderRadius: "6px",
+                    border: "none",
+                    background: statusFilter === st ? "#38bdf8" : "transparent",
+                    color: statusFilter === st ? "#0f172a" : "#94a3b8",
+                    fontSize: "12px",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                    textTransform: "capitalize",
+                  }}
+                >
+                  {st}
+                </button>
+              ))}
+            </div>
+
+            <input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Search by name or sector..."
+              style={{ width: "200px" }}
+            />
+          </div>
         </header>
-        {list.map((m, index) => {
-          const isSelected = mission.id === m.id;
-          const isProcessing = m.status === "processing";
-          const statusText = isProcessing ? `PROCESSING (${m.progress || 0}%)` : (m.status || "READY").toUpperCase();
 
-          return (
-            <motion.button
-              className={`mission-row ${isSelected ? "selected" : ""}`}
-              key={m.id}
-              onClick={() => {
-                setMission(m.id);
-                notice(`${m.name} is now active app-wide`);
-              }}
-              initial={shouldReduceMotion ? false : { opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{
-                duration: 0.2,
-                delay: index * 0.04,
-                ease: [0.22, 1, 0.36, 1],
-              }}
-              whileHover={
-                shouldReduceMotion
-                  ? undefined
-                  : { y: -2, boxShadow: "0 8px 20px rgba(14, 165, 233, 0.12)" }
-              }
-              whileTap={shouldReduceMotion ? undefined : { scale: 0.995 }}
-            >
-              <span className={`mission-dot ${m.status}`} />
-              <section>
-                <strong>
-                  {m.name} <em>— {m.sector}</em>
-                </strong>
-                <small>
-                  {m.type} · {m.drone || "AERO-X4"} · {m.duration || "00:30"} flight
-                </small>
-              </section>
-              <span>
-                {m.coverage || "0.45 km²"}
-                <small>Coverage</small>
-              </span>
-              <span>
-                {m.objects?.total ?? 0}
-                <small>Objects</small>
-              </span>
-              <div>
-                <Status tone={isProcessing ? "info" : "success"}>
-                  {statusText}
-                </Status>
-                {isProcessing && <Progress value={m.progress || 0} />}
-              </div>
-            </motion.button>
-          );
-        })}
+        {loading ? (
+          <div style={{ padding: "40px", textAlign: "center", color: "#94a3b8" }}>
+            Loading flight missions...
+          </div>
+        ) : filteredList.length === 0 ? (
+          <div style={{ padding: "48px 24px", textAlign: "center", background: "rgba(15, 23, 42, 0.4)", borderRadius: "12px", border: "1px dashed rgba(255, 255, 255, 0.12)", margin: "16px 0" }}>
+            <div style={{ width: 48, height: 48, borderRadius: "50%", background: "rgba(56, 189, 248, 0.12)", color: "#38bdf8", display: "grid", placeItems: "center", margin: "0 auto 16px" }}>
+              <Icon name="Plus" size={24} />
+            </div>
+            <h3 style={{ fontSize: "16px", color: "#f8fafc", marginBottom: "6px" }}>No Flight Missions Found</h3>
+            <p style={{ fontSize: "13px", color: "#94a3b8", maxWidth: "420px", margin: "0 auto 20px" }}>
+              {q || statusFilter !== "all"
+                ? "No flight missions match your current search or status filters."
+                : "Your workspace is empty. Upload a drone flight video to run 3D photogrammetry & spatial object detection."}
+            </p>
+            {onCreateMission && (
+              <Button variant="primary" icon="Plus" onClick={onCreateMission}>
+                + Upload Drone Flight Video
+              </Button>
+            )}
+          </div>
+        ) : (
+          filteredList.map((m, index) => {
+            const isSelected = mission?.id === m.id;
+            const isProcessing = m.status === "processing" || m.status === "queued";
+            const statusText = isProcessing ? `PROCESSING (${m.progress || 0}%)` : (m.status || "READY").toUpperCase();
+
+            return (
+              <motion.div
+                className={`mission-row ${isSelected ? "selected" : ""}`}
+                key={m.id}
+                role="button"
+                tabIndex={0}
+                aria-label={`Select mission ${m.name}`}
+                onClick={() => {
+                  setMission(m.id);
+                  notice?.(`${m.name} is now active app-wide`);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    setMission(m.id);
+                    notice?.(`${m.name} is now active app-wide`);
+                  }
+                }}
+                initial={shouldReduceMotion ? false : { opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.2, delay: index * 0.03 }}
+              >
+                <span className={`mission-dot ${m.status}`} />
+                <section style={{ flex: 1 }}>
+                  <strong>
+                    {m.name} <em>— {m.sector || m.location || "Sector Recon"}</em>
+                  </strong>
+                  <small>
+                    {m.type || "Single-Pass Aerial Ingestion"} · {m.video?.resolution?.width ? `${m.video.resolution.width}x${m.video.resolution.height}` : "HD Video"}
+                  </small>
+                </section>
+                <span>
+                  {m.video?.size_mb ? `${m.video.size_mb} MB` : "—"}
+                  <small>Size</small>
+                </span>
+                <span>
+                  {m.objects?.total ?? 0}
+                  <small>Objects</small>
+                </span>
+                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                  <Status tone={m.status === "failed" ? "critical" : isProcessing ? "info" : "success"}>
+                    {statusText}
+                  </Status>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      handleDelete(m.id, e);
+                    }}
+                    disabled={deletingId === m.id}
+                    aria-label={`Delete mission ${m.name}`}
+                    title="Delete Mission"
+                    style={{
+                      background: "rgba(239, 68, 68, 0.15)",
+                      border: "1px solid rgba(239, 68, 68, 0.3)",
+                      color: "#f87171",
+                      borderRadius: "6px",
+                      padding: "4px 8px",
+                      fontSize: "12px",
+                      cursor: "pointer",
+                    }}
+                  >
+                    {deletingId === m.id ? "..." : "Delete"}
+                  </button>
+                </div>
+              </motion.div>
+            );
+          })
+        )}
       </Panel>
 
-      <Panel className="selected-mission">
-        <span className="eyebrow">ACTIVE MISSION CONTEXT</span>
-        <h2>
-          {mission.name} — {mission.sector}
-        </h2>
-        <div className="command-stats" style={{ margin: "16px 0" }}>
-          {[
-            ["3D Confidence", `${mission.confidence || 92}%`],
-            ["Frames", mission.frames || mission.video?.total_frames || 0],
-            ["Findings", mission.findings?.length || 0],
-            ["Objects Tracked", mission.objects?.total || 0],
-            ["Pipeline Status", (mission.status || "READY").toUpperCase()],
-          ].map((x) => (
-            <Stat key={x[0]} label={x[0]} value={x[1]} />
-          ))}
-        </div>
+      {mission?.id && (
+        <Panel className="selected-mission">
+          <span className="eyebrow">ACTIVE MISSION CONTEXT</span>
+          <h2>
+            {mission.name} — {mission.sector || mission.location || "Active Flight"}
+          </h2>
+          <div className="command-stats" style={{ margin: "16px 0" }}>
+            {[
+              ["3D Confidence", mission.confidence ? `${mission.confidence}%` : "—"],
+              ["Frames", mission.frames || mission.video?.total_frames || 0],
+              ["Findings", mission.findings?.length || 0],
+              ["Objects Tracked", mission.objects?.total || 0],
+              ["Pipeline Status", (mission.status || "READY").toUpperCase()],
+            ].map((x) => (
+              <Stat key={x[0]} label={x[0]} value={x[1]} />
+            ))}
+          </div>
 
-        <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", marginTop: "16px" }}>
-          {mission.status === "processing" ? (
-            <Button variant="primary" icon="Activity" onClick={() => navigate("pipeline")}>
-              Monitor Live Pipeline Execution
-            </Button>
-          ) : (
-            <>
-              <Button variant="primary" icon="Box" onClick={() => navigate("reconstruction")}>
-                Open 3D Reconstruction
+          <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", marginTop: "16px" }}>
+            {mission.status === "processing" ? (
+              <Button variant="primary" icon="Activity" onClick={() => navigate("pipeline")}>
+                Monitor Live Pipeline Execution
               </Button>
-              <Button variant="secondary" icon="Film" onClick={() => navigate("drone")}>
-                View Flight Footage
-              </Button>
-              <Button variant="secondary" icon="Ruler" onClick={() => navigate("measurements")}>
-                Scale & Measurements
-              </Button>
-              <Button variant="secondary" icon="FileText" onClick={() => navigate("reports")}>
-                Deliverables & Reports
-              </Button>
-            </>
-          )}
-        </div>
-      </Panel>
+            ) : (
+              <>
+                <Button variant="primary" icon="Box" onClick={() => navigate("reconstruction")}>
+                  Open 3D Reconstruction
+                </Button>
+                <Button variant="secondary" icon="Film" onClick={() => navigate("drone")}>
+                  View Flight Footage
+                </Button>
+                <Button variant="secondary" icon="Ruler" onClick={() => navigate("measurements")}>
+                  Scale & Measurements
+                </Button>
+                <Button variant="secondary" icon="FileText" onClick={() => navigate("reports")}>
+                  Deliverables & Reports
+                </Button>
+              </>
+            )}
+          </div>
+        </Panel>
+      )}
     </>
   );
 }

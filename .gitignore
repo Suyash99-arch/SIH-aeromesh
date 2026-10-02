@@ -32,6 +32,7 @@ data/users.json
 # Uploaded test videos and dynamically generated mission runs
 data/uploads/
 data/missions/*
+backend/data/
 data/objects/missions/*/
 !data/objects/missions/north-ridge/
 !data/objects/missions/phase5_drone_validation/
@@ -67,6 +68,9 @@ output/
 *.mov
 *.avi
 *.mkv
+!frontend/public/**/*.mp4
+!frontend/public/**/*.mov
+
 
 # OS
 Thumbs.db
@@ -93,4 +97,9 @@ scratch_inspect_pcd.py
 process_demo_missions_real.py
 test_live_eval_priority1.py
 verify_aa710.py
-verify_all_missions.py.venv312/
+verify_all_missions.py
+test-results/
+.venv312/
+.venv311/
+.venv310/
+

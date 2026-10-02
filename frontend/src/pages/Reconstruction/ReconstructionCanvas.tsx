@@ -312,7 +312,9 @@ export const ReconstructionCanvas: React.FC<ReconstructionCanvasProps> = ({
       if (mount.setPointerCapture) {
         try {
           mount.setPointerCapture(e.pointerId);
-        } catch (_) {}
+        } catch (_err) {
+          /* ignore pointer capture error */
+        }
       }
     };
 
@@ -379,7 +381,9 @@ export const ReconstructionCanvas: React.FC<ReconstructionCanvasProps> = ({
       if (mount.releasePointerCapture) {
         try {
           mount.releasePointerCapture(e.pointerId);
-        } catch (_) {}
+        } catch (_err) {
+          /* ignore pointer capture error */
+        }
       }
     };
 

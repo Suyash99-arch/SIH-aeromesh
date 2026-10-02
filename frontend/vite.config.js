@@ -22,15 +22,18 @@ export default defineConfig({
         target: "http://localhost:8000",
         changeOrigin: true,
       },
+      "/missions": {
+        target: "http://localhost:8000",
+        changeOrigin: true,
+      },
+      "/health": {
+        target: "http://localhost:8000",
+        changeOrigin: true,
+      },
       "/media": {
         target: "http://localhost:8000",
         changeOrigin: true,
       },
-    },
-    watch: {
-      ignored: ["**/public/assets/missions/**/*.mp4"],
-      usePolling: true,
-      interval: 1000,
     },
   },
   build: {

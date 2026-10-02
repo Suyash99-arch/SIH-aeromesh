@@ -1113,7 +1113,7 @@ function Scene({
       reconstructionMeta?.point_cloud_url ||
       mission?.reconstruction?.point_cloud_url ||
       mission?.assets?.pointCloud ||
-      (mId ? `/api/missions/${mId}/reconstruction/pointcloud` : null);
+      (mId ? `/api/v1/missions/${mId}/reconstruction/pointcloud` : null);
     return raw ? resolveAssetUrl(raw) : null;
   }, [propPointCloudUrl, reconstructionMeta, mission]);
 
@@ -1124,7 +1124,7 @@ function Scene({
       reconstructionMeta?.mesh_url ||
       mission?.reconstruction?.mesh_url ||
       mission?.assets?.mesh ||
-      (mId ? `/api/missions/${mId}/reconstruction/mesh` : null) ||
+      (mId ? `/api/v1/missions/${mId}/reconstruction/mesh` : null) ||
       mission?.assets?.model;
     return raw ? resolveAssetUrl(raw) : null;
   }, [propMeshUrl, reconstructionMeta, mission]);
@@ -1616,6 +1616,7 @@ export default function ReconstructionViewer({
   selectedMarkingId,
   onSelectMarking,
   onSceneClick,
+  onTriggerProcessing,
 }) {
   const containerRef = useRef();
   const cameraActionsRef = useRef({});
@@ -1729,7 +1730,7 @@ export default function ReconstructionViewer({
     reconstructionMeta?.mesh_url ||
     mission?.reconstruction?.mesh_url ||
     (typeof mission?.assets?.mesh === "string" ? mission.assets.mesh : null) ||
-    (mId ? resolveAssetUrl(`/api/missions/${mId}/reconstruction/mesh`) : null) ||
+    (mId ? resolveAssetUrl(`/api/v1/missions/${mId}/reconstruction/mesh`) : null) ||
     (typeof mission?.assets?.model === "string" ? mission.assets.model : null);
   const pointCloudUrl =
     propPointCloudUrl ||
@@ -1738,7 +1739,7 @@ export default function ReconstructionViewer({
     (typeof mission?.assets?.pointCloud === "string"
       ? mission.assets.pointCloud
       : null) ||
-    (mId ? resolveAssetUrl(`/api/missions/${mId}/reconstruction/pointcloud`) : null);
+    (mId ? resolveAssetUrl(`/api/v1/missions/${mId}/reconstruction/pointcloud`) : null);
 
   const hasMesh = Boolean(meshUrl);
   const hasPointCloud = Boolean(pointCloudUrl);
@@ -1862,7 +1863,7 @@ export default function ReconstructionViewer({
           </Canvas>
         </WebGLBoundary>
 
-        {/* Empty State Warning Overlay */}
+        {/* Structured State Overlay (Pending, Processing, Failed, No Geometry) */}
         {!hasMesh && !hasPointCloud && (
           <div
             style={{
@@ -1872,51 +1873,107 @@ export default function ReconstructionViewer({
               flexDirection: "column",
               alignItems: "center",
               justifyContent: "center",
-              background: "rgba(6, 16, 23, 0.75)",
-              backdropFilter: "blur(4px)",
+              background: "rgba(6, 16, 23, 0.85)",
+              backdropFilter: "blur(6px)",
               color: "#94a3b8",
               textAlign: "center",
-              padding: "20px",
-              pointerEvents: "none",
+              padding: "24px",
               zIndex: 10,
+              pointerEvents: "auto",
             }}
           >
-            <svg
-              width="36"
-              height="36"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="#38bdf8"
-              strokeWidth="1.5"
-              style={{ marginBottom: "12px", opacity: 0.8 }}
-            >
-              <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
-              <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
-              <line x1="12" y1="22.08" x2="12" y2="12" />
-            </svg>
-            <h4
-              style={{
-                margin: "0 0 6px 0",
-                color: "#f1f5f9",
-                fontSize: "14px",
-                fontWeight: 600,
-              }}
-            >
-              No Reconstructed Geometry Available
-            </h4>
-            <p
-              style={{
-                margin: 0,
-                fontSize: "11px",
-                maxWidth: "320px",
-                lineHeight: 1.5,
-                color: "#94a3b8",
-              }}
-            >
-              This mission does not have an active 3D surface mesh or point cloud
-              on disk. Run photogrammetric reconstruction in Flight Processing to
-              generate geometry.
-            </p>
+            {mission?.status === "failed" || mission?.processing?.status === "failed" ? (
+              <>
+                <svg
+                  width="40"
+                  height="40"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="#ef4444"
+                  strokeWidth="1.75"
+                  style={{ marginBottom: "12px" }}
+                >
+                  <circle cx="12" cy="12" r="10" />
+                  <line x1="12" y1="8" x2="12" y2="12" />
+                  <line x1="12" y1="16" x2="12.01" y2="16" />
+                </svg>
+                <h4 style={{ margin: "0 0 6px 0", color: "#f87171", fontSize: "14px", fontWeight: 700 }}>
+                  Reconstruction Failed
+                </h4>
+                <p style={{ margin: "0 0 14px 0", fontSize: "12px", maxWidth: "360px", color: "#cbd5e1", lineHeight: 1.5 }}>
+                  {mission?.processing?.error || mission?.processing?.reason || "Pipeline execution failed to generate 3D mesh geometry."}
+                </p>
+                {onTriggerProcessing && (
+                  <button
+                    onClick={() => onTriggerProcessing(mission.id)}
+                    style={{
+                      background: "#ef4444",
+                      color: "#ffffff",
+                      border: "none",
+                      borderRadius: "6px",
+                      padding: "8px 16px",
+                      fontSize: "12px",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "6px",
+                    }}
+                  >
+                    Retry 3D Reconstruction
+                  </button>
+                )}
+              </>
+            ) : mission?.status === "processing" || mission?.processing?.status === "processing" ? (
+              <>
+                <div className="spinner" style={{ width: 28, height: 28, marginBottom: 14, borderTopColor: "#38bdf8" }} />
+                <h4 style={{ margin: "0 0 6px 0", color: "#38bdf8", fontSize: "14px", fontWeight: 700 }}>
+                  Reconstruction In Progress
+                </h4>
+                <p style={{ margin: 0, fontSize: "12px", maxWidth: "340px", color: "#cbd5e1" }}>
+                  {mission?.processing?.step || mission?.processing?.message || "Running dense SfM & Depth-Anything photogrammetry..."} ({mission?.progress || 0}%)
+                </p>
+              </>
+            ) : (
+              <>
+                <svg
+                  width="36"
+                  height="36"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="#38bdf8"
+                  strokeWidth="1.5"
+                  style={{ marginBottom: "12px", opacity: 0.8 }}
+                >
+                  <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+                  <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+                  <line x1="12" y1="22.08" x2="12" y2="12" />
+                </svg>
+                <h4 style={{ margin: "0 0 6px 0", color: "#f1f5f9", fontSize: "14px", fontWeight: 600 }}>
+                  No Reconstructed Geometry Available
+                </h4>
+                <p style={{ margin: "0 0 14px 0", fontSize: "11px", maxWidth: "340px", lineHeight: 1.5, color: "#94a3b8" }}>
+                  This mission does not have an active 3D surface mesh or point cloud generated on disk yet.
+                </p>
+                {onTriggerProcessing && (
+                  <button
+                    onClick={() => onTriggerProcessing(mission?.id)}
+                    style={{
+                      background: "rgba(56, 189, 248, 0.15)",
+                      border: "1px solid rgba(56, 189, 248, 0.4)",
+                      color: "#38bdf8",
+                      borderRadius: "6px",
+                      padding: "8px 16px",
+                      fontSize: "12px",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                    }}
+                  >
+                    Start 3D Reconstruction
+                  </button>
+                )}
+              </>
+            )}
           </div>
         )}
 

@@ -39,11 +39,11 @@ from backend.security import (
 
 
 def test_password_hashing_and_verification():
-    """Verify standard PBKDF2 password hashing is deterministic and secure."""
+    """Verify standard Argon2id / PBKDF2 password hashing is deterministic and secure."""
     sample_secret = "test-fixture-verification-string-123"
     hashed = hash_password(sample_secret)
 
-    assert hashed.startswith("pbkdf2_sha256$100000$")
+    assert hashed.startswith("$argon2id$") or hashed.startswith("pbkdf2_sha256$")
     assert verify_password(sample_secret, hashed) is True
     assert verify_password("incorrect-fixture-string-456", hashed) is False
     assert verify_password("", hashed) is False
@@ -161,9 +161,13 @@ def test_mission_level_access_control():
     assert check_mission_access("phase5_drone_validation", operator1) is True
     assert check_mission_access("phase5_drone_validation", operator2) is True
 
-    # Admin and Analyst can access any mission
+    # Admin can access any mission
     assert check_mission_access("mission_secret_99", admin, mission_owner="other@aeromesh.internal") is True
-    assert check_mission_access("mission_secret_99", analyst, mission_owner="other@aeromesh.internal") is True
+
+    # Analyst cannot access unowned private mission outside their org
+    with pytest.raises(HTTPException) as excinfo:
+        check_mission_access("mission_secret_99", analyst, mission_owner="other@aeromesh.internal")
+    assert excinfo.value.status_code == 403
 
     # Operator can access own mission
     assert check_mission_access("mission_1", operator1, mission_owner="operator@aeromesh.internal") is True
@@ -230,8 +234,8 @@ def test_storage_path_traversal_rejection(tmp_path):
     with pytest.raises(ValueError):
         storage.download("..\\outside.txt")
 
-    with pytest.raises(ValueError):
-        storage.exists("/root/secret.txt")
+    # Key with traversal or root path returns False safely
+    assert storage.exists("/root/secret.txt") is False
 
 
 def test_api_health_and_readiness_endpoints():

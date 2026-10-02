@@ -443,11 +443,11 @@ export default function ProcessingProgressPage({ mission, navigate }) {
           <div className="info-grid">
             <div className="info-item">
               <label>Sparse Point Cloud</label>
-              <span className="value">{(mission.reconstruction?.point_count || mission.reconstruction?.points || "12,916").toLocaleString()} points</span>
+              <span className="value">{Number(mission.reconstruction?.point_count || mission.reconstruction?.sparse_point_count || 0).toLocaleString()} points</span>
             </div>
             <div className="info-item">
               <label>Camera Keyframes</label>
-              <span className="value">{mission.reconstruction?.camera_count || 20} cameras</span>
+              <span className="value">{mission.reconstruction?.camera_count ?? mission.reconstruction?.registered_images ?? 0} cameras</span>
             </div>
             <div className="info-item">
               <label>Poisson Surface Mesh</label>
@@ -455,7 +455,7 @@ export default function ProcessingProgressPage({ mission, navigate }) {
             </div>
             <div className="info-item">
               <label>Overall Confidence</label>
-              <span className="value">{mission.confidence || 94}%</span>
+              <span className="value">{mission.confidence != null ? `${mission.confidence}%` : "—"}</span>
             </div>
           </div>
         </section>

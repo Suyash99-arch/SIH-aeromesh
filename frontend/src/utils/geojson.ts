@@ -2,7 +2,7 @@ import { Detection, GeoJSONFeatureCollection } from '../types/aerial.ts';
 
 export function exportDetectionsToGeoJSON(
   detections: Detection[],
-  sceneId: string = 'north-ridge-01'
+  sceneId: string = 'active-mission'
 ): void {
   const geojson: GeoJSONFeatureCollection = {
     type: 'FeatureCollection',

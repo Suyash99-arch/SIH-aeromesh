@@ -16,7 +16,7 @@ export default function VideoPlayer({
   const rawVideoSrc =
     mission?.assets?.video ||
     mission?.video?.url ||
-    (mission?.id ? `/api/missions/${mission.id}/video` : "");
+    (mission?.id ? `/api/v1/missions/${mission.id}/video` : "");
   const videoSrc = useMemo(() => resolveAssetUrl(rawVideoSrc), [rawVideoSrc]);
   const hasVideoAsset = Boolean(videoSrc);
 

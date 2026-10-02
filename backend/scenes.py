@@ -16,7 +16,7 @@ from fastapi.responses import PlainTextResponse
 
 logger = logging.getLogger(__name__)
 
-router = APIRouter(prefix="/api/scenes", tags=["scenes"])
+router = APIRouter(tags=["scenes"])
 
 # Resolve data directories relative to Sih workspace root
 BACKEND_DIR = Path(__file__).resolve().parent
@@ -24,39 +24,29 @@ PROJECT_ROOT = BACKEND_DIR.parent
 DATA_DIR = PROJECT_ROOT / "data"
 MISSIONS_DIR = DATA_DIR / "missions"
 
-# Aliases matching frontend sortie cards
-SCENE_ALIASES = {
-    "north-ridge-01": "north-ridge",
-    "north-ridge": "north-ridge",
-    "downtown-perimeter-grid": "downtown-grid",
-    "downtown-grid": "downtown-grid",
-    "harbor-coastal-approach": "harbor-district",
-    "harbor-district": "harbor-district",
-    "river-approach": "river-approach",
-}
-
-SCENE_METADATA = {
-    "north-ridge": {
-        "name": "North Ridge · Sector 01",
-        "sector": "Sector 01 — Downtown Perimeter",
+# Generic scene profiles for flight environment classification
+SCENE_PROFILES = {
+    "urban-grid": {
+        "name": "Urban Grid Corridor",
+        "sector": "High-Density Urban Inspection",
         "coord_system": "LOCAL_ARBITRARY",
         "scale_mode": "RELATIVE_SCALE",
     },
-    "downtown-grid": {
-        "name": "Downtown Perimeter Grid",
-        "sector": "Sector 02 — High-Density Urban Grid",
+    "coastal-harbor": {
+        "name": "Coastal Harbor Basin",
+        "sector": "Maritime Dock & Port Line",
         "coord_system": "LOCAL_ARBITRARY",
         "scale_mode": "RELATIVE_SCALE",
     },
-    "harbor-district": {
-        "name": "Harbor Coastal Approach",
-        "sector": "Sector 03 — Maritime Basin & Docks",
+    "mountain-ridge": {
+        "name": "Mountain Ridge Transit",
+        "sector": "Elevated Terrain Corridor",
         "coord_system": "LOCAL_ARBITRARY",
         "scale_mode": "RELATIVE_SCALE",
     },
-    "river-approach": {
-        "name": "River Approach Corridor",
-        "sector": "Sector 04 — Fluvial Inspection Line",
+    "river-corridor": {
+        "name": "River Approach Line",
+        "sector": "Fluvial Basin Survey",
         "coord_system": "LOCAL_ARBITRARY",
         "scale_mode": "CALIBRATED",
     },
@@ -64,8 +54,7 @@ SCENE_METADATA = {
 
 
 def _resolve_mission_id(scene_id: str) -> str:
-    cleaned = scene_id.lower().strip()
-    return SCENE_ALIASES.get(cleaned, cleaned)
+    return scene_id.strip()
 
 
 def _load_mission_json(mission_id: str) -> Dict[str, Any]:
@@ -140,11 +129,11 @@ async def get_scene_manifest(scene_id: str):
             pass
 
     if point_count == 0:
-        point_count = recon.get("points_count") or recon.get("sparse_point_count") or 12916
+        point_count = recon.get("points_count") or recon.get("sparse_point_count") or 0
 
-    cameras_count = recon.get("cameras_registered") or frames_count or 20
-    faces_count = recon.get("faces_count") or (point_count * 4)
-    reproj_err = recon.get("mean_reprojection_error") or 1.95
+    cameras_count = recon.get("cameras_registered") or frames_count or 0
+    faces_count = recon.get("faces_count") or (point_count * 2 if point_count else 0)
+    reproj_err = recon.get("mean_reprojection_error") or 0.0
 
     stages = recon.get("stages") or {
         "sparse_sfm": {

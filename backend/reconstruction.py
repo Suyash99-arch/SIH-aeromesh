@@ -363,7 +363,19 @@ def _run_pycolmap_sfm(
     # 1. Feature extraction with pycolmap 4.1.1 native options (tuned for high-density aerial photogrammetry)
     reader_options = pycolmap.ImageReaderOptions()
     reader_options.camera_model = "PINHOLE"
-    reader_options.camera_params = "475,475,192,425"
+    first_frame_path = next(frames_dir.glob("*.jpg"), None) or next(frames_dir.glob("*.png"), None)
+    if first_frame_path:
+        img_mat = cv2.imread(str(first_frame_path))
+        if img_mat is not None:
+            h_f, w_f = img_mat.shape[:2]
+            f_f = max(w_f, h_f) * 1.2
+            cx_f, cy_f = w_f / 2.0, h_f / 2.0
+            reader_options.camera_params = f"{f_f:.1f},{f_f:.1f},{cx_f:.1f},{cy_f:.1f}"
+        else:
+            reader_options.camera_params = "475,475,192,425"
+    else:
+        reader_options.camera_params = "475,475,192,425"
+
     extraction_options = pycolmap.FeatureExtractionOptions()
     extraction_options.max_image_size = 1920
     extraction_options.num_threads = min(os.cpu_count() or 4, 4)
@@ -1853,17 +1865,18 @@ def run_reconstruction_for_mission(
 # ============================================================
 
 def get_reconstruction_pointcloud_path(mission_id: str) -> Optional[Path]:
-    """Locate point cloud PLY file for a mission."""
+    """Locate point cloud PLY file for a mission within authorized backend storage."""
     recon_dirs = [
+        MISSIONS_DIR / mission_id,
         MISSIONS_DIR / mission_id / "reconstruction",
+        DATA_DIR / "objects" / "missions" / mission_id,
         DATA_DIR / "objects" / "missions" / mission_id / "reconstruction",
-        BASE_DIR / "frontend" / "public" / "assets" / "missions" / mission_id,
-        BASE_DIR / "frontend" / "dist" / "assets" / "missions" / mission_id,
     ]
     for recon_dir in recon_dirs:
         candidates = [
             recon_dir / "hybrid_point_cloud.ply",
             recon_dir / "point_cloud.ply",
+            recon_dir / "sparse_points.ply",
             recon_dir / "point-cloud.ply",
             recon_dir / "model" / "point_cloud.ply",
             recon_dir / "pinhole_model" / "model_0.ply",
@@ -1900,16 +1913,17 @@ def _inspect_ply_header(path: Optional[Path]) -> Tuple[int, int]:
 
 
 def get_reconstruction_mesh_path(mission_id: str) -> Optional[Path]:
-    """Locate surface mesh file for a mission, preferring native .ply."""
+    """Locate surface mesh file for a mission, preferring native .ply in authorized backend storage."""
     recon_dirs = [
+        MISSIONS_DIR / mission_id,
         MISSIONS_DIR / mission_id / "reconstruction",
+        DATA_DIR / "objects" / "missions" / mission_id,
         DATA_DIR / "objects" / "missions" / mission_id / "reconstruction",
-        BASE_DIR / "frontend" / "public" / "assets" / "missions" / mission_id,
-        BASE_DIR / "frontend" / "dist" / "assets" / "missions" / mission_id,
     ]
     for recon_dir in recon_dirs:
         candidates = [
             recon_dir / "mesh.ply",
+            recon_dir / "surface_mesh.ply",
             recon_dir / "reconstruction-model.glb",
             recon_dir / "model.glb",
             recon_dir / "hybrid_mesh.glb",
@@ -1944,7 +1958,7 @@ def get_reconstruction_metadata(mission_id: str) -> Optional[Dict[str, Any]]:
             data["mesh"] = existing_mesh
 
         if p_verts > 0:
-            if not data.get("sparse_point_count") or data.get("sparse_point_count") == 12916:
+            if not data.get("sparse_point_count") or data.get("sparse_point_count") <= 0:
                 data["sparse_point_count"] = p_verts
                 data["point_count"] = p_verts
 

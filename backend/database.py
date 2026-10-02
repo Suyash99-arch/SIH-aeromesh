@@ -27,9 +27,20 @@ engine = create_database_engine()
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False, expire_on_commit=False) if engine else None
 
 
+_cached_engine = None
+_cached_db_url = None
+
 def get_configured_engine():
-    """Resolve DATABASE_URL lazily so dotenv-loaded settings are honored."""
-    return create_database_engine(get_database_url())
+    """Resolve DATABASE_URL lazily with singleton caching so engine and connection pools are reused."""
+    global _cached_engine, _cached_db_url
+    url = get_database_url()
+    if not url:
+        return None
+    if _cached_engine is not None and _cached_db_url == url:
+        return _cached_engine
+    _cached_engine = create_database_engine(url)
+    _cached_db_url = url
+    return _cached_engine
 
 
 @contextmanager
