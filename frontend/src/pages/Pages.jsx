@@ -962,7 +962,7 @@ export function DronePage({ mission }) {
 
           <small className="video-source">
             SOURCE: {mission?.video?.filename || mission?.video?.source || "mission video"}{" "}
-            · Mission: {mission.name}
+            · Mission: {mission?.name || mission?.id || "—"}
           </small>
         </Panel>
 
@@ -2103,14 +2103,14 @@ function Reports({ mission, notice }) {
           <div className="reports-title-group">
             <span className="eyebrow">MISSION REPORT</span>
             <h2>
-              {repMission.name || mission.name} —{" "}
-              {mission.sector || "Operational Sector"}
+              {repMission?.name || mission?.name || "Mission"} —{" "}
+              {mission?.sector || repMission?.sector || "Operational Sector"}
             </h2>
             <div className="reports-meta-badge-row">
               <span className="reports-badge reports-badge--success">
                 <Icon name="CheckCircle2" size={13} />
                 Status:{" "}
-                {repMission.status || mission.status || "MESH_GENERATED"}
+                {repMission?.status || mission?.status || "MESH_GENERATED"}
               </span>
               <span className="reports-badge reports-badge--info">
                 <Icon name="Calendar" size={13} />
@@ -2405,13 +2405,13 @@ function Reports({ mission, notice }) {
                     <td>
                       <b>Mission Name</b>
                     </td>
-                    <td>{repMission.name || mission.name}</td>
+                    <td>{repMission?.name || mission?.name || "—"}</td>
                   </tr>
                   <tr>
                     <td>
                       <b>Operator</b>
                     </td>
-                    <td>{repMission.operator || mission.operator}</td>
+                    <td>{repMission?.operator || mission?.operator || "—"}</td>
                     <td>
                       <b>Location / Sector</b>
                     </td>
@@ -2908,7 +2908,7 @@ function Reports({ mission, notice }) {
               HEXA SPARK / DECISION REPORT PREVIEW
             </span>
             <h2>
-              {repMission.name || mission.name} — {mission.sector}
+              {repMission?.name || mission?.name || "Mission"} — {mission?.sector || repMission?.sector || "Operational Sector"}
             </h2>
             <p>
               Comprehensive flight quality, sparse photogrammetry

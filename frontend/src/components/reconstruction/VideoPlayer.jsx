@@ -246,7 +246,7 @@ export default function VideoPlayer({
       {loading && (
         <div className="video-loading" aria-live="polite">
           <i />
-          LOADING FLIGHT FOOTAGE FOR {mission.name?.toUpperCase?.() || mission.id}
+          LOADING FLIGHT FOOTAGE FOR {mission?.name?.toUpperCase?.() || mission?.id || "MISSION"}
         </div>
       )}
     </div>

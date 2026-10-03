@@ -31,6 +31,7 @@ export default function ProcessingProgressPage({ mission, navigate }) {
     let mounted = true;
 
     const fetchStatus = async () => {
+      if (!mission?.id) return;
       try {
         const [updatedMission, status] = await Promise.all([
           getMission(mission.id, true),
@@ -83,6 +84,7 @@ export default function ProcessingProgressPage({ mission, navigate }) {
   const progressPercent = statusData?.progress_percent ?? (isComplete ? 100 : mission?.progress ?? 0);
 
   const handleRetryPipeline = async () => {
+    if (!mission?.id) return;
     try {
       setAutoRefresh(true);
       await processVideo(mission.id);
@@ -93,17 +95,31 @@ export default function ProcessingProgressPage({ mission, navigate }) {
     }
   };
 
+  if (!mission) {
+    return (
+      <div className="processing-page">
+        <div className="page-header">
+          <div>
+            <span className="eyebrow">MISSION PROCESSING</span>
+            <h1>No Mission Selected</h1>
+            <p>Select a mission from the mission list or create a new mission to view pipeline status.</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="processing-page">
       <div className="page-header">
         <div>
           <span className="eyebrow">MISSION PROCESSING</span>
-          <h1>{mission.name}</h1>
+          <h1>{mission.name || mission.id || "Active Mission"}</h1>
           <p>Real-Time Drone Video → 3D Reconstruction Pipeline</p>
         </div>
         <div
           className="status-badge"
-          data-status={isFailed ? "failed" : isQueued ? "queued" : mission.status}
+          data-status={isFailed ? "failed" : isQueued ? "queued" : (mission.status || "ready")}
           style={
             isFailed
               ? { background: "rgba(239, 68, 68, 0.15)", color: "#f87171", borderColor: "#ef4444" }
