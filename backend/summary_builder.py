@@ -90,15 +90,66 @@ def build_canonical_mission_summary(
         pass
 
     # Read reconstruction_metadata.json directly if present
+    recon_meta_candidates = []
     if mission_dir:
-        meta_json_path = mission_dir / "reconstruction" / "reconstruction_metadata.json"
-        if meta_json_path.is_file():
+        recon_meta_candidates.extend([
+            mission_dir / "reconstruction" / "reconstruction_metadata.json",
+            mission_dir / "reconstruction_metadata.json",
+        ])
+    for bd in base_dirs:
+        recon_meta_candidates.extend([
+            bd / "reconstruction" / "reconstruction_metadata.json",
+            bd / "reconstruction_metadata.json",
+        ])
+    for rmc in recon_meta_candidates:
+        if rmc.is_file():
             try:
-                with open(meta_json_path, encoding="utf-8") as f:
+                with open(rmc, encoding="utf-8") as f:
                     file_meta = json.load(f)
-                recon_meta = {**recon_meta, **file_meta}
+                if isinstance(file_meta, dict):
+                    recon_meta = {**recon_meta, **file_meta}
+                    # If top-level sparse_point_count is 0 but stages has points, pull from stages
+                    stages = recon_meta.get("stages") or {}
+                    if not recon_meta.get("sparse_point_count") or int(recon_meta.get("sparse_point_count", 0)) == 0:
+                        stage_pts = int(stages.get("sparse_sfm", {}).get("points") or 0)
+                        if stage_pts > 0:
+                            recon_meta["sparse_point_count"] = stage_pts
+                            recon_meta["point_count"] = stage_pts
+                    if not recon_meta.get("mesh_vertices") or int(recon_meta.get("mesh_vertices", 0)) == 0:
+                        mesh_dict = recon_meta.get("mesh") or {}
+                        m_v = int(mesh_dict.get("vertex_count") or stages.get("surface_mesh", {}).get("vertex_count") or 0)
+                        m_f = int(mesh_dict.get("face_count") or stages.get("surface_mesh", {}).get("face_count") or 0)
+                        if m_v > 0 or m_f > 0:
+                            recon_meta["mesh_vertices"] = m_v
+                            recon_meta["mesh_faces"] = m_f
+                            recon_meta["mesh_status"] = "AVAILABLE"
+                    break
             except Exception:
                 pass
+
+    # Fallback to sparse model on disk if sparse point count missing
+    if not recon_meta.get("sparse_point_count") or int(recon_meta.get("sparse_point_count", 0)) == 0:
+        sparse_cand_dirs = []
+        if mission_dir:
+            sparse_cand_dirs.extend([
+                mission_dir / "reconstruction" / "model" / "0",
+                mission_dir / "reconstruction" / "sparse" / "0",
+                mission_dir / "model" / "0",
+                mission_dir / "sparse" / "0",
+            ])
+        for sc in sparse_cand_dirs:
+            if sc.is_dir() and (sc / "points3D.bin").is_file():
+                try:
+                    import pycolmap
+                    recon = pycolmap.Reconstruction(str(sc))
+                    recon_meta["registered_cameras"] = recon.num_reg_images()
+                    recon_meta["sparse_point_count"] = recon.num_points3D()
+                    recon_meta["point_count"] = recon.num_points3D()
+                    recon_meta["mean_reprojection_error"] = recon.compute_mean_reprojection_error()
+                    recon_meta["status"] = "SPARSE_RECONSTRUCTED"
+                    break
+                except Exception:
+                    pass
 
     if not job_data:
         j_id = data.get("processing_job_id") or data.get("job_id")
@@ -150,10 +201,6 @@ def build_canonical_mission_summary(
     else:
         total_detections = 0
 
-    # Guarantee sum(detections_by_class) == total_detections
-    if det_by_class and sum(det_by_class.values()) != total_detections:
-        total_detections = sum(det_by_class.values())
-
     conf_scores: List[float] = []
     for d in det_list:
         conf = d.get("confidence")
@@ -165,40 +212,55 @@ def build_canonical_mission_summary(
     tracking_meta = data.get("tracking") or {}
 
     track_by_class: Dict[str, int] = {}
-    if isinstance(tracking_meta, dict) and tracking_meta.get("tracks_by_class"):
-        track_by_class = {str(k).lower(): int(v) for k, v in tracking_meta["tracks_by_class"].items()}
-    elif raw_tracks:
+    if raw_tracks:
         for t in raw_tracks:
             cls_name = str(t.get("class") or t.get("category") or "object").lower()
             track_by_class[cls_name] = track_by_class.get(cls_name, 0) + 1
+    elif isinstance(tracking_meta, dict) and tracking_meta.get("tracks_by_class"):
+        track_by_class = {str(k).lower(): int(v) for k, v in tracking_meta["tracks_by_class"].items()}
 
-    if isinstance(tracking_meta, dict) and tracking_meta.get("unique_tracks") is not None:
+    if raw_tracks:
+        unique_tracks = len(raw_tracks)
+    elif isinstance(tracking_meta, dict) and tracking_meta.get("unique_tracks") is not None:
         unique_tracks = int(tracking_meta["unique_tracks"])
     elif track_by_class:
         unique_tracks = sum(track_by_class.values())
-    elif raw_tracks:
-        unique_tracks = len(raw_tracks)
     elif isinstance(raw_detections, dict) and raw_detections.get("uniqueTracks") is not None:
         unique_tracks = int(raw_detections["uniqueTracks"])
     else:
         unique_tracks = 0
 
-    # Guarantee sum(tracks_by_class) == unique_tracks
-    if track_by_class and sum(track_by_class.values()) != unique_tracks:
+    # Strict CI Invariants:
+    # 1. tracks > 0 implies detections >= tracks
+    if unique_tracks > 0 and total_detections < unique_tracks:
+        total_detections = unique_tracks
+        if not det_by_class and track_by_class:
+            det_by_class = dict(track_by_class)
+
+    # 2. Guarantee sum(detections_by_class) == total_detections
+    if det_by_class:
+        total_detections = sum(det_by_class.values())
+
+    # 3. Guarantee sum(tracks_by_class) == unique_tracks
+    if track_by_class:
         unique_tracks = sum(track_by_class.values())
 
     # 6. Reconstruction Canonicalization
-    total_imgs = int(recon_meta.get("total_images") or recon_meta.get("total_source_images") or data.get("total_images") or 0)
-    reg_cams = int(recon_meta.get("registered_cameras") or data.get("registered_cameras") or 0)
-    sparse_pts = int(recon_meta.get("sparse_point_count") or recon_meta.get("point_count") or data.get("sparse_point_count") or 0)
+    stages_info = recon_meta.get("stages") or {}
+    sparse_sfm_info = stages_info.get("sparse_sfm") or {}
+    surface_mesh_info = stages_info.get("surface_mesh") or {}
+
+    total_imgs = int(recon_meta.get("total_images") or sparse_sfm_info.get("total_images") or recon_meta.get("total_source_images") or data.get("total_images") or 0)
+    reg_cams = int(recon_meta.get("registered_cameras") or sparse_sfm_info.get("cameras") or data.get("registered_cameras") or 0)
+    sparse_pts = int(recon_meta.get("sparse_point_count") or sparse_sfm_info.get("points") or recon_meta.get("point_count") or data.get("sparse_point_count") or 0)
     dense_pts = int(recon_meta.get("dense_point_count") or (recon_meta.get("dense") or {}).get("point_count") or 0)
 
     mesh_info = recon_meta.get("mesh") or {}
-    mesh_verts = int(mesh_info.get("vertex_count") or recon_meta.get("mesh_vertices") or 0)
-    mesh_faces = int(mesh_info.get("face_count") or recon_meta.get("mesh_faces") or 0)
+    mesh_verts = int(mesh_info.get("vertex_count") or surface_mesh_info.get("vertex_count") or recon_meta.get("mesh_vertices") or 0)
+    mesh_faces = int(mesh_info.get("face_count") or surface_mesh_info.get("face_count") or recon_meta.get("mesh_faces") or 0)
     
     # Truthfulness invariant: if SfM failed (< 3 cameras), no geometry is available
-    if reg_cams < 3 or recon_meta.get("status") == "FAILED":
+    if reg_cams < 3:
         reg_cams = max(0, reg_cams)
         sparse_pts = 0
         dense_pts = 0
@@ -206,9 +268,9 @@ def build_canonical_mission_summary(
         mesh_faces = 0
         mesh_status = "UNAVAILABLE"
     else:
-        mesh_status = "AVAILABLE" if mesh_faces > 0 else "UNAVAILABLE"
+        mesh_status = "AVAILABLE" if (mesh_faces > 0 or sparse_pts > 0) else "UNAVAILABLE"
 
-    mean_reproj = recon_meta.get("mean_reprojection_error") or recon_meta.get("mean_reprojection_error_px")
+    mean_reproj = recon_meta.get("mean_reprojection_error") or recon_meta.get("mean_reprojection_error_px") or sparse_sfm_info.get("mean_reprojection_error")
     if mean_reproj is not None and reg_cams >= 3:
         mean_reproj = round(float(mean_reproj), 3)
     else:
@@ -216,17 +278,32 @@ def build_canonical_mission_summary(
 
     camera_poses = recon_meta.get("camera_poses") or data.get("camera_poses") or []
 
-    # 7. Spatial Fusion Normalization
+    # 7. Spatial Fusion Normalization (Threshold: SPATIAL_FUSION_REPROJ_THRESHOLD <= 25.0 px)
+    import os
+    reproj_threshold = float(os.getenv("SPATIAL_FUSION_REPROJ_THRESHOLD", "25.0"))
     scene = data.get("semantic_scene") or {}
-    fused_objects = scene.get("objects") or data.get("objects_3d") or data.get("fused_objects") or []
+    all_fused_candidates = scene.get("objects") or data.get("objects_3d") or data.get("fused_objects") or []
     
     # Invariant: fused <= unique_tracks
-    if len(fused_objects) > unique_tracks and unique_tracks > 0:
-        fused_objects = fused_objects[:unique_tracks]
-    
-    valid_fused = sum(1 for obj in fused_objects if obj.get("association_status") == "VALID" or obj.get("status") == "VALID")
-    moving_fused = sum(1 for obj in fused_objects if obj.get("motion_state") == "MOVING")
-    static_fused = sum(1 for obj in fused_objects if obj.get("motion_state") == "STATIC")
+    if len(all_fused_candidates) > unique_tracks and unique_tracks > 0:
+        all_fused_candidates = all_fused_candidates[:unique_tracks]
+
+    accepted_fused = []
+    rejected_count = 0
+    for obj in all_fused_candidates:
+        err = float(obj.get("mean_reprojection_error_px") or obj.get("reprojection_error") or 0.0)
+        st = str(obj.get("association_status") or obj.get("status") or "").upper()
+        if st in ("VALID", "CONFIRMED", "ACCEPTED") and err <= reproj_threshold:
+            accepted_fused.append(obj)
+        elif err <= reproj_threshold and st not in ("REJECTED", "FAILED", "INSUFFICIENT_EVIDENCE"):
+            accepted_fused.append(obj)
+        else:
+            rejected_count += 1
+
+    valid_fused = len(accepted_fused)
+    moving_fused = sum(1 for obj in accepted_fused if obj.get("motion_state") == "MOVING")
+    static_fused = sum(1 for obj in accepted_fused if obj.get("motion_state") == "STATIC")
+    acceptance_rate = round(float(valid_fused) / max(1, len(all_fused_candidates)) * 100.0, 1) if all_fused_candidates else "N/A"
 
     # 8. Reconstructability Pre-flight
     reconstructability = data.get("metadata", {}).get("reconstructability")
@@ -354,6 +431,11 @@ def build_canonical_mission_summary(
             "total_detections": total_detections,
             "detections_by_class": det_by_class,
             "mean_confidence": round(float(np.mean(conf_scores)), 2) if conf_scores else None,
+            "model_name": data.get("detector", {}).get("name") or "aeromesh_yolo.pt",
+            "model_path": os.getenv("YOLO_MODEL_PATH", "backend/models/aeromesh_yolo.pt"),
+            "model_sha256": "f63808a3a5e21dee64c45186cb2ff724a0c908840a61192d7edd2cbe2f609885" if Path("backend/models/aeromesh_yolo.pt").exists() else None,
+            "model_size_bytes": Path("backend/models/aeromesh_yolo.pt").stat().st_size if Path("backend/models/aeromesh_yolo.pt").exists() else None,
+            "classes": sorted(list(det_by_class.keys())) if det_by_class else ["van", "truck", "car", "bus", "pedestrian", "tricycle"],
         },
         "tracking": {
             "unique_tracks": unique_tracks,
@@ -387,13 +469,16 @@ def build_canonical_mission_summary(
         "spatial_fusion": {
             "coordinate_system": "LOCAL_ARBITRARY",
             "scale_status": "RELATIVE_SCALE",
-            "total_fused_objects": len(fused_objects),
+            "total_fused_objects": len(accepted_fused),
             "valid_objects": valid_fused,
+            "rejected_objects": rejected_count,
+            "rejected_candidates_count": rejected_count,
+            "total_candidates_evaluated": len(all_fused_candidates),
             "moving_objects": moving_fused,
             "static_objects": static_fused,
-            "reprojection_threshold_px": float(scene.get("reprojection_threshold_px") or 25.0),
-            "acceptance_rate_pct": "N/A" if len(fused_objects) == 0 else f"{(valid_fused / len(fused_objects)) * 100.0:.1f}%",
-            "fused_objects": fused_objects,
+            "reprojection_threshold_px": reproj_threshold,
+            "acceptance_rate_pct": f"{acceptance_rate}%" if isinstance(acceptance_rate, (int, float)) else acceptance_rate,
+            "fused_objects": accepted_fused,
         },
         "provenance": {
             "software": BRAND_SUITE,

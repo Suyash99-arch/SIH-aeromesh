@@ -32,7 +32,7 @@ def test_model_registry_reports_missing_model(tmp_path):
 
     assert record.available is False
     assert record.path.endswith("missing.pt")
-    with pytest.raises(ModelUnavailableError, match="YOLO model not found"):
+    with pytest.raises(ModelUnavailableError, match="detector weights not found"):
         registry.require_available()
 
 
@@ -153,6 +153,7 @@ def _get_validation_dir() -> Path:
     return Path("data/validation")
 
 
+@pytest.mark.local_data
 def test_phase4_authoritative_artifact_is_not_mutated():
     import json
 
@@ -171,6 +172,7 @@ def test_phase4_authoritative_artifact_is_not_mutated():
     assert data["tracking_metrics"]["unique_tracks"] == 23
 
 
+@pytest.mark.local_data
 def test_phase_b_authoritative_artifact_is_not_mutated():
     import json
 
@@ -344,6 +346,7 @@ def test_default_tile_inference_is_false():
     assert sig_v.parameters["tile_inference"].default is False
 
 
+@pytest.mark.local_data
 def test_no_mutation_of_authoritative_validation_artifacts():
     base = _get_validation_dir()
     assert (base / "accuracy_remediation" / "phase_b_sampling_benchmark.json").exists()

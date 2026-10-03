@@ -210,16 +210,19 @@ def transcode_to_normalized_h264(
     return output_path
 
 
+DEFAULT_PROXY_MAX_WIDTH = int(os.getenv("VIDEO_PROXY_MAX_WIDTH", "1280"))
+
+
 def create_browser_proxy(
     input_path: Path,
     output_path: Path,
-    max_width: int = 1280,
+    max_width: int = DEFAULT_PROXY_MAX_WIDTH,
     progress_callback: Optional[Callable[[float], None]] = None,
 ) -> Path:
     """
     Create a browser-friendly playback proxy with:
     - H.264 / yuv420p (universal browser support)
-    - Width capped at max_width (default 1280), height scaled proportionally
+    - Width capped at max_width (default 1280 or VIDEO_PROXY_MAX_WIDTH), height scaled proportionally
     - +faststart: moves moov atom to the FRONT of the file so seeking works immediately
     - Keyframe interval ~1s (for accurate seeking)
     - Audio preserved as AAC stereo
@@ -285,7 +288,7 @@ def create_browser_proxy(
 def get_or_create_browser_proxy(
     original_path: Path,
     mission_dir: Path,
-    max_width: int = 1280,
+    max_width: int = DEFAULT_PROXY_MAX_WIDTH,
     progress_callback: Optional[Callable[[float], None]] = None,
 ) -> Optional[Path]:
     """

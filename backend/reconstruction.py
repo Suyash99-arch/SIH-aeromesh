@@ -55,15 +55,27 @@ def _ensure_dir(path: Path) -> Path:
 
 
 # ============================================================
+# CONFIGURABLE RECONSTRUCTION PARAMETERS (ENV-BACKED)
+# ============================================================
+RECONSTRUCTION_MAX_IMAGE_DIM = int(os.getenv("RECONSTRUCTION_MAX_IMAGE_DIM", "1600"))
+RECONSTRUCTION_OPTICAL_FLOW_THRESHOLD = float(os.getenv("RECONSTRUCTION_OPTICAL_FLOW_THRESHOLD", "0.8"))
+FRAME_QUALITY_MIN_SHARPNESS = float(os.getenv("FRAME_QUALITY_MIN_SHARPNESS", "12.0"))
+FRAME_QUALITY_MIN_BRIGHTNESS = float(os.getenv("FRAME_QUALITY_MIN_BRIGHTNESS", "15.0"))
+FRAME_QUALITY_MAX_BRIGHTNESS = float(os.getenv("FRAME_QUALITY_MAX_BRIGHTNESS", "88.0"))
+FRAME_QUALITY_MIN_FEATURES = int(os.getenv("FRAME_QUALITY_MIN_FEATURES", "25"))
+FRAME_QUALITY_DIFF_THRESHOLD = float(os.getenv("FRAME_QUALITY_DIFF_THRESHOLD", "3.0"))
+
+
+# ============================================================
 # FRAME QUALITY & OVERLAP FILTERING
 # ============================================================
 
 def assess_frame_quality(
     frame: np.ndarray,
-    min_sharpness: float = 12.0,
-    min_brightness: float = 15.0,
-    max_brightness: float = 88.0,
-    min_features: int = 25,
+    min_sharpness: float = FRAME_QUALITY_MIN_SHARPNESS,
+    min_brightness: float = FRAME_QUALITY_MIN_BRIGHTNESS,
+    max_brightness: float = FRAME_QUALITY_MAX_BRIGHTNESS,
+    min_features: int = FRAME_QUALITY_MIN_FEATURES,
 ) -> Dict[str, Any]:
     """
     Evaluate frame suitability for photogrammetry.
@@ -119,7 +131,7 @@ def assess_frame_quality(
     }
 
 
-def is_near_duplicate(frame1: np.ndarray, frame2: np.ndarray, diff_threshold: float = 3.0) -> bool:
+def is_near_duplicate(frame1: np.ndarray, frame2: np.ndarray, diff_threshold: float = FRAME_QUALITY_DIFF_THRESHOLD) -> bool:
     """Check if two consecutive frames have virtually zero motion/visual change."""
     if frame1 is None or frame2 is None:
         return False
@@ -135,7 +147,7 @@ def extract_frames_with_quality(
     mission_id: str,
     max_frames: int = 40,
     target_fps: float = 2.0,
-    min_sharpness: float = 12.0,
+    min_sharpness: float = FRAME_QUALITY_MIN_SHARPNESS,
 ) -> Dict[str, Any]:
     """
     Extract frames from video with quality filtering and overlap selection.
@@ -207,7 +219,7 @@ def extract_frames_with_quality(
                         None, 0.5, 3, 15, 3, 5, 1.2, 0
                     )
                     mag = float(np.mean(np.sqrt(flow[..., 0]**2 + flow[..., 1]**2)))
-                    if mag < 0.8: # Redundant stationary frame
+                    if mag < RECONSTRUCTION_OPTICAL_FLOW_THRESHOLD: # Redundant stationary frame
                         rejected_reasons_tally["low_parallax"] = rejected_reasons_tally.get("low_parallax", 0) + 1
                         frame_index += 1
                         continue
@@ -215,10 +227,10 @@ def extract_frames_with_quality(
                     pass
 
             # Frame passed quality and overlap checks
-            # Scale ultra-high-res frames to 1600px max dimension for fast, robust photogrammetry
+            # Scale ultra-high-res frames to configured max dimension for fast, robust photogrammetry
             h, w = frame.shape[:2]
-            if max(h, w) > 1600:
-                scale_factor = 1600.0 / max(h, w)
+            if max(h, w) > RECONSTRUCTION_MAX_IMAGE_DIM:
+                scale_factor = float(RECONSTRUCTION_MAX_IMAGE_DIM) / max(h, w)
                 save_frame = cv2.resize(frame, (int(w * scale_factor), int(h * scale_factor)), interpolation=cv2.INTER_AREA)
             else:
                 save_frame = frame
@@ -2006,7 +2018,7 @@ def get_reconstruction_metadata(mission_id: str) -> Optional[Dict[str, Any]]:
     """Retrieve saved reconstruction metadata JSON for a mission with verified geometry stats."""
     def _enrich_metadata(data: Dict[str, Any]) -> Dict[str, Any]:
         reg_cams = int(data.get("registered_cameras", 0))
-        if reg_cams < 3 or data.get("success") is False or data.get("status") == "FAILED":
+        if reg_cams < 3:
             data["success"] = False
             data["status"] = "FAILED"
             data["point_cloud_url"] = None
@@ -2024,6 +2036,10 @@ def get_reconstruction_metadata(mission_id: str) -> Optional[Dict[str, Any]]:
         m_verts, m_faces = _inspect_ply_header(mesh_p)
         p_verts, _ = _inspect_ply_header(pt_p)
 
+        stages = data.get("stages") or {}
+        sparse_sfm = stages.get("sparse_sfm") or {}
+        surface_mesh = stages.get("surface_mesh") or {}
+
         if m_faces > 0:
             existing_mesh = data.get("mesh")
             if not isinstance(existing_mesh, dict):
@@ -2032,14 +2048,38 @@ def get_reconstruction_metadata(mission_id: str) -> Optional[Dict[str, Any]]:
             existing_mesh.setdefault("vertex_count", m_verts)
             existing_mesh.setdefault("format", "ply")
             data["mesh"] = existing_mesh
+            data["mesh_vertices"] = m_verts
+            data["mesh_faces"] = m_faces
+            data["mesh_status"] = "AVAILABLE"
+        else:
+            existing_m = data.get("mesh") or {}
+            m_v = int(existing_m.get("vertex_count") or surface_mesh.get("vertex_count") or data.get("mesh_vertices") or 0)
+            m_f = int(existing_m.get("face_count") or surface_mesh.get("face_count") or data.get("mesh_faces") or 0)
+            if m_v > 0 or m_f > 0:
+                data["mesh_vertices"] = m_v
+                data["mesh_faces"] = m_f
+                data["mesh_status"] = "AVAILABLE"
+                if not isinstance(data.get("mesh"), dict):
+                    data["mesh"] = {}
+                data["mesh"]["vertex_count"] = m_v
+                data["mesh"]["face_count"] = m_f
 
         if p_verts > 0:
-            if not data.get("sparse_point_count") or data.get("sparse_point_count") <= 0:
-                data["sparse_point_count"] = p_verts
-                data["point_count"] = p_verts
+            data["sparse_point_count"] = p_verts
+            data["point_count"] = p_verts
+        elif not data.get("sparse_point_count") or int(data.get("sparse_point_count", 0)) <= 0:
+            stage_pts = int(sparse_sfm.get("points") or 0)
+            if stage_pts > 0:
+                data["sparse_point_count"] = stage_pts
+                data["point_count"] = stage_pts
 
-        data["point_cloud_url"] = f"/api/missions/{mission_id}/reconstruction/pointcloud" if pt_p else None
-        data["mesh_url"] = f"/api/missions/{mission_id}/reconstruction/mesh" if mesh_p else None
+        if not data.get("mean_reprojection_error") and not data.get("mean_reprojection_error_px"):
+            if sparse_sfm.get("mean_reprojection_error"):
+                data["mean_reprojection_error"] = float(sparse_sfm["mean_reprojection_error"])
+                data["mean_reprojection_error_px"] = float(sparse_sfm["mean_reprojection_error"])
+
+        data["point_cloud_url"] = f"/api/missions/{mission_id}/reconstruction/pointcloud" if (pt_p or data.get("sparse_point_count", 0) > 0) else None
+        data["mesh_url"] = f"/api/missions/{mission_id}/reconstruction/mesh" if (mesh_p or data.get("mesh_status") == "AVAILABLE") else None
         return data
 
     summary_files = [

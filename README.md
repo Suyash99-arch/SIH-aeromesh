@@ -146,6 +146,20 @@ Hexa Spark enforces scoped, role-based authorization via JWT tokens and secure c
 
 ---
 
+## AI Vision Models & Tactical Weights
+
+Hexa Spark includes pre-trained neural vision models optimized for tactical aerial imagery and drone-based object detection:
+
+- **Primary Detector Weights**: `backend/models/aeromesh_yolo.pt`
+- **File Size**: 21,246,435 bytes (20.26 MB)
+- **SHA256 Checksum**: `f63808a3a5e21dee64c45186cb2ff724a0c908840a61192d7edd2cbe2f609885`
+- **Target Classes**: `van`, `truck`, `car`, `bus`, `pedestrian`, `person`, `tricycle`, `awning-tricycle`, `motorcycle`, `bicycle`, `vehicle`
+- **Fail-Fast Policy**: If model weights are missing at the configured path, the service raises `FileNotFoundError("detector weights not found at <path>, see README")` immediately, preventing silent fallbacks or unverified runtime downloads.
+
+Custom models can be supplied by pointing `YOLO_MODEL_PATH` to any local `.pt` weights file in your `.env`.
+
+---
+
 ## Environment Variables
 
 | Variable Name | Default Value | Description |
@@ -155,7 +169,19 @@ Hexa Spark enforces scoped, role-based authorization via JWT tokens and secure c
 | `STORAGE_BACKEND` | `local` | Storage driver (`local` or `s3`) |
 | `GUEST_TTL_HOURS` | `2` | Session lifespan in hours for ephemeral guest workspaces |
 | `PORT` | `8000` | HTTP port for FastAPI backend |
-| `CORS_ORIGINS` | `http://localhost:5173,http://127.0.0.1:5173` | Comma-separated list of allowed CORS origins |
+| `CORS_ALLOWED_ORIGINS` | `http://localhost:5173,http://127.0.0.1:5173` | Comma-separated list of allowed CORS origins |
+| `YOLO_MODEL_PATH` | `backend/models/aeromesh_yolo.pt` | Path to tactical YOLO weights file |
+| `DETECTION_CONFIDENCE` | `0.35` | Minimum object detection confidence threshold |
+| `DETECTION_IOU` | `0.7` | NMS IoU threshold for 2D detections |
+| `DETECTION_SAMPLE_FPS` | `2.0` | Target frame sampling frequency for video inference |
+| `DETECTION_IMGSZ` | `1280` | Input dimension for YOLO inference |
+| `DETECTION_TILE_IOU` | `0.5` | IoU threshold for suppressing duplicates across overlapping tiles |
+| `DETECTION_TILE_OVERLAP` | `0.15` | Overlap percentage between adjacent inference tiles |
+| `VIDEO_PROXY_MAX_WIDTH` | `1280` | Max width for browser-compatible H.264 video proxy transcoding |
+| `RECONSTRUCTION_MAX_IMAGE_DIM` | `1600` | Maximum dimension for working-copy photogrammetry keyframes |
+| `RECONSTRUCTION_OPTICAL_FLOW_THRESHOLD` | `0.8` | Minimum optical flow magnitude to filter stationary redundant frames |
+| `FRAME_QUALITY_MIN_SHARPNESS` | `12.0` | Minimum Laplacian variance for photogrammetry frame acceptance |
+| `SPATIAL_FUSION_REPROJ_THRESHOLD` | `25.0` | Max pixel reprojection error before rejecting 3D candidate objects |
 | `BRAND_NAME` | `Hexa Spark` | Platform brand name for executive reports |
 | `BRAND_SUITE` | `Hexa Spark Aerial Intelligence Platform` | Suite title displayed on generated PDF reports |
 

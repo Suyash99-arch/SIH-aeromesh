@@ -1,10 +1,16 @@
-from __future__ import annotations
-
+import os
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any, Iterable
 
 from .model_registry import ModelRecord, ModelRegistry
+
+DEFAULT_DETECTION_CONFIDENCE = float(os.getenv("DETECTION_CONFIDENCE", "0.35"))
+DEFAULT_DETECTION_IOU = float(os.getenv("DETECTION_IOU", "0.7"))
+DEFAULT_DETECTION_SAMPLE_FPS = float(os.getenv("DETECTION_SAMPLE_FPS", "2.0"))
+DEFAULT_DETECTION_IMGSZ = int(os.getenv("DETECTION_IMGSZ", "1280"))
+DEFAULT_TILE_IOU = float(os.getenv("DETECTION_TILE_IOU", "0.5"))
+DEFAULT_TILE_OVERLAP = float(os.getenv("DETECTION_TILE_OVERLAP", "0.15"))
 
 
 @dataclass(frozen=True)
@@ -17,7 +23,7 @@ class DetectionRecord:
     track_id: str | None = None
 
 
-def calculate_frame_interval(fps: float, sample_fps: float = 2.0) -> int:
+def calculate_frame_interval(fps: float, sample_fps: float = DEFAULT_DETECTION_SAMPLE_FPS) -> int:
     """Calculate frame stride/interval from video FPS and target sampling FPS."""
     if fps <= 0:
         return 1
@@ -179,15 +185,17 @@ class DetectionService:
         tile_inference: bool = False,
         tile_rows: int = 2,
         tile_cols: int = 2,
-        tile_overlap: float = 0.15,
-        tile_iou: float = 0.5,
+        tile_overlap: float = DEFAULT_TILE_OVERLAP,
+        tile_iou: float = DEFAULT_TILE_IOU,
+        imgsz: int | None = None,
     ) -> list[DetectionRecord]:
         if frame is None:
             raise ValueError("INVALID_FRAME")
         model = self._get_model()
+        target_imgsz = imgsz or DEFAULT_DETECTION_IMGSZ
 
         if not tile_inference:
-            kwargs = {"conf": confidence, "iou": iou, "verbose": False}
+            kwargs = {"conf": confidence, "iou": iou, "imgsz": target_imgsz, "verbose": False}
             result = model(frame, **{key: value for key, value in kwargs.items() if value is not None})[0]
             return self._normalize(result, frame_id, timestamp, classes, confidence)
 
@@ -200,7 +208,7 @@ class DetectionService:
 
         for tx1, ty1, tx2, ty2 in tiles:
             tile = frame[ty1:ty2, tx1:tx2]
-            kwargs = {"conf": confidence, "iou": iou, "verbose": False}
+            kwargs = {"conf": confidence, "iou": iou, "imgsz": target_imgsz, "verbose": False}
             result = model(tile, **{key: value for key, value in kwargs.items() if value is not None})[0]
             tile_records = self._normalize(result, frame_id, timestamp, classes, confidence)
             del tile
@@ -229,16 +237,17 @@ class DetectionService:
     def detect_video(
         self,
         video_path: Path,
-        sample_fps: float = 2.0,
-        confidence: float = 0.35,
-        iou: float = 0.7,
+        sample_fps: float = DEFAULT_DETECTION_SAMPLE_FPS,
+        confidence: float = DEFAULT_DETECTION_CONFIDENCE,
+        iou: float = DEFAULT_DETECTION_IOU,
         classes: set[str] | None = None,
         scene_profile: str | None = None,
         tile_inference: bool = False,
         tile_rows: int = 2,
         tile_cols: int = 2,
-        tile_overlap: float = 0.15,
-        tile_iou: float = 0.5,
+        tile_overlap: float = DEFAULT_TILE_OVERLAP,
+        tile_iou: float = DEFAULT_TILE_IOU,
+        imgsz: int = DEFAULT_DETECTION_IMGSZ,
     ) -> list[DetectionRecord]:
         import cv2
         capture = cv2.VideoCapture(str(video_path))

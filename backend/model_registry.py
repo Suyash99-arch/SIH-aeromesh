@@ -20,7 +20,7 @@ class ModelRecord:
     registered_at: str
 
 
-class ModelUnavailableError(RuntimeError):
+class ModelUnavailableError(FileNotFoundError):
     code = "MODEL_NOT_FOUND"
 
 
@@ -60,7 +60,7 @@ class ModelRegistry:
     def require_available(self) -> ModelRecord:
         record = self.inspect()
         if not record.available:
-            raise ModelUnavailableError(f"YOLO model not found at {record.path}. Set YOLO_MODEL_PATH to an authorized local model file.")
+            raise ModelUnavailableError(f"detector weights not found at {record.path}, see README")
         return record
 
     def metadata(self) -> dict[str, Any]:
