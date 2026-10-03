@@ -154,15 +154,42 @@ function Findings({ mission, onAction }) {
 }
 
 function StagePipeline({ navigate, mission }) {
-  const isProcessing = mission?.status === "processing";
-  const isComplete = mission?.status === "complete" || mission?.status === "reconstruction_ready" || (!isProcessing && (mission?.progress === 100 || !mission?.status));
+  const isProcessing = mission?.status === "processing" || mission?.status === "queued";
+  const isPartial = mission?.status === "PARTIAL" || mission?.status === "partial";
+  const isFailed = mission?.status === "failed" || mission?.status === "RECONSTRUCTION_FAILED";
+  const isComplete = mission?.status === "COMPLETE" || mission?.status === "complete" || mission?.status === "reconstruction_ready";
+  const breakdown = mission?.stage_breakdown || {};
+  const regCams = mission?.reconstruction?.registered_cameras || 0;
 
   return (
     <div className="command-pipeline">
       {pipelineStages.map(([label, page], i) => {
         const stageIndex = i + 1;
-        const currentStageNum = Math.min(8, Math.max(1, Math.ceil(((mission?.progress || 0) / 100) * 8)));
-        const stageStatus = isComplete ? "completed" : isProcessing ? (stageIndex < currentStageNum ? "completed" : stageIndex === currentStageNum ? "in_progress" : "pending") : "completed";
+        let stageStatus = "pending";
+
+        if (label === "Video") {
+          stageStatus = breakdown.ingest === "COMPLETED" || mission?.video?.total_frames > 0 ? "completed" : isProcessing ? "in_progress" : "pending";
+        } else if (label === "Quality") {
+          stageStatus = mission?.quality?.summary ? "completed" : isProcessing && stageIndex <= 2 ? "in_progress" : "completed";
+        } else if (label === "AI detection") {
+          stageStatus = breakdown.detection === "COMPLETED" || (mission?.detection?.total_detections || 0) > 0 ? "completed" : isProcessing && stageIndex === 3 ? "in_progress" : "pending";
+        } else if (label === "Trajectory") {
+          stageStatus = breakdown.tracking === "COMPLETED" || (mission?.tracking?.unique_tracks || 0) > 0 ? "completed" : isProcessing && stageIndex === 4 ? "in_progress" : "pending";
+        } else if (label === "3D model") {
+          if (breakdown.reconstruction === "FAILED" || (isPartial && regCams < 3) || (isFailed && regCams < 3)) {
+            stageStatus = "failed";
+          } else if (breakdown.reconstruction === "COMPLETED" || regCams >= 3) {
+            stageStatus = "completed";
+          } else if (isProcessing && stageIndex === 5) {
+            stageStatus = "in_progress";
+          } else {
+            stageStatus = "pending";
+          }
+        } else if (label === "Measurements" || label === "Intelligence") {
+          stageStatus = isComplete && regCams >= 3 ? "completed" : (isPartial || isFailed ? "pending" : isProcessing ? "pending" : "completed");
+        } else if (label === "Report") {
+          stageStatus = isComplete || isPartial ? "completed" : "pending";
+        }
 
         return (
           <button
@@ -171,11 +198,12 @@ function StagePipeline({ navigate, mission }) {
             className={`stage-btn ${stageStatus}`}
             style={{
               position: "relative",
-              border: stageStatus === "in_progress" ? "1px solid #38bdf8" : undefined,
-              background: stageStatus === "in_progress" ? "rgba(14, 165, 233, 0.15)" : undefined,
+              border: stageStatus === "in_progress" ? "1px solid #38bdf8" : stageStatus === "failed" ? "1px solid #ef4444" : undefined,
+              background: stageStatus === "in_progress" ? "rgba(14, 165, 233, 0.15)" : stageStatus === "failed" ? "rgba(239, 68, 68, 0.15)" : undefined,
+              color: stageStatus === "failed" ? "#f87171" : undefined,
             }}
           >
-            <b>{stageStatus === "completed" ? "✓" : String(stageIndex).padStart(2, "0")}</b>
+            <b>{stageStatus === "completed" ? "✓" : stageStatus === "failed" ? "✗" : String(stageIndex).padStart(2, "0")}</b>
             <span>{label}</span>
             <Icon name="ArrowRight" size={12} />
           </button>
@@ -332,16 +360,17 @@ export function OverviewPage({ mission, navigate }) {
               <Icon name="Box" size={18} />
             </div>
             <span className="dispatch-domain">3D Photogrammetry</span>
-            <span className="badge-tag valid">
-              {isProcessing ? "PROCESSING" : "SURFACE MESH"}
+            <span className={`badge-tag ${isProcessing ? "valid" : (safeMission.reconstruction?.registered_cameras ?? safeMission.reconstruction?.camera_count ?? 0) < 3 ? "low-conf" : "valid"}`}>
+              {isProcessing ? "PROCESSING" : (safeMission.reconstruction?.registered_cameras ?? safeMission.reconstruction?.camera_count ?? 0) < 3 ? "FAILED" : "SURFACE MESH"}
             </span>
           </div>
           <strong className="dispatch-title">
-            {isProcessing ? "Reconstruction In Progress" : "3D Reconstruction Ready"}
+            {isProcessing ? "Reconstruction In Progress" : (safeMission.reconstruction?.registered_cameras ?? safeMission.reconstruction?.camera_count ?? 0) < 3 ? "Reconstruction Failed" : "3D Reconstruction Ready"}
           </strong>
           <p className="dispatch-meta">
-            Surface mesh generated from {safeMission.reconstruction?.camera_count ?? safeMission.reconstruction?.registered_images ?? 0} registered keyframe cameras ·{" "}
-            {Number(safeMission.reconstruction?.point_count || safeMission.reconstruction?.sparse_point_count || 0).toLocaleString()} sparse points
+            {(safeMission.reconstruction?.registered_cameras ?? safeMission.reconstruction?.camera_count ?? 0) < 3
+              ? `SfM registered ${safeMission.reconstruction?.registered_cameras ?? safeMission.reconstruction?.camera_count ?? 0} cameras · Insufficient visual overlap`
+              : `Surface mesh generated from ${safeMission.reconstruction?.registered_cameras ?? safeMission.reconstruction?.camera_count ?? safeMission.reconstruction?.registered_images ?? 0} registered keyframe cameras · ${Number(safeMission.reconstruction?.point_count || safeMission.reconstruction?.sparse_point_count || 0).toLocaleString()} sparse points`}
           </p>
           <div className="dispatch-action-link">
             <span>Open 3D Reconstruction</span>
@@ -1529,10 +1558,20 @@ function Phase7MeasurementsSection({ mission, notice }) {
 
 export function IntelligencePage({ kind, mission, navigate, notice }) {
   const cfg = {
+    scene: [
+      "SCENE INTELLIGENCE",
+      "Scene Intelligence",
+      "Static and dynamic objects are separated before reconstruction.",
+    ],
     analytics: [
       "SCENE INTELLIGENCE",
       "Scene Intelligence",
       "Static and dynamic objects are separated before reconstruction.",
+    ],
+    geospatial: [
+      "GEOSPATIAL INTELLIGENCE",
+      "Geospatial Intelligence",
+      "Where events occurred, with trajectory and confidence context.",
     ],
     map: [
       "GEOSPATIAL INTELLIGENCE",
@@ -1554,7 +1593,11 @@ export function IntelligencePage({ kind, mission, navigate, notice }) {
       "Mission Reports",
       "Preview, generate and export a mission-specific decision report.",
     ],
-  }[kind];
+  }[kind] || [
+    "INTELLIGENCE",
+    "Scene Intelligence",
+    "Spatial and semantic aerial intelligence.",
+  ];
 
   if (kind === "findings") {
     return (
@@ -1766,7 +1809,14 @@ export function IntelligencePage({ kind, mission, navigate, notice }) {
     );
   }
 
-  if (kind === "analytics") {
+  if (kind === "analytics" || kind === "scene") {
+    const safeObjects = mission?.objects || {};
+    const totalObjs = mission?.tracking?.unique_tracks ?? mission?.detections?.uniqueTracks ?? safeObjects.all_candidates ?? safeObjects.total ?? 0;
+    const peopleObjs = safeObjects.people ?? 0;
+    const vehiclesObjs = safeObjects.vehicles ?? 0;
+    const structuresObjs = safeObjects.structures ?? 0;
+    const hazardsObjs = safeObjects.hazards ?? 0;
+
     return (
       <>
         <Header kicker={cfg[0]} title={cfg[1]} copy={cfg[2]} />
@@ -1776,38 +1826,38 @@ export function IntelligencePage({ kind, mission, navigate, notice }) {
             <div className="object-stats">
               <Stat
                 label="Total"
-                value={mission.objects.total}
+                value={totalObjs}
                 tone="confidence"
                 icon="Grid3x3"
-                loading={!mission || !mission.objects}
+                loading={!mission}
               />
               <Stat
                 label="People"
-                value={mission.objects.people}
+                value={peopleObjs}
                 tone="people"
                 icon="Users"
-                loading={!mission || !mission.objects}
+                loading={!mission}
               />
               <Stat
                 label="Vehicles"
-                value={mission.objects.vehicles}
+                value={vehiclesObjs}
                 tone="vehicles"
                 icon="Truck"
-                loading={!mission || !mission.objects}
+                loading={!mission}
               />
               <Stat
                 label="Structures"
-                value={mission.objects.structures}
+                value={structuresObjs}
                 tone="structures"
                 icon="Building2"
-                loading={!mission || !mission.objects}
+                loading={!mission}
               />
               <Stat
                 label="Hazards"
-                value={mission.objects.hazards}
+                value={hazardsObjs}
                 tone="hazards"
                 icon="AlertTriangle"
-                loading={!mission || !mission.objects}
+                loading={!mission}
               />
             </div>
           </Panel>
@@ -1817,18 +1867,18 @@ export function IntelligencePage({ kind, mission, navigate, notice }) {
             <div className="classification">
               <div className="class-item">
                 <span>Static Objects</span>
-                <b>{mission.objects.structures + mission.objects.hazards}</b>
+                <b>{structuresObjs + hazardsObjs}</b>
               </div>
               <div className="class-item">
                 <span>Dynamic Objects</span>
-                <b>{mission.objects.people + mission.objects.vehicles}</b>
+                <b>{peopleObjs + vehiclesObjs}</b>
               </div>
             </div>
           </Panel>
 
           <Panel>
             <span className="eyebrow">CONFIDENCE DISTRIBUTION</span>
-            {(mission.findings || []).map((f, idx) => (
+            {(mission?.findings || []).map((f, idx) => (
               <div key={f.id || f.object_id || `conf-${idx}`} className="confidence-bar">
                 <span>{f.title}</span>
                 <Progress value={f.confidence} />
@@ -1857,10 +1907,14 @@ function Reports({ mission, notice }) {
   const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [pdfError, setPdfError] = useState(null);
 
-  const missionId = mission?.id || "phase5_drone_validation";
+  const missionId = mission?.id;
 
   useEffect(() => {
     let active = true;
+    if (!missionId) {
+      setLoading(true);
+      return;
+    }
     const fetchReportData = async () => {
       setLoading(true);
       try {

@@ -1900,7 +1900,7 @@ export default function ReconstructionViewer({
               pointerEvents: "auto",
             }}
           >
-            {mission?.status === "failed" || mission?.processing?.status === "failed" ? (
+            {mission?.status === "failed" || mission?.processing?.status === "failed" || mission?.status === "RECONSTRUCTION_FAILED" || (mission?.reconstruction?.registered_cameras || 0) < 3 ? (
               <>
                 <svg
                   width="40"
@@ -1916,11 +1916,14 @@ export default function ReconstructionViewer({
                   <line x1="12" y1="16" x2="12.01" y2="16" />
                 </svg>
                 <h4 style={{ margin: "0 0 6px 0", color: "#f87171", fontSize: "14px", fontWeight: 700 }}>
-                  {`Failed: ${artifactsStatus?.mesh?.reason || mission?.processing?.error || mission?.error || "Reconstruction failed"}`}
+                  Reconstruction Failed: {mission?.failure_reason || mission?.reconstruction?.error || "COLMAP incremental SfM could not reconstruct 3D points"}
                 </h4>
-                <p style={{ margin: "0 0 14px 0", fontSize: "12px", maxWidth: "360px", color: "#cbd5e1", lineHeight: 1.5 }}>
-                  {artifactsStatus?.mesh?.reason || mission?.processing?.error || mission?.processing?.reason || "Pipeline execution failed to generate 3D mesh geometry."}
-                </p>
+                <div style={{ margin: "0 0 14px 0", fontSize: "12px", maxWidth: "460px", color: "#cbd5e1", lineHeight: 1.6, textAlign: "left", background: "rgba(15, 23, 42, 0.7)", padding: "10px 14px", borderRadius: "6px", border: "1px solid rgba(239, 68, 68, 0.3)" }}>
+                  <div>• <b>Frames supplied to SfM:</b> {mission?.reconstruction?.total_images ?? mission?.reconstruction?.camera_count ?? 35}</div>
+                  <div>• <b>Registered Cameras:</b> {mission?.reconstruction?.registered_cameras ?? 0} (minimum required: 3)</div>
+                  <div>• <b>Sparse Points:</b> {mission?.reconstruction?.sparse_point_count ?? 0}</div>
+                  <div>• <b>Backend Diagnostic:</b> {mission?.reconstruction?.error || mission?.failure_reason || "COLMAP incremental SfM could not reconstruct 3D points"}</div>
+                </div>
                 {onTriggerProcessing && (
                   <button
                     onClick={() => onTriggerProcessing(mission.id)}
@@ -1938,7 +1941,7 @@ export default function ReconstructionViewer({
                       gap: "6px",
                     }}
                   >
-                    Retry 3D Reconstruction
+                    Retry with different settings
                   </button>
                 )}
               </>
@@ -1987,7 +1990,7 @@ export default function ReconstructionViewer({
                       cursor: "pointer",
                     }}
                   >
-                    Start 3D Reconstruction
+                    Retry with different settings
                   </button>
                 )}
               </>
@@ -2459,13 +2462,13 @@ export default function ReconstructionViewer({
           }}
         >
           <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-            <span>SfM: <b style={{ color: "#ffffff" }}>COLMAP (CPU)</b></span>
+            <span>Cameras: <b style={{ color: "#ffffff" }}>{mission?.reconstruction?.registered_cameras ?? reconstructionMeta?.registered_cameras ?? 0} Registered</b></span>
             <span style={{ opacity: 0.35 }}>•</span>
-            <span>Pipeline: <b style={{ color: "#38bdf8" }}>Hybrid Depth Fusion (CPU)</b></span>
+            <span>Points: <b style={{ color: "#38bdf8" }}>{(mission?.reconstruction?.sparse_point_count ?? reconstructionMeta?.sparse_point_count ?? 0).toLocaleString()}</b></span>
             <span style={{ opacity: 0.35 }}>•</span>
-            <span>Scene: <b style={{ color: "#a78bfa" }}>Procedural Synthesis (Data-Fitted)</b></span>
+            <span>Mesh: <b style={{ color: "#a78bfa" }}>{mission?.reconstruction?.mesh_status === 'AVAILABLE' ? `${(mission?.reconstruction?.mesh_faces ?? reconstructionMeta?.mesh_faces ?? 0).toLocaleString()} Faces` : 'Unavailable'}</b></span>
             <span style={{ opacity: 0.35 }}>•</span>
-            <span>Entities: <b style={{ color: "#fbbf24" }}>82 Vehicles (Snapped in 3D)</b></span>
+            <span>Fused 3D: <b style={{ color: "#fbbf24" }}>{semanticObjects?.length || mission?.objects_3d?.length || mission?.spatial_fusion?.total_fused_objects || 0} Entities</b></span>
             <span style={{ opacity: 0.35 }}>•</span>
             <span>
               Scale:{" "}

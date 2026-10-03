@@ -27,8 +27,9 @@ export const BACKEND_URL = API_BASE.replace(/\/api(\/v1)?$/, "");
 
 const fallbackMission = {
   id: "",
-  name: "Active Mission",
-  sector: "Aerial Sector",
+  name: "Untitled mission",
+  sector: "Not set",
+  location: "Not set",
   status: "ready",
   priority: "medium",
   type: "Single-Pass Aerial Reconstruction",
@@ -280,10 +281,10 @@ export async function createMission({ name, missionType, location, operator }) {
   }
 }
 
-export async function getMission(missionId, forceRefresh = false) {
+export async function getMission(missionId, forceRefresh = true) {
   if (!forceRefresh && missionCache.has(missionId)) {
     const cached = missionCache.get(missionId);
-    if (cached && cached.status !== "processing") {
+    if (cached && cached.status !== "processing" && cached.canonical_summary) {
       console.log(`[Mission] Cache hit for mission ${missionId}`);
       return cached;
     }

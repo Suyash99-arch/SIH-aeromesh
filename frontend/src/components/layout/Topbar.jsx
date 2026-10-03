@@ -43,7 +43,12 @@ export default function Topbar({
 }) {
   const health = useHealthStatus();
 
+  const isGuest = Boolean(currentUser?.is_guest || currentUser?.portal_type === "GUEST" || currentUser?.role === "GUEST");
+
   const getRoleBadgeStyle = (role) => {
+    if (isGuest || role === "GUEST") {
+      return { background: "rgba(251, 191, 36, 0.2)", color: "#fbbf24", border: "1px solid rgba(251, 191, 36, 0.4)" };
+    }
     switch (role) {
       case "ADMIN":
         return { background: "rgba(168, 85, 247, 0.2)", color: "#c084fc", border: "1px solid rgba(168, 85, 247, 0.4)" };
@@ -54,12 +59,19 @@ export default function Topbar({
     }
   };
 
-  // Derive initials from full_name only; never fall back to "AM"
-  const initials = currentUser?.full_name
+  // Derive initials from full_name only; never fall back to fake names
+  const initials = isGuest
+    ? "G"
+    : currentUser?.full_name
     ? currentUser.full_name.split(" ").map((n) => n[0]).join("").toUpperCase().slice(0, 2)
     : currentUser?.email
     ? currentUser.email.slice(0, 2).toUpperCase()
     : "?";
+
+  const displayName = isGuest
+    ? "Guest"
+    : (currentUser?.full_name || currentUser?.email || "Sign In");
+  const displayRole = isGuest ? "GUEST" : (currentUser?.role || "");
 
   const handleOperatorClick = () => {
     if (currentUser) {
@@ -130,15 +142,15 @@ export default function Topbar({
           style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer" }}
         >
           <span className="operator-avatar">{initials}</span>
-          <span className="operator-name">{currentUser?.full_name || currentUser?.email || "Sign In"}</span>
+          <span className="operator-name">{displayName}</span>
           {currentUser ? (
-            currentUser.role ? (
+            displayRole ? (
               <span style={{
-                ...getRoleBadgeStyle(currentUser.role),
+                ...getRoleBadgeStyle(displayRole),
                 fontSize: "0.68rem", fontWeight: 700, padding: "2px 6px",
                 borderRadius: "4px", marginLeft: "4px", textTransform: "uppercase", letterSpacing: "0.04em",
               }}>
-                {currentUser.role}
+                {displayRole}
               </span>
             ) : null
           ) : (
