@@ -39,26 +39,41 @@ class MissionRepository:
         mission = self.session.get(Mission, mission_id)
         return _payload(mission) if mission else None
 
-    def list(self, user: Any = None) -> list[dict[str, Any]]:
+    def delete(self, mission_id: str) -> bool:
+        mission = self.session.get(Mission, mission_id)
+        if mission is not None:
+            self.session.delete(mission)
+            self.session.flush()
+            return True
+        return False
+
+    def list(self, user: Any = None, include_benchmarks: bool = False) -> list[dict[str, Any]]:
+        from sqlalchemy import not_, or_
         query = select(Mission).order_by(Mission.created_at.desc())
-        if user is not None and getattr(user, "role", "") != "ADMIN":
-            portal = getattr(user, "portal_type", "INDIVIDUAL")
-            org = getattr(user, "organization_name", None)
-            uid = getattr(user, "id", None)
-            email = getattr(user, "email", None)
-            if portal == "GOVERNMENT_ORG" and org:
-                from sqlalchemy import or_
-                query = query.where(or_(
-                    Mission.organization_name == org,
-                    Mission.owner_id == uid,
-                    Mission.created_by == email,
-                ))
-            elif uid or email:
-                from sqlalchemy import or_
-                query = query.where(or_(
-                    Mission.owner_id == uid,
-                    Mission.created_by == email,
-                ))
+        if not include_benchmarks:
+            query = query.where(
+                not_(Mission.id.in_(["phase5_drone_validation"])),
+                not_(Mission.id.like("test_%")),
+                not_(Mission.id.like("phase5_%")),
+            )
+        if user is not None:
+            is_superadmin = (getattr(user, "role", "") == "ADMIN" and not getattr(user, "organization_name", None))
+            if not is_superadmin:
+                portal = getattr(user, "portal_type", "INDIVIDUAL")
+                org = getattr(user, "organization_name", None)
+                uid = getattr(user, "id", None)
+                email = getattr(user, "email", None)
+                if portal in ("GOVERNMENT_ORG", "ENTERPRISE") and org:
+                    query = query.where(or_(
+                        Mission.organization_name == org,
+                        Mission.owner_id == uid,
+                        Mission.created_by == email,
+                    ))
+                elif uid or email:
+                    query = query.where(or_(
+                        Mission.owner_id == uid,
+                        Mission.created_by == email,
+                    ))
         missions = self.session.scalars(query).all()
         return [_payload(mission) for mission in missions]
 

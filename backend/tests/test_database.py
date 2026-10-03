@@ -112,3 +112,73 @@ def test_geometry_columns_are_postgis_compatible():
 
     assert "geometry(POINT,4326)" in sql
     assert "reference_location" in sql
+
+
+def test_database_url_normalization_all_three_schemes():
+    from backend.database import normalize_database_url
+
+    # Scheme 1: Render / Heroku legacy postgres://
+    render_url = "postgres://aerouser:secretpassword123@dpg-abc123-a.oregon-postgres.render.com:5432/aeromesh_db"
+    norm_1 = normalize_database_url(render_url)
+    assert norm_1.startswith("postgresql+psycopg://")
+    assert "aerouser:secretpassword123@dpg-abc123-a.oregon-postgres.render.com:5432/aeromesh_db" in norm_1
+
+    # Scheme 2: Standard postgresql://
+    standard_url = "postgresql://aerouser:secretpassword123@dpg-abc123-a.oregon-postgres.render.com:5432/aeromesh_db"
+    norm_2 = normalize_database_url(standard_url)
+    assert norm_2.startswith("postgresql+psycopg://")
+    assert norm_2 == norm_1
+
+    # Scheme 3: Explicit postgresql+psycopg://
+    explicit_url = "postgresql+psycopg://aerouser:secretpassword123@dpg-abc123-a.oregon-postgres.render.com:5432/aeromesh_db"
+    norm_3 = normalize_database_url(explicit_url)
+    assert norm_3 == explicit_url
+    assert norm_3 == norm_1
+
+    # Non-postgres scheme (e.g. SQLite for testing) preserved
+    sqlite_url = "sqlite:///local_test.db"
+    assert normalize_database_url(sqlite_url) == sqlite_url
+
+    # Empty / None handling
+    assert normalize_database_url(None) is None
+    assert normalize_database_url("   ") is None
+
+
+def test_mask_database_url_safeguards_credentials():
+    from backend.database import mask_database_url
+
+    secret_url = "postgres://aerouser:UltraSecretPassword99!@db.render.com:5432/aeromesh_prod"
+    masked = mask_database_url(secret_url)
+    assert "UltraSecretPassword99!" not in masked
+    assert "aerouser:***@db.render.com:5432/aeromesh_prod" in masked
+
+    # URL without password
+    no_pw_url = "postgresql://db.render.com:5432/aeromesh"
+    assert mask_database_url(no_pw_url) == no_pw_url
+
+
+def test_validate_production_database_url_scenarios():
+    from backend.database import validate_production_database_url
+
+    # Case 1: Missing DATABASE_URL
+    is_valid, msg = validate_production_database_url("")
+    assert is_valid is False
+    assert "DATABASE_URL is missing" in msg
+
+    # Case 2: Bad scheme (sqlite, mysql, redis)
+    bad_url = "mysql://admin:TopSecretPassword@localhost:3306/aeromesh"
+    is_valid, msg = validate_production_database_url(bad_url)
+    assert is_valid is False
+    assert "scheme 'mysql' is invalid" in msg
+    assert "TopSecretPassword" not in msg
+    assert "admin:***@localhost:3306" in msg
+
+    # Case 3: Valid schemes (all normalize to postgresql+psycopg)
+    for scheme_url in [
+        "postgres://user:pass@host:5432/db",
+        "postgresql://user:pass@host:5432/db",
+        "postgresql+psycopg://user:pass@host:5432/db",
+    ]:
+        is_valid, msg = validate_production_database_url(scheme_url)
+        assert is_valid is True
+        assert msg == ""

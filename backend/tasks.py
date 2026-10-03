@@ -217,7 +217,7 @@ analyze = _register("analyze")
 generate_report = _register("generate_report")
 def _real_pipeline_task(job_id: str):
     from .jobs import get_job, update_job
-    from .main import MissionData, MISSIONS_DIR
+    from .main import DATA_DIR, MissionData, MISSIONS_DIR
     from pathlib import Path
 
     job = get_job(job_id)
@@ -230,19 +230,71 @@ def _real_pipeline_task(job_id: str):
     mission = MissionData(mission_id)
     video_path = mission.get("video_path")
     if not video_path or not Path(video_path).exists():
-        cand = MISSIONS_DIR / mission_id / "video.mp4"
-        if cand.exists():
-            video_path = str(cand)
+        candidates = [
+            MISSIONS_DIR / mission_id / "video.mp4",
+            DATA_DIR / "missions" / mission_id / "video.mp4",
+            DATA_DIR / "objects" / "missions" / mission_id / "video.mp4",
+        ]
+        obj_dir = DATA_DIR / "objects" / "missions" / mission_id
+        if obj_dir.is_dir():
+            candidates.extend(list(obj_dir.glob("*.mp4")))
+        miss_dir = MISSIONS_DIR / mission_id
+        if miss_dir.is_dir():
+            candidates.extend(list(miss_dir.glob("*.mp4")))
+        for cand in candidates:
+            if Path(cand).is_file() and Path(cand).stat().st_size > 0:
+                video_path = str(cand)
+                break
 
     # 1. Detection & Tracking
     det_res = _detection_task(job_id, video_path=video_path, sample_fps=2.0)
     detections = det_res.get("detections", []) if isinstance(det_res, dict) else []
     track_res = _tracking_task(job_id, detections=detections)
+    tracks = track_res.get("tracks", []) if isinstance(track_res, dict) else []
 
-    # 2. 3D Reconstruction
+    # Format findings for UI compatibility
+    findings = []
+    for d in detections:
+        findings.append({
+            "id": d.get("id") or str(d.get("box_2d", [])),
+            "title": str(d.get("class") or "object").title(),
+            "confidence": int(round(float(d.get("confidence", 0.8)) * 100)) if float(d.get("confidence", 0.8)) <= 1.0 else int(d.get("confidence", 80)),
+            "frame": int(d.get("frame_id", 1)),
+            "severity": "medium",
+            "box": d.get("box_2d", [0, 0, 0, 0]),
+        })
+
+    mission.update({
+        "detections": {"observations": detections, "count": len(detections)},
+        "tracks": tracks,
+        "findings": findings,
+    })
+    mission.save()
+
+    # 2. Quality Metrics & Reconstructability
+    try:
+        from .reconstructability import analyze_video_reconstructability
+        from .quality_metrics import analyze_video_quality_timeseries
+        if video_path and Path(video_path).is_file():
+            recon_check = analyze_video_reconstructability(video_path)
+            q_data = analyze_video_quality_timeseries(video_path, sample_fps=2.0)
+            mission.update({
+                "metadata": {**dict(mission.get("metadata") or {}), "reconstructability": recon_check},
+                "frameQuality": q_data,
+                "quality": q_data.get("summary", {}),
+            })
+            mission.save()
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).warning("Quality/reconstructability pre-flight failed: %s", exc)
+
+    # 3. 3D Reconstruction
     recon_res = _reconstruction_task(job_id, mission_id=mission_id, video_path=video_path, max_frames=30)
+    if isinstance(recon_res, dict) and recon_res.get("reconstruction"):
+        mission.update({"reconstruction": recon_res["reconstruction"]})
+        mission.save()
 
-    # 3. Spatial Fusion & Scale Calibration
+    # 4. Spatial Fusion & Scale Calibration
     fuse_res = _fusion_task(job_id, mission_id=mission_id)
 
     update_job(job_id, status="COMPLETED", stage="COMPLETED", progress_percent=100, message="Full end-to-end processing pipeline completed successfully")

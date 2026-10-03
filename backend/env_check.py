@@ -83,8 +83,69 @@ def check_ffmpeg_environment(strict: bool = False) -> Dict[str, Any]:
     }
 
 
+
+def is_split_worker_mode() -> bool:
+    """
+    Check if the current process is configured as a split/distributed worker or delegating API.
+    A process is a split worker ONLY when ROLE=worker, AEROMESH_ROLE=worker, PROFILE=worker,
+    WORKER_MODE=1, or WORKER_URL is explicitly set.
+    """
+    role = (os.getenv("ROLE") or os.getenv("AEROMESH_ROLE") or "").lower().strip()
+    profile = os.getenv("PROFILE", "").lower().strip()
+    worker_mode = os.getenv("WORKER_MODE", "").lower() in ("true", "1")
+    worker_url = os.getenv("WORKER_URL", "").strip()
+    return role == "worker" or profile == "worker" or worker_mode or bool(worker_url)
+
+
+def check_worker_shared_state(strict: bool = False, force_enforce: bool = False) -> Dict[str, Any]:
+    """
+    Ensure background worker and API share the same PostgreSQL DB and S3/R2 storage.
+    The shared-state check must run ONLY when the process is a split worker (ROLE=worker and/or WORKER_URL set).
+    In a single-machine local run (ENVIRONMENT=development, PIPELINE_ENABLED=true, no WORKER_URL) the app
+    must start with SQLite or the JSON fallback, with no Postgres needed.
+    """
+    from backend.database import get_database_url, mask_database_url
+
+    db_url = get_database_url() or ""
+    is_postgres = bool(
+        db_url.startswith("postgresql+psycopg://")
+        or db_url.startswith("postgresql://")
+        or db_url.startswith("postgres://")
+    )
+
+    storage_type = os.getenv("STORAGE_BACKEND", "local").lower().strip()
+    s3_bucket = os.getenv("S3_BUCKET", "").strip()
+    is_shared_storage = storage_type == "s3" and bool(s3_bucket)
+
+    is_split = is_split_worker_mode() or force_enforce
+
+    if is_split:
+        if not db_url:
+            msg = "WORKER STARTUP HALTED: DATABASE_URL environment variable is missing. Worker requires shared PostgreSQL database to synchronize with API."
+            logger.critical(msg)
+            raise RuntimeError(msg)
+        if not is_postgres:
+            masked = mask_database_url(db_url)
+            msg = f"WORKER STARTUP HALTED: Worker DATABASE_URL scheme is invalid ({masked}). Shared PostgreSQL database is required."
+            logger.critical(msg)
+            raise RuntimeError(msg)
+        if not is_shared_storage:
+            msg = "WORKER STARTUP HALTED: Shared S3/R2 object storage (STORAGE_BACKEND=s3 and S3_BUCKET) is required for distributed worker. Local storage cannot be accessed by the remote API."
+            logger.critical(msg)
+            raise RuntimeError(msg)
+
+    return {
+        "status": "ready" if (is_postgres and is_shared_storage) else ("split_worker_ready" if is_split else "local_standalone"),
+        "database": "postgres" if is_postgres else ("sqlite" if db_url.startswith("sqlite") else "json_fallback"),
+        "storage": "s3" if is_shared_storage else storage_type,
+        "shared_state": is_postgres and is_shared_storage,
+        "is_split_worker": is_split,
+    }
+
+
 def verify_environment(strict: bool = False) -> Dict[str, Any]:
     return {
         "opencv": check_opencv_environment(strict=strict),
         "ffmpeg": check_ffmpeg_environment(strict=strict),
+        "worker_shared_state": check_worker_shared_state(strict=strict),
     }

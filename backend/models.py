@@ -25,6 +25,9 @@ class PortableGeometry(TypeDecorator):
 
 @compiles(PortableGeometry, "postgresql")
 def compile_postgis_geometry(element, compiler, **kwargs):
+    import os
+    if os.getenv("AEROMESH_POSTGIS", "1").strip().lower() in ("0", "false", "off", "no"):
+        return "TEXT"
     return f"geometry({element.geometry_type},{element.srid})"
 
 

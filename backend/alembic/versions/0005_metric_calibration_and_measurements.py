@@ -11,7 +11,10 @@ depends_on = None
 
 
 def upgrade() -> None:
-    inspector = sa.inspect(op.get_bind())
+    bind = op.get_bind()
+    if bind.dialect.name == "postgresql":
+        op.execute(sa.text("ALTER TABLE alembic_version ALTER COLUMN version_num TYPE VARCHAR(128)"))
+    inspector = sa.inspect(bind)
     tables = inspector.get_table_names()
 
     if "calibrations" not in tables:

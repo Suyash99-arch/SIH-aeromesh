@@ -40,6 +40,7 @@ except ImportError:
 import numpy as np
 from fastapi import (
     BackgroundTasks,
+    Body,
     Depends,
     FastAPI,
     File,
@@ -49,11 +50,12 @@ from fastapi import (
     UploadFile,
     status,
 )
+from pydantic import BaseModel, Field, field_validator
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 import uvicorn
-from backend.database import check_database, get_configured_engine, init_database, session_scope
+from backend.database import check_database, get_configured_engine, get_database_url, init_database, mask_database_url, session_scope, validate_production_database_url
 from backend.repository import MissionRepository
 from backend.jobs import JOB_STAGES, create_job, get_job, update_job
 from backend.storage import get_storage, mission_object_key
@@ -178,13 +180,40 @@ if load_dotenv:
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 MISSIONS_DIR.mkdir(parents=True, exist_ok=True)
 
+def is_production_mode() -> bool:
+    return os.getenv("ENVIRONMENT", "").strip().lower() in ("production", "prod") or os.getenv("ENV", "").strip().lower() in ("production", "prod")
+
+is_production = is_production_mode()
+
+raw_db_url = os.getenv("DATABASE_URL", "").strip()
+if is_production:
+    is_valid, error_msg = validate_production_database_url(raw_db_url)
+    if not is_valid:
+        logger.critical("PRODUCTION STARTUP HALTED: %s", error_msg)
+        raise RuntimeError(f"PRODUCTION STARTUP HALTED: {error_msg}")
+
 configured_engine = get_configured_engine()
 if configured_engine is not None:
     try:
-        init_database(configured_engine)
-        logger.info("Database storage enabled")
+        from backend.database import run_database_migrations
+        run_database_migrations()
+        if not check_database(configured_engine):
+            raise RuntimeError("PostgreSQL database connection check query failed.")
+        logger.info("Database storage and migrations successfully initialized")
     except Exception as exc:
-        logger.warning("Database unavailable; JSON storage fallback remains active: %s", exc)
+        masked_url = mask_database_url(get_database_url())
+        clean_exc = mask_database_url(str(exc))
+        if is_production:
+            logger.critical("PRODUCTION STARTUP HALTED: PostgreSQL database at %s is unreachable (%s)", masked_url, clean_exc)
+            raise RuntimeError(
+                f"PRODUCTION STARTUP HALTED: PostgreSQL database at {masked_url} is unreachable ({clean_exc}). "
+                "Please verify host reachability, credentials, and firewall settings. JSON storage fallback is strictly forbidden in production."
+            )
+        logger.warning("Database unavailable; JSON storage fallback remains active: %s", clean_exc)
+else:
+    if is_production:
+        logger.critical("PRODUCTION STARTUP HALTED: DATABASE_URL is missing. Production requires a PostgreSQL database (e.g. Render Postgres). JSON storage fallback is strictly forbidden.")
+        raise RuntimeError("PRODUCTION STARTUP HALTED: DATABASE_URL is missing. Production requires a PostgreSQL database (e.g. Render Postgres). JSON storage fallback is strictly forbidden.")
 
 # ============================================================
 # FASTAPI APP
@@ -244,6 +273,11 @@ async def api_url_normalization_middleware(request: Request, call_next):
             request.scope["path"] = "/api" + subpath
     response = await call_next(request)
     if is_legacy:
+        logger.warning(
+            "DEPRECATION WARNING: Legacy route %s %s hit. Please migrate to /api/v1/...",
+            request.method,
+            path,
+        )
         response.headers["Deprecation"] = "true"
         response.headers["Warning"] = '299 - "Legacy API path. Standardized path is /api/v1."'
     return response
@@ -282,6 +316,50 @@ app.mount("/media", StaticFiles(directory=str(DATA_DIR)), name="mission-media")
 # ============================================================
 # MODELS
 # ============================================================
+
+class ProcessMissionRequest(BaseModel):
+    frame_sampling: float = Field(default=2.0, ge=0.1, le=100.0, description="Frame sampling rate in seconds or fps")
+    inference_resolution: int = Field(default=640, ge=160, le=3840, description="YOLO inference resolution")
+    detection_confidence: float = Field(default=0.35, ge=0.01, le=1.0, description="Detection confidence threshold")
+    reconstruction_quality: str = Field(default="medium", description="Reconstruction quality")
+    scene_profile: Optional[str] = Field(default="road", description="Scene profile")
+    tile_inference: bool = Field(default=True, description="Enable tiled inference")
+    tile_rows: int = Field(default=2, ge=1, le=10, description="Tile rows")
+    tile_cols: int = Field(default=2, ge=1, le=10, description="Tile columns")
+    tile_overlap: float = Field(default=0.15, ge=0.0, le=0.5, description="Tile overlap")
+    sync: bool = Field(default=False, description="Run synchronously")
+
+    @field_validator("reconstruction_quality", mode="before")
+    @classmethod
+    def validate_quality(cls, v):
+        if v is None:
+            return "medium"
+        val = str(v).strip().lower()
+        allowed = {"preview", "low", "medium", "high", "ultra"}
+        if val not in allowed:
+            raise ValueError(f"reconstruction_quality must be one of {sorted(allowed)}, got '{v}'")
+        return val
+
+    @field_validator("scene_profile", mode="before")
+    @classmethod
+    def validate_scene_profile(cls, v):
+        if v is None or not str(v).strip():
+            return "road"
+        val = str(v).strip().lower()
+        allowed = {"road", "urban", "bridge", "river", "disaster", "infrastructure", "survey", "default"}
+        if val not in allowed:
+            raise ValueError(f"scene_profile must be one of {sorted(allowed)}, got '{v}'")
+        return val
+
+
+class EtaEstimationRequest(BaseModel):
+    size_bytes: Optional[int] = Field(default=None, description="Video file size in bytes")
+    duration_seconds: Optional[float] = Field(default=None, description="Video duration in seconds")
+    width: Optional[int] = Field(default=1920, description="Video frame width")
+    height: Optional[int] = Field(default=1080, description="Video frame height")
+    fps: Optional[float] = Field(default=30.0, description="Video frame rate")
+    frame_sampling: Optional[float] = Field(default=2.0, description="Target frame sampling rate in fps")
+
 
 # VisDrone class remapping: map fine-tuned model classes to scene_analysis categories
 VISDRONE_CLASS_REMAPPING = {
@@ -478,7 +556,7 @@ class MissionData:
                         self.data.setdefault("name", "Phase 5 Drone Validation Mission")
                         self.data.setdefault("type", "infrastructure")
                         self.data.setdefault("location", "Operational Flight Zone")
-                        self.data.setdefault("operator", "AeroMesh Inspection Team")
+                        self.data.setdefault("operator", "Unknown operator")
                         self.data.setdefault("status", "MESH_GENERATED")
                 except Exception as exc:
                     logger.warning("Failed reading phase5 validation data: %s", exc)
@@ -788,7 +866,7 @@ def build_scene_analysis(detections: Optional[dict], tracks: Optional[list] = No
 @app.get("/")
 async def root():
     return {
-        "system": "AeroMesh Backend",
+        "system": "Hexa Spark Backend",
         "status": "online",
         "service": "Single-Pass 3D Reconstruction",
         "version": "1.0.0",
@@ -805,7 +883,14 @@ async def root():
     }
 
 def is_pipeline_enabled() -> bool:
-    return os.getenv("PIPELINE_ENABLED", "false").strip().lower() in ("1", "true", "yes", "on")
+    val = os.getenv("PIPELINE_ENABLED")
+    if val is None:
+        return True
+    return val.strip().lower() in ("1", "true", "yes", "on")
+
+def get_worker_url() -> Optional[str]:
+    url = os.getenv("WORKER_URL", "").strip()
+    return url.rstrip("/") if url else None
 
 def is_api_profile() -> bool:
     profile = os.getenv("PROFILE", "").strip().lower()
@@ -892,22 +977,98 @@ def detect_compute_device() -> Dict[str, Any]:
     return _detected_compute_device
 
 
+def print_startup_summary(dev: Dict[str, Any], env_info: Dict[str, Any]):
+    role = (os.getenv("ROLE") or os.getenv("AEROMESH_ROLE") or "").lower().strip()
+    profile = os.getenv("PROFILE", "").lower().strip()
+    worker_url = os.getenv("WORKER_URL", "").strip()
+    pipeline_on = is_pipeline_enabled()
+
+    if is_production_mode():
+        mode = "production"
+    elif role == "worker" or profile == "worker":
+        mode = "worker"
+    elif bool(worker_url) or not pipeline_on:
+        mode = "api"
+    else:
+        mode = "local"
+
+    engine = get_configured_engine()
+    raw_db = (get_database_url() or "").lower()
+    if engine is not None and check_database(engine):
+        if "postgres" in raw_db:
+            db_type = "PostgreSQL"
+        elif "sqlite" in raw_db:
+            db_type = "SQLite"
+        else:
+            db_type = "SQL Database"
+    else:
+        db_type = "JSON Fallback"
+
+    storage_backend = os.getenv("STORAGE_BACKEND", "local").lower().strip()
+    s3_bucket = os.getenv("S3_BUCKET", "").strip()
+    storage_type = f"s3 ({s3_bucket})" if (storage_backend == "s3" and s3_bucket) else "local"
+
+    ff = env_info.get("ffmpeg", {})
+    ff_path = ff.get("ffmpeg_path")
+    ff_status = f"Ready ({Path(ff_path).name})" if (ff.get("available") and ff_path) else ("Ready" if ff.get("available") else "Missing / Not Installed")
+
+    cv = env_info.get("opencv", {})
+    cv_pkg = (cv.get("packages") or ["unknown"])[0] if cv.get("packages") else "opencv"
+    cv_status = f"Ready ({cv_pkg} {cv.get('version', '')})".strip() if cv.get("available") else "Missing / Error"
+
+    device_name = dev.get("device_name", "Host CPU")
+    cuda_status = "CUDA Active" if dev.get("cuda_available") else "CPU Only"
+
+    mode_label = {
+        "local": "Local All-in-One",
+        "production": "Production Service",
+        "worker": "Distributed Worker Node",
+        "api": "API Gateway (Worker Offloaded)",
+    }.get(mode, mode)
+
+    sep = "=" * 80
+    summary_banner = (
+        f"\n{sep}\n"
+        f"HEXA SPARK / AEROMESH STARTUP SUMMARY\n"
+        f"{sep}\n"
+        f"Execution Mode    : {mode} ({mode_label})\n"
+        f"Database Backend  : {db_type}\n"
+        f"Storage Backend   : {storage_type}\n"
+        f"Pipeline Enabled  : {pipeline_on}\n"
+        f"FFmpeg Status     : {ff_status}\n"
+        f"OpenCV Status     : {cv_status}\n"
+        f"Compute Hardware  : {device_name} ({cuda_status})\n"
+        f"{sep}\n"
+    )
+    print(summary_banner, flush=True)
+    logger.info("Startup summary initialized: mode=%s, db=%s, storage=%s, pipeline=%s", mode, db_type, storage_type, pipeline_on)
+
+
 @app.on_event("startup")
 async def startup_hardware_detection():
-    # OpenCV/ffmpeg environment check runs strictly only when PIPELINE_ENABLED=true
+    # 1. Production Mode Check: Strictly enforce PostgreSQL
+    if is_production_mode():
+        raw_url = os.getenv("DATABASE_URL", "").strip()
+        is_valid, err_msg = validate_production_database_url(raw_url)
+        if not is_valid:
+            logger.critical("PRODUCTION STARTUP HALTED: %s", err_msg)
+            raise RuntimeError(f"PRODUCTION STARTUP HALTED: {err_msg}")
+        engine = get_configured_engine()
+        if engine is None or not check_database(engine):
+            masked = mask_database_url(raw_url)
+            logger.critical("PRODUCTION STARTUP HALTED: Active PostgreSQL connection required at %s.", masked)
+            raise RuntimeError(f"PRODUCTION STARTUP HALTED: Active PostgreSQL connection required at {masked}.")
+
+    # 2. Environment Verification (OpenCV, FFmpeg, and split worker state if active)
     if is_pipeline_enabled():
         env_info = verify_environment(strict=True)
-        logger.info("Environment verified (pipeline enabled): OpenCV=%s, FFmpeg=%s", env_info["opencv"]["version"], env_info["ffmpeg"]["ffmpeg_path"])
         dev = detect_compute_device()
-        logger.info("Compute hardware initialized: %s (CUDA available: %s)", dev.get("device_name"), dev.get("cuda_available"))
     else:
-        # In API profile: OpenCV/ffmpeg check is a warning at most
         env_info = verify_environment(strict=False)
-        logger.info("API profile initialized (PIPELINE_ENABLED=false): OpenCV=%s, FFmpeg=%s",
-                    env_info.get("opencv", {}).get("version") or "headless/absent",
-                    env_info.get("ffmpeg", {}).get("ffmpeg_path") or "absent")
         dev = detect_compute_device()
-        logger.info("API compute profile: %s", dev.get("device_name"))
+
+    # 3. Print Clean Startup Summary
+    print_startup_summary(dev, env_info)
 
 
 
@@ -921,6 +1082,31 @@ async def get_system_compute_device():
     }
 
 
+@app.post("/api/v1/system/estimate-eta")
+@app.post("/api/system/estimate-eta", deprecated=True)
+async def estimate_system_eta(payload: Optional[EtaEstimationRequest] = Body(default=None)):
+    """Compute mathematically grounded reconstruction ETA from file params and hardware."""
+    from backend.eta_engine import estimate_pipeline_eta
+    req = payload or EtaEstimationRequest()
+    hw_prof = detect_compute_device()
+    fps = req.fps or 30.0
+    duration = req.duration_seconds or 10.0
+    total_frames = int(fps * duration)
+    meta = {
+        "resolution": {"width": req.width or 1920, "height": req.height or 1080},
+        "total_frames": total_frames,
+        "fps": fps,
+        "frame_sampling": req.frame_sampling or 2.0,
+        "size_bytes": req.size_bytes or 0,
+    }
+    eta_result = estimate_pipeline_eta(meta, hardware_profile=hw_prof)
+    return {
+        "success": True,
+        "eta": eta_result,
+        "device": hw_prof,
+    }
+
+
 @app.get("/health")
 @app.get("/api/health", deprecated=True)
 @app.get("/api/v1/health")
@@ -928,7 +1114,11 @@ async def health():
     database_engine = get_configured_engine()
     database_configured = database_engine is not None
     database_ready = check_database(database_engine) if database_configured else False
-    db_status = "ready" if database_ready else ("configured_unavailable" if database_configured else "json_fallback")
+    db_url = (get_database_url() or "").lower()
+    if database_ready:
+        db_status = "postgres" if ("postgres" in db_url) else "ready"
+    else:
+        db_status = "configured_unavailable" if database_configured else "json_fallback"
     
     cv_status = check_opencv_environment(strict=False)
     ff_status = check_ffmpeg_environment(strict=False)
@@ -1523,9 +1713,15 @@ async def get_current_user_profile(user: UserRecord = Depends(get_current_user))
 
 
 @app.get("/api/v1/auth/demo-users")
-@app.get("/api/auth/demo-users")
+@app.get("/api/auth/demo-users", deprecated=True)
 async def get_demo_users():
-    """Expose available demo credentials for 1-click evaluation by judges."""
+    """Expose available demo profiles in development only. Disabled in production. Never returns credentials."""
+    env = os.getenv("ENVIRONMENT", "development").strip().lower()
+    if env != "development":
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Demo users endpoint is disabled in non-development environments",
+        )
     return {
         "success": True,
         "users": [
@@ -1536,15 +1732,6 @@ async def get_demo_users():
                 "portal_type": u.portal_type,
                 "organization_name": u.organization_name,
                 "department": u.department,
-                "demo_password": (
-                    AEROMESH_ADMIN_PASSWORD
-                    if u.role == ROLE_ADMIN
-                    else (
-                        AEROMESH_ANALYST_PASSWORD
-                        if u.role == ROLE_ANALYST
-                        else AEROMESH_OPERATOR_PASSWORD
-                    )
-                ),
                 "description": (
                     "Full administrator access, role management, and system administration"
                     if u.role == ROLE_ADMIN
@@ -1560,6 +1747,7 @@ async def get_demo_users():
     }
 
 
+@app.get("/api/v1/missions/{mission_id}/status")
 @app.get("/api/missions/{mission_id}/status")
 async def get_mission_status(mission_id: str):
     mission = MissionData(mission_id)
@@ -1748,10 +1936,142 @@ async def get_mission(mission_id: str):
         mission_dict["objects_3d"] = fused_objs
 
     mission_dict["assets"] = assets
+
+    # Canonical Authoritative Summary Integration (Requirement 6)
+    try:
+        from backend.summary_builder import build_canonical_mission_summary
+        canonical = build_canonical_mission_summary(m_id, mission_dict)
+        mission_dict["status"] = canonical["status"]
+        mission_dict["failed_stage"] = canonical["failed_stage"]
+        mission_dict["failure_reason"] = canonical["failure_reason"]
+        mission_dict["stage_breakdown"] = canonical["stage_breakdown"]
+        mission_dict["video"] = canonical["video"]
+        if "proxy_url" in canonical["video"]:
+            assets["video_proxy"] = canonical["video"]["proxy_url"]
+            assets["video"] = canonical["video"].get("original_url") or assets.get("video")
+        mission_dict["reconstructability"] = canonical["reconstructability"]
+        mission_dict["quality"] = canonical["quality"]["summary"]
+        mission_dict["frameQuality"] = canonical["quality"]
+        mission_dict["telemetry"] = canonical["telemetry"]
+        mission_dict["geospatial"] = canonical["geospatial"]
+        mission_dict["reconstruction"] = canonical["reconstruction"]
+        mission_dict["spatial_fusion"] = canonical["spatial_fusion"]
+        mission_dict["canonical_summary"] = canonical
+    except Exception as exc:
+        logger.warning("Could not assemble canonical summary for mission %s: %s", m_id, exc)
+
     return {
         "success": True,
         "mission": mission_dict
     }
+
+
+@app.get("/api/v1/missions/{mission_id}/summary")
+@app.get("/api/missions/{mission_id}/summary")
+async def get_mission_summary_canonical(mission_id: str):
+    """Authoritative Canonical MissionSummary endpoint (Requirement 6)."""
+    mission = MissionData(mission_id)
+    if not mission.data:
+        raise HTTPException(status_code=404, detail="Mission not found")
+    from backend.summary_builder import build_canonical_mission_summary
+    summary = build_canonical_mission_summary(mission_id, mission.data)
+    return {
+        "success": True,
+        "summary": summary,
+    }
+
+
+@app.get("/api/v1/missions/{mission_id}/geospatial")
+@app.get("/api/missions/{mission_id}/geospatial")
+async def get_mission_geospatial(mission_id: str):
+    """Geospatial intelligence endpoint with real SfM geometry, flight path, and honesty checks."""
+    mission = MissionData(mission_id)
+    if not mission.data:
+        raise HTTPException(status_code=404, detail="Mission not found")
+    from backend.summary_builder import build_canonical_mission_summary
+    summary = build_canonical_mission_summary(mission_id, mission.data)
+    geo = summary.get("geospatial", {})
+    recon = summary.get("reconstruction", {})
+    return {
+        "success": True,
+        "mission_id": mission_id,
+        "status": summary["status"],
+        "failed_stage": summary["failed_stage"],
+        "failure_reason": summary["failure_reason"],
+        "geospatial": geo,
+        "telemetry": summary.get("telemetry", {}),
+        "reconstruction": recon,
+        "camera_poses": recon.get("camera_poses", []),
+        "flight_path_length": geo.get("flight_path_length", "Not available"),
+        "coverage_area": geo.get("coverage_area", "Not available"),
+        "is_georeferenced": geo.get("is_georeferenced", False),
+        "reference_location": geo.get("reference_location"),
+        "scale_status": geo.get("scale_status", "RELATIVE_SCALE"),
+        "duration_seconds": summary.get("video", {}).get("duration_seconds", 0.0),
+    }
+
+
+@app.get("/api/v1/missions/{mission_id}/scene")
+@app.get("/api/missions/{mission_id}/scene")
+async def get_mission_scene_canonical(mission_id: str):
+    """Canonical Scene Intelligence endpoint returning identical object and track counts."""
+    mission = MissionData(mission_id)
+    if not mission.data:
+        raise HTTPException(status_code=404, detail="Mission not found")
+    from backend.summary_builder import build_canonical_mission_summary
+    summary = build_canonical_mission_summary(mission_id, mission.data)
+    fusion = summary.get("spatial_fusion", {})
+    return {
+        "success": True,
+        "mission_id": mission_id,
+        "status": summary["status"],
+        "scene": fusion,
+        "tracking": summary.get("tracking", {}),
+        "detection": summary.get("detection", {}),
+        "objects_3d": fusion.get("fused_objects", []),
+        "total_objects": fusion.get("total_fused_objects", 0),
+        "valid_objects": fusion.get("valid_objects", 0),
+        "moving_objects": fusion.get("moving_objects", 0),
+        "static_objects": fusion.get("static_objects", 0),
+    }
+
+
+class GeoreferenceUpdateRequest(BaseModel):
+    latitude: Optional[float] = None
+    longitude: Optional[float] = None
+    altitude: Optional[float] = None
+    heading: Optional[float] = None
+    reference_distance_m: Optional[float] = None
+    crs: Optional[str] = "WGS-84"
+
+
+@app.post("/api/v1/missions/{mission_id}/georeference")
+@app.post("/api/missions/{mission_id}/georeference")
+async def update_mission_georeference(mission_id: str, req: GeoreferenceUpdateRequest):
+    """Optional georeferencing input: approximate center lat/lon, altitude, or reference distance."""
+    mission = MissionData(mission_id)
+    if not mission.data:
+        raise HTTPException(status_code=404, detail="Mission not found")
+
+    geo_data = {
+        "latitude": req.latitude,
+        "longitude": req.longitude,
+        "altitude": req.altitude,
+        "heading": req.heading,
+        "reference_distance_m": req.reference_distance_m,
+        "crs": req.crs or "WGS-84",
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    loc_str = None
+    if req.latitude is not None and req.longitude is not None:
+        loc_str = f"{req.latitude:.5f}° N, {req.longitude:.5f}° E"
+
+    mission.update({
+        "georeference": geo_data,
+        "reference_location": loc_str or mission.data.get("reference_location"),
+    })
+    mission.save()
+    return {"success": True, "georeference": geo_data, "location": loc_str}
 
 
 @app.delete("/api/v1/missions/{mission_id}")
@@ -1795,14 +2115,17 @@ _missions_list_cache = {"timestamp": 0.0, "data": []}
 @app.get("/api/v1/missions")
 @app.get("/api/missions")
 @app.get("/missions")
-async def list_missions(current_user: Optional[UserRecord] = Depends(get_current_user_optional)):
+async def list_missions(
+    include_benchmarks: bool = Query(False),
+    current_user: Optional[UserRecord] = Depends(get_current_user_optional),
+):
     """List missions with strict per-user and per-organization data isolation."""
     now = time.time()
 
     database_engine = get_configured_engine()
     if database_engine is not None and check_database(database_engine):
         with session_scope(database_engine) as session:
-            missions_list = MissionRepository(session).list(user=current_user)
+            missions_list = MissionRepository(session).list(user=current_user, include_benchmarks=include_benchmarks)
             return {
                 "success": True,
                 "missions": missions_list,
@@ -1816,6 +2139,16 @@ async def list_missions(current_user: Optional[UserRecord] = Depends(get_current
                 if not m_id:
                     continue
 
+                is_benchmark_mission = bool(
+                    m_id == "phase5_drone_validation"
+                    or m.get("is_benchmark")
+                    or m.get("is_test")
+                    or str(m_id).startswith("test_")
+                    or str(m_id).startswith("phase5_")
+                )
+                if is_benchmark_mission and not include_benchmarks:
+                    continue
+
                 # Strict tenant / user isolation
                 if current_user is not None:
                     is_superadmin = (current_user.role == ROLE_ADMIN and not current_user.organization_name)
@@ -1826,13 +2159,13 @@ async def list_missions(current_user: Optional[UserRecord] = Depends(get_current
                             m_created = m.get("created_by")
                             matches_org = bool(m_org and m_org.strip().lower() == current_user.organization_name.strip().lower())
                             matches_owner = bool((m_owner and m_owner == current_user.id) or (m_created and m_created == current_user.email))
-                            if not (matches_org or matches_owner or m_id == "phase5_drone_validation"):
+                            if not (matches_org or matches_owner):
                                 continue
                         elif current_user.portal_type in (PORTAL_INDIVIDUAL, PORTAL_GUEST):
                             m_owner = m.get("owner_id")
                             m_created = m.get("created_by")
                             matches_owner = bool((m_owner and m_owner == current_user.id) or (m_created and m_created == current_user.email))
-                            if not (matches_owner or m_id == "phase5_drone_validation"):
+                            if not matches_owner:
                                 continue
 
                 # Sync with active background processing job if one exists
@@ -1998,6 +2331,14 @@ def _process_and_validate_video_file(video_path: Path, safe_name: str, mission_i
         hardware_profile=hw_prof
     )
 
+    # Pre-flight reconstructability check
+    recon_check = None
+    try:
+        from backend.reconstructability import analyze_video_reconstructability
+        recon_check = analyze_video_reconstructability(active_video_path)
+    except Exception as exc:
+        logger.warning("Reconstructability pre-flight analysis failed: %s", exc)
+
     video_info = {
         "filename": safe_name,
         "url": f"{str(request.base_url).rstrip('/')}/api/storage/{storage_metadata.key}",
@@ -2016,6 +2357,7 @@ def _process_and_validate_video_file(video_path: Path, safe_name: str, mission_i
         "thumbnails": thumb_urls,
         "thumbnail_previews": thumb_previews,
         "initial_eta": initial_eta,
+        "reconstructability": recon_check,
     }
 
     mission = MissionData(mission_id)
@@ -2024,6 +2366,8 @@ def _process_and_validate_video_file(video_path: Path, safe_name: str, mission_i
         "video": video_info,
         "video_path": str(mission_dir / "video.mp4"),
         "initial_eta": initial_eta,
+        "reconstructability": recon_check,
+        "metadata": {**dict(mission.data.get("metadata") or {}), "reconstructability": recon_check},
     })
 
     database_engine = get_configured_engine()
@@ -2068,6 +2412,12 @@ async def upload_video(
     valid, error_reason = validate_uploaded_file(safe_name, content)
     if not valid:
         raise HTTPException(status_code=400, detail=error_reason)
+
+    if not is_pipeline_enabled() and not get_worker_url():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Processing worker not connected. The backend API is running in lightweight profile (PIPELINE_ENABLED=false) and no WORKER_URL is configured. Please start a processing worker or connect via tunnel.",
+        )
 
     storage = get_storage(DATA_DIR / "objects")
     storage_key = mission_object_key(mission_id, safe_name)
@@ -2114,6 +2464,12 @@ async def upload_video_chunk(
     allowed = {".mp4", ".mov", ".avi", ".mkv", ".webm"}
     if Path(safe_name).suffix.lower() not in allowed:
         raise HTTPException(status_code=400, detail=f"Unsupported format: {Path(safe_name).suffix}")
+
+    if not is_pipeline_enabled() and not get_worker_url():
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Processing worker not connected. The backend API is running in lightweight profile (PIPELINE_ENABLED=false) and no WORKER_URL is configured. Please start a processing worker or connect via tunnel.",
+        )
 
     staging_dir = DATA_DIR / "staging"
     staging_dir.mkdir(parents=True, exist_ok=True)
@@ -2179,7 +2535,10 @@ async def get_mission_thumbnail(mission_id: str, filename: str):
     return FileResponse(thumb_path, media_type="image/jpeg", headers={"Cache-Control": "public, max-age=86400"})
 
 
+@app.get("/api/v1/storage/{storage_key:path}")
 @app.get("/api/storage/{storage_key:path}")
+@app.get("/api/v1/artifacts/{storage_key:path}")
+@app.get("/api/artifacts/{storage_key:path}")
 async def download_storage_object(storage_key: str):
     """Download an object through the configured local or S3 storage adapter with path traversal guards."""
     if ".." in storage_key or "\\..\\" in storage_key or "/../" in f"/{storage_key}/":
@@ -2314,33 +2673,69 @@ def get_mission_artifact_info(mission: MissionData, artifact_name: str) -> dict:
             if not file_exists and mission.get("video_path") and Path(mission.get("video_path")).is_file():
                 file_exists = True
     elif artifact_name == "mesh":
-        mesh_path = get_reconstruction_mesh_path(m_id)
-        if not mesh_path or not mesh_path.exists():
-            for base in [MISSIONS_DIR / m_id, MISSIONS_DIR / m_id / "reconstruction", DATA_DIR / "objects" / "missions" / m_id, DATA_DIR / "objects" / "missions" / m_id / "reconstruction"]:
-                for fn in ["mesh.ply", "surface_mesh.ply", "model.glb", "reconstruction-model.glb"]:
-                    candidate = base / fn
-                    if candidate.exists() and candidate.stat().st_size > 0:
-                        mesh_path = candidate
-                        break
-        file_exists = bool(mesh_path and mesh_path.exists() and mesh_path.stat().st_size > 0)
+        storage = get_storage()
+        for key in [
+            f"missions/{m_id}/mesh.ply",
+            f"missions/{m_id}/reconstruction/mesh.ply",
+            f"missions/{m_id}/reconstruction/surface_mesh.ply",
+            f"missions/{m_id}/reconstruction/model.glb",
+            f"missions/{m_id}/model.glb",
+            f"{m_id}/mesh.ply",
+        ]:
+            if storage.exists(key):
+                file_exists = True
+                break
+        if not file_exists:
+            mesh_path = get_reconstruction_mesh_path(m_id)
+            if not mesh_path or not mesh_path.exists():
+                for base in [MISSIONS_DIR / m_id, MISSIONS_DIR / m_id / "reconstruction", DATA_DIR / "objects" / "missions" / m_id, DATA_DIR / "objects" / "missions" / m_id / "reconstruction"]:
+                    for fn in ["mesh.ply", "surface_mesh.ply", "model.glb", "reconstruction-model.glb"]:
+                        candidate = base / fn
+                        if candidate.exists() and candidate.stat().st_size > 0:
+                            mesh_path = candidate
+                            break
+            file_exists = bool(mesh_path and mesh_path.exists() and mesh_path.stat().st_size > 0)
     elif artifact_name == "pointcloud":
-        pc_path = get_reconstruction_pointcloud_path(m_id)
-        if not pc_path or not pc_path.exists():
-            for base in [MISSIONS_DIR / m_id, MISSIONS_DIR / m_id / "reconstruction", DATA_DIR / "objects" / "missions" / m_id, DATA_DIR / "objects" / "missions" / m_id / "reconstruction"]:
-                for fn in ["point_cloud.ply", "sparse_points.ply", "hybrid_point_cloud.ply"]:
-                    candidate = base / fn
-                    if candidate.exists() and candidate.stat().st_size > 0:
-                        pc_path = candidate
-                        break
-        file_exists = bool(pc_path and pc_path.exists() and pc_path.stat().st_size > 0)
+        storage = get_storage()
+        for key in [
+            f"missions/{m_id}/point_cloud.ply",
+            f"missions/{m_id}/reconstruction/point_cloud.ply",
+            f"missions/{m_id}/reconstruction/sparse_points.ply",
+            f"missions/{m_id}/reconstruction/hybrid_point_cloud.ply",
+            f"{m_id}/point_cloud.ply",
+        ]:
+            if storage.exists(key):
+                file_exists = True
+                break
+        if not file_exists:
+            pc_path = get_reconstruction_pointcloud_path(m_id)
+            if not pc_path or not pc_path.exists():
+                for base in [MISSIONS_DIR / m_id, MISSIONS_DIR / m_id / "reconstruction", DATA_DIR / "objects" / "missions" / m_id, DATA_DIR / "objects" / "missions" / m_id / "reconstruction"]:
+                    for fn in ["point_cloud.ply", "sparse_points.ply", "hybrid_point_cloud.ply"]:
+                        candidate = base / fn
+                        if candidate.exists() and candidate.stat().st_size > 0:
+                            pc_path = candidate
+                            break
+            file_exists = bool(pc_path and pc_path.exists() and pc_path.stat().st_size > 0)
     elif artifact_name == "keyframes":
-        frames_dirs = [
-            MISSIONS_DIR / m_id / "reconstruction" / "frames",
-            MISSIONS_DIR / m_id / "frames",
-            DATA_DIR / "missions" / m_id / "reconstruction" / "frames",
-            DATA_DIR / "objects" / "missions" / m_id / "reconstruction" / "frames"
-        ]
-        file_exists = any(fd.exists() and fd.is_dir() and (list(fd.glob("*.jpg")) or list(fd.glob("*.png"))) for fd in frames_dirs)
+        storage = get_storage()
+        for key in [
+            f"missions/{m_id}/reconstruction/frames/frame_0000.jpg",
+            f"missions/{m_id}/frames/frame_0000.jpg",
+            f"missions/{m_id}/reconstruction/frames/frame_0001.jpg",
+            f"{m_id}/frames/frame_0000.jpg",
+        ]:
+            if storage.exists(key):
+                file_exists = True
+                break
+        if not file_exists:
+            frames_dirs = [
+                MISSIONS_DIR / m_id / "reconstruction" / "frames",
+                MISSIONS_DIR / m_id / "frames",
+                DATA_DIR / "missions" / m_id / "reconstruction" / "frames",
+                DATA_DIR / "objects" / "missions" / m_id / "reconstruction" / "frames"
+            ]
+            file_exists = any(fd.exists() and fd.is_dir() and (list(fd.glob("*.jpg")) or list(fd.glob("*.png"))) for fd in frames_dirs)
 
     url_path = (
         f"/api/v1/missions/{m_id}/video" if artifact_name == "video" else
@@ -2506,7 +2901,114 @@ async def get_mission_video(mission_id: str, request: Request):
     return get_artifact_status_response(mission, "video")
 
 
-@app.post("/api/v1/missions/{mission_id}/process")
+@app.get("/api/v1/missions/{mission_id}/video/proxy")
+@app.get("/api/missions/{mission_id}/video/proxy")
+async def get_mission_video_proxy(mission_id: str, request: Request):
+    """
+    Serve a browser-playback-optimised proxy version of the mission video.
+    The proxy is H.264 / yuv420p with +faststart (moov atom at front) so seeking
+    works immediately without downloading the entire file.
+
+    Proxy creation is lazy: the first request triggers ffmpeg in a background thread.
+    Subsequent requests hit the cached file.  Falls back to the original if proxy
+    creation fails or ffmpeg is unavailable.
+    """
+    if any(sep in mission_id for sep in ("..", "/", "\\")):
+        raise HTTPException(status_code=400, detail="Invalid mission identifier")
+
+    allowed_roots = [MISSIONS_DIR.resolve(), DATA_DIR.resolve()]
+
+    def is_safe(p: Path) -> bool:
+        try:
+            resolved = p.resolve()
+            for root in allowed_roots:
+                try:
+                    resolved.relative_to(root)
+                    return True
+                except ValueError:
+                    continue
+            return False
+        except Exception:
+            return False
+
+    # Locate the original video file
+    original_path: Path | None = None
+    mission = MissionData(mission_id)
+
+    # Check storage-backed path first
+    storage = get_storage()
+    for key_candidate in [
+        f"missions/{mission_id}/original/video.mp4",
+        f"missions/{mission_id}/original/flight-video.mp4",
+        f"missions/{mission_id}/flight-video.mp4",
+        f"missions/{mission_id}/video.mp4",
+    ]:
+        if storage.exists(key_candidate) and hasattr(storage, "_path"):
+            cand = storage._path(key_candidate)
+            if cand.is_file() and is_safe(cand):
+                original_path = cand
+                break
+
+    if not original_path:
+        for base_dir in [MISSIONS_DIR / mission_id, DATA_DIR / "objects" / "missions" / mission_id]:
+            if base_dir.exists():
+                for name in ["flight-video.mp4", "video.mp4"]:
+                    cand = base_dir / name
+                    if cand.is_file() and is_safe(cand):
+                        original_path = cand
+                        break
+            if original_path:
+                break
+
+    if not original_path and mission.data:
+        video_meta = mission.get("video") or {}
+        storage_key = video_meta.get("storage_key")
+        if storage_key and storage.exists(storage_key) and hasattr(storage, "_path"):
+            cand = storage._path(storage_key)
+            if cand.is_file() and is_safe(cand):
+                original_path = cand
+        if not original_path:
+            video_path_raw = mission.get("video_path")
+            if video_path_raw:
+                p_raw = Path(video_path_raw)
+                if p_raw.is_file() and is_safe(p_raw):
+                    original_path = p_raw
+
+    if not original_path:
+        return get_artifact_status_response(mission, "video")
+
+    # Determine mission directory for proxy storage
+    mission_dir: Path | None = None
+    for base_dir in [DATA_DIR / "objects" / "missions" / mission_id, MISSIONS_DIR / mission_id]:
+        if base_dir.exists():
+            mission_dir = base_dir
+            break
+    if not mission_dir:
+        mission_dir = original_path.parent.parent  # fallback: put proxy next to original
+
+    proxy_path = mission_dir / "proxy" / "video_proxy.mp4"
+
+    # Serve existing proxy immediately if ready
+    if proxy_path.exists() and proxy_path.stat().st_size > 10_000:
+        return ranged_file_response(proxy_path, request, content_type="video/mp4")
+
+    # Try to create the proxy synchronously (blocking on first request)
+    try:
+        from backend.video_ingest import get_or_create_browser_proxy
+        result = await asyncio.get_event_loop().run_in_executor(
+            None,
+            lambda: get_or_create_browser_proxy(original_path, mission_dir, max_width=1280),
+        )
+        if result and result.is_file() and result.stat().st_size > 10_000:
+            return ranged_file_response(result, request, content_type="video/mp4")
+    except Exception as exc:
+        logger.warning("Proxy creation failed for mission %s, falling back to original: %s", mission_id, exc)
+
+    # Fallback: serve original (may have moov-at-end limitation)
+    return ranged_file_response(original_path, request, content_type="video/mp4")
+
+
+
 @app.post("/api/jobs")
 async def create_processing_job(
     mission_id: Optional[str] = None,
@@ -2523,6 +3025,37 @@ async def create_processing_job(
     mission = MissionData(target_mission_id)
     if not mission.data:
         raise HTTPException(status_code=404, detail="Mission not found")
+
+    worker_url = get_worker_url()
+    if not is_pipeline_enabled():
+        if not worker_url:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Processing worker not connected. The backend API is running in lightweight profile (PIPELINE_ENABLED=false) and no WORKER_URL is configured. Please start a processing worker or connect via tunnel.",
+            )
+        try:
+            import httpx
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                params = {
+                    "frame_sampling": frame_sampling,
+                    "inference_resolution": inference_resolution,
+                    "detection_confidence": detection_confidence,
+                    "reconstruction_quality": reconstruction_quality,
+                }
+                if scene_profile:
+                    params["scene_profile"] = scene_profile
+                resp = await client.post(f"{worker_url}/api/v1/missions/{target_mission_id}/process", params=params)
+                if resp.status_code >= 400:
+                    raise HTTPException(status_code=resp.status_code, detail=resp.text)
+                return resp.json()
+        except HTTPException:
+            raise
+        except Exception as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=f"Processing worker not connected: failed to reach worker at {worker_url} ({exc})",
+            )
+
     job = create_job(target_mission_id, {
         "frame_sampling": frame_sampling,
         "inference_resolution": inference_resolution,
@@ -2556,6 +3089,7 @@ PIPELINE_STAGES = [
 ]
 
 
+@app.get("/api/v1/missions/{mission_id}/processing-status")
 @app.get("/api/missions/{mission_id}/processing-status")
 async def get_processing_status(mission_id: str):
     mission = MissionData(mission_id)
@@ -2983,12 +3517,15 @@ def run_full_pipeline_task(
     """Synchronous worker that sequentially advances the 8 real pipeline stages."""
     current_stage_id = "video"
     completed_stages = []
+    stage_timings: Dict[str, float] = {}
+    wall_start = time.perf_counter()
     mission = MissionData(mission_id)
 
     try:
         # ============================================================
         # STAGE 1: Video Validation & Container Inspection
         # ============================================================
+        t_s1 = time.perf_counter()
         current_stage_id = "video"
         update_job(
             job_id,
@@ -3007,10 +3544,12 @@ def run_full_pipeline_task(
             "video": {**video_info, **real_summary},
         })
         completed_stages.append("video")
+        stage_timings["stage_1_video_validation"] = round(time.perf_counter() - t_s1, 3)
 
         # ============================================================
         # STAGE 2: Quality Filtering & Keyframe Extraction
         # ============================================================
+        t_s2 = time.perf_counter()
         current_stage_id = "quality"
         update_job(
             job_id,
@@ -3024,12 +3563,33 @@ def run_full_pipeline_task(
         basic_res = _basic_process(video_path, frame_sampling, detection_confidence, scene_profile)
         result = basic_res
         result["video"] = {**video_info, **result.get("video", {}), **real_summary}
-        mission.update({"frameQuality": result.get("frameQuality")})
+
+        try:
+            from backend.quality_metrics import analyze_video_quality_timeseries as _aqts
+            q_data = _aqts(video_path, sample_fps=2.0)
+            if q_data.get("samples"):
+                result["frameQuality"] = {
+                    "estimated": False,
+                    "average": q_data["summary"],
+                    "samples": q_data["samples"],
+                    "timeseries": q_data["samples"],
+                    "summary": q_data["summary"],
+                }
+                result["quality"] = q_data["summary"]
+        except Exception as _qe:
+            logger.warning("Frame quality timeseries computation failed: %s", _qe)
+
+        mission.update({
+            "frameQuality": result.get("frameQuality"),
+            "quality": result.get("quality"),
+        })
         completed_stages.append("quality")
+        stage_timings["stage_2_quality_keyframe"] = round(time.perf_counter() - t_s2, 3)
 
         # ============================================================
         # STAGE 3: AI Object Detection (Fine-tuned YOLO11)
         # ============================================================
+        t_s3 = time.perf_counter()
         current_stage_id = "detection"
         update_job(
             job_id,
@@ -3067,10 +3627,12 @@ def run_full_pipeline_task(
 
         damage_result = analyze_damage_for_mission(video_path, mission_id, max_frames=20)
         completed_stages.append("detection")
+        stage_timings["stage_3_yolo_detection"] = round(time.perf_counter() - t_s3, 3)
 
         # ============================================================
         # STAGE 4: Flight Trajectory & Object Tracking
         # ============================================================
+        t_s4 = time.perf_counter()
         current_stage_id = "trajectory"
         update_job(
             job_id,
@@ -3084,10 +3646,12 @@ def run_full_pipeline_task(
         entry_exit_result = detect_entry_exit_points(video_path, mission_id, max_frames=12)
         scene_analysis = result.get("scene_analysis") or build_scene_analysis(result.get("detections"), result.get("tracks"))
         completed_stages.append("trajectory")
+        stage_timings["stage_4_tracking_trajectory"] = round(time.perf_counter() - t_s4, 3)
 
         # ============================================================
         # STAGE 5: Photogrammetric 3D Reconstruction (PyCOLMAP)
         # ============================================================
+        t_s5 = time.perf_counter()
         current_stage_id = "reconstruction"
         update_job(
             job_id,
@@ -3100,10 +3664,12 @@ def run_full_pipeline_task(
         )
         reconstruction_result = run_reconstruction_for_mission(mission_id, video_path, max_frames=40)
         completed_stages.append("reconstruction")
+        stage_timings["stage_5_pycolmap_sfm_mesh"] = round(time.perf_counter() - t_s5, 3)
 
         # ============================================================
         # STAGE 6: Scale Calibration & Geometric Measurements
         # ============================================================
+        t_s6 = time.perf_counter()
         current_stage_id = "measurements"
         update_job(
             job_id,
@@ -3114,7 +3680,6 @@ def run_full_pipeline_task(
             progress_percent=82,
             message="Calibrating metric scale & computing 3D geometric measurements",
         )
-        # Stage 6: Honest spatial extents derived directly from reconstructed geometry
         cloud_or_mesh_cand = (
             reconstruction_result.get("point_cloud_path")
             or (reconstruction_result.get("mesh") or {}).get("mesh_path")
@@ -3139,10 +3704,12 @@ def run_full_pipeline_task(
             "scale_status": "RELATIVE_SCALE",
         }
         completed_stages.append("measurements")
+        stage_timings["stage_6_scale_measurements"] = round(time.perf_counter() - t_s6, 3)
 
         # ============================================================
         # STAGE 7: Spatial Intelligence & 3D Object Fusion
         # ============================================================
+        t_s7 = time.perf_counter()
         current_stage_id = "intelligence"
         update_job(
             job_id,
@@ -3153,6 +3720,11 @@ def run_full_pipeline_task(
             progress_percent=92,
             message="Projecting 2D detections into 3D space & constructing semantic twin",
         )
+        # Pre-save tracks & detections so fusion can read them
+        mission.update({
+            "detections": result.get("detections"),
+            "tracks": result.get("tracks"),
+        })
         fusion_result = {}
         try:
             from backend.fuse_mission_3d import run_3d_fusion_for_mission
@@ -3160,10 +3732,12 @@ def run_full_pipeline_task(
         except Exception as exc:
             logger.warning("3D spatial fusion notice: %s", exc)
         completed_stages.append("intelligence")
+        stage_timings["stage_7_spatial_fusion_3d"] = round(time.perf_counter() - t_s7, 3)
 
         # ============================================================
         # STAGE 8: Certified Deliverables & Report Generation
         # ============================================================
+        t_s8 = time.perf_counter()
         current_stage_id = "report"
         update_job(
             job_id,
@@ -3187,13 +3761,52 @@ def run_full_pipeline_task(
         if damage_result.get("available") and damage_result.get("findings"):
             recommendations.insert(0, "Priority action: Inspect highlighted structural anomalies along central flight corridor.")
 
+        # Compute unified timing breakdown
+        stage_timings["stage_8_report_deliverables"] = round(time.perf_counter() - t_s8, 3)
+        wall_total = round(time.perf_counter() - wall_start, 3)
+        stages_sum = round(sum(stage_timings.values()), 3)
+        overhead_other = round(max(0.0, wall_total - stages_sum), 3)
+
+        timing_summary = {
+            **stage_timings,
+            "stages_sum_s": stages_sum,
+            "overhead_other_s": overhead_other,
+            "wall_time_s": wall_total,
+        }
+        logger.info("PIPELINE STAGE TIMERS for mission %s: %s", mission_id, timing_summary)
+
+        # Authoritative reconstruction metadata fields
+        reg_cams = (
+            reconstruction_result.get("registered_cameras")
+            or (len(reconstruction_result.get("cameras", [])) if isinstance(reconstruction_result.get("cameras"), list) else 0)
+            or reconstruction_result.get("stages", {}).get("sparse_sfm", {}).get("cameras", 0)
+        )
+        tot_imgs = (
+            reconstruction_result.get("total_images")
+            or reconstruction_result.get("extraction_audit", {}).get("selected_count", 0)
+            or reconstruction_result.get("stages", {}).get("sparse_sfm", {}).get("total_images", 0)
+        )
+        mean_reproj = (
+            reconstruction_result.get("mean_reprojection_error")
+            or reconstruction_result.get("stages", {}).get("sparse_sfm", {}).get("mean_reprojection_error")
+        )
+        pts_count = (
+            reconstruction_result.get("point_count")
+            or reconstruction_result.get("sparse_point_count")
+            or reconstruction_result.get("stages", {}).get("sparse_sfm", {}).get("points", 0)
+        )
+
+        mesh_data = reconstruction_result.get("mesh") or {}
+        has_mesh = bool(mesh_data.get("face_count", 0) > 0 or mesh_data.get("faces", 0) > 0)
+        recon_status = reconstruction_result.get("status") or ("MESH_GENERATED" if has_mesh else ("PARTIAL" if reg_cams > 0 else "FAILED"))
+
         mission.update({
             "status": "complete",
             "progress": 100,
             "processing": result.get("processing"),
             "detections": result.get("detections"),
             "tracks": result.get("tracks"),
-            "tracking": {
+            "tracking": result.get("tracking") or {
                 "unique_tracks": len(result.get("tracks", [])),
                 "tracks_by_class": result.get("detections", {}).get("byClass", {}),
             },
@@ -3211,25 +3824,33 @@ def run_full_pipeline_task(
             "video": {**video_info, **result.get("video", {})},
             "measurements": measurements_data,
             "reconstruction": {
-                "status": reconstruction_result.get("status", "READY"),
-                "point_count": reconstruction_result.get("point_count") or reconstruction_result.get("sparse_point_count", 0),
-                "sparse_point_count": reconstruction_result.get("sparse_point_count", 0),
-                "success": reconstruction_result.get("success", False),
+                "status": recon_status,
+                "point_count": pts_count,
+                "sparse_point_count": pts_count,
+                "registered_cameras": reg_cams,
+                "total_images": tot_imgs,
+                "mean_reprojection_error": mean_reproj,
+                "success": bool(reconstruction_result.get("success", reg_cams > 0)),
                 "method": reconstruction_result.get("method", "pycolmap"),
-                "processing_time_s": reconstruction_result.get("processing_time_s", 0.0),
+                "processing_time_s": reconstruction_result.get("processing_time_s", stage_timings.get("stage_5_pycolmap_sfm_mesh", 0.0)),
                 "output_path": reconstruction_result.get("output_path"),
                 "error": reconstruction_result.get("error"),
-                "mesh": reconstruction_result.get("mesh", {"status": "Generated"}),
+                "mesh": mesh_data,
                 "point_cloud_url": f"/api/missions/{mission_id}/reconstruction/pointcloud",
                 "mesh_url": f"/api/missions/{mission_id}/reconstruction/mesh",
+                "stages": reconstruction_result.get("stages", {}),
+                "scale": reconstruction_result.get("scale", {}),
             },
             "objects_3d": fusion_result.get("objects", []),
             "semantic_scene": fusion_result.get("semantic_scene", {}),
+            "reprojection_statistics": fusion_result.get("reprojection_statistics", {}),
             "damage_detection": damage_result,
             "entry_exit_detection": entry_exit_result,
             "findings": findings,
             "recommendations": recommendations,
+            "timings": timing_summary,
         })
+        mission.save()
 
         database_engine = get_configured_engine()
         if database_engine is not None and check_database(database_engine):
@@ -3349,40 +3970,106 @@ def _dispatch_task_wrapper(task_kwargs: dict):
                 threading.Thread(target=_dispatch_task_wrapper, args=(next_kwargs,), daemon=True).start()
 
 
-@app.post("/api/missions/{mission_id}/process")
+@app.post("/api/v1/missions/{mission_id}/process")
+@app.post("/api/missions/{mission_id}/process", deprecated=True)
 async def process_video(
     mission_id: str,
     background_tasks: BackgroundTasks,
-    frame_sampling: float = Query(2.0),
-    inference_resolution: int = Query(640),
-    detection_confidence: float = Query(0.35),
-    reconstruction_quality: str = Query("medium"),
+    payload: Optional[ProcessMissionRequest] = Body(default=None),
+    frame_sampling: Optional[float] = Query(None),
+    inference_resolution: Optional[int] = Query(None),
+    detection_confidence: Optional[float] = Query(None),
+    reconstruction_quality: Optional[str] = Query(None),
     scene_profile: Optional[str] = Query(None),
-    tile_inference: bool = Query(True),
-    tile_rows: int = Query(2),
-    tile_cols: int = Query(2),
-    tile_overlap: float = Query(0.15),
-    sync: bool = Query(False),
+    tile_inference: Optional[bool] = Query(None),
+    tile_rows: Optional[int] = Query(None),
+    tile_cols: Optional[int] = Query(None),
+    tile_overlap: Optional[float] = Query(None),
+    sync: Optional[bool] = Query(None),
 ):
     """Process uploaded video through the 8-stage real pipeline, protected by a concurrency guard."""
+    opts_dict = {}
+    if frame_sampling is not None:
+        opts_dict["frame_sampling"] = frame_sampling
+    if inference_resolution is not None:
+        opts_dict["inference_resolution"] = inference_resolution
+    if detection_confidence is not None:
+        opts_dict["detection_confidence"] = detection_confidence
+    if reconstruction_quality is not None:
+        opts_dict["reconstruction_quality"] = reconstruction_quality
+    if scene_profile is not None:
+        opts_dict["scene_profile"] = scene_profile
+    if tile_inference is not None:
+        opts_dict["tile_inference"] = tile_inference
+    if tile_rows is not None:
+        opts_dict["tile_rows"] = tile_rows
+    if tile_cols is not None:
+        opts_dict["tile_cols"] = tile_cols
+    if tile_overlap is not None:
+        opts_dict["tile_overlap"] = tile_overlap
+    if sync is not None:
+        opts_dict["sync"] = sync
+
+    req = payload if payload is not None else ProcessMissionRequest(**opts_dict)
+
     mission = MissionData(mission_id)
     if not mission.data:
         raise HTTPException(status_code=404, detail="Mission not found")
+
+    worker_url = get_worker_url()
+    if not is_pipeline_enabled():
+        if not worker_url:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Processing worker not connected. The backend API is running in lightweight profile (PIPELINE_ENABLED=false) and no WORKER_URL is configured. Please start a processing worker or connect via tunnel.",
+            )
+        try:
+            import httpx
+            async with httpx.AsyncClient(timeout=30.0) as client:
+                body_dict = req.model_dump()
+                params = {
+                    "frame_sampling": req.frame_sampling,
+                    "inference_resolution": req.inference_resolution,
+                    "detection_confidence": req.detection_confidence,
+                    "reconstruction_quality": req.reconstruction_quality,
+                    "tile_inference": req.tile_inference,
+                    "tile_rows": req.tile_rows,
+                    "tile_cols": req.tile_cols,
+                    "tile_overlap": req.tile_overlap,
+                    "sync": req.sync,
+                }
+                if req.scene_profile:
+                    params["scene_profile"] = req.scene_profile
+                resp = await client.post(
+                    f"{worker_url}/api/v1/missions/{mission_id}/process",
+                    params=params,
+                    json=body_dict,
+                )
+                if resp.status_code >= 400:
+                    raise HTTPException(status_code=resp.status_code, detail=resp.text)
+                return resp.json()
+        except HTTPException:
+            raise
+        except Exception as exc:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail=f"Processing worker not connected: failed to forward to {worker_url} ({exc})",
+            )
 
     video_info = mission.get("video")
     if not video_info:
         raise HTTPException(status_code=400, detail="No video uploaded")
 
     job = create_job(mission_id, {
-        "frame_sampling": frame_sampling,
-        "inference_resolution": inference_resolution,
-        "detection_confidence": detection_confidence,
-        "reconstruction_quality": reconstruction_quality,
-        "scene_profile": scene_profile,
-        "tile_inference": tile_inference,
-        "tile_rows": tile_rows,
-        "tile_cols": tile_cols,
-        "tile_overlap": tile_overlap,
+        "frame_sampling": req.frame_sampling,
+        "inference_resolution": req.inference_resolution,
+        "detection_confidence": req.detection_confidence,
+        "reconstruction_quality": req.reconstruction_quality,
+        "scene_profile": req.scene_profile,
+        "tile_inference": req.tile_inference,
+        "tile_rows": req.tile_rows,
+        "tile_cols": req.tile_cols,
+        "tile_overlap": req.tile_overlap,
     })
 
     mission_dir = MISSIONS_DIR / mission_id
@@ -3406,18 +4093,18 @@ async def process_video(
         "mission_id": mission_id,
         "video_path": video_path,
         "video_info": video_info,
-        "frame_sampling": frame_sampling,
-        "inference_resolution": inference_resolution,
-        "detection_confidence": detection_confidence,
-        "reconstruction_quality": reconstruction_quality,
-        "scene_profile": scene_profile,
-        "tile_inference": tile_inference,
-        "tile_rows": tile_rows,
-        "tile_cols": tile_cols,
-        "tile_overlap": tile_overlap,
+        "frame_sampling": req.frame_sampling,
+        "inference_resolution": req.inference_resolution,
+        "detection_confidence": req.detection_confidence,
+        "reconstruction_quality": req.reconstruction_quality,
+        "scene_profile": req.scene_profile,
+        "tile_inference": req.tile_inference,
+        "tile_rows": req.tile_rows,
+        "tile_cols": req.tile_cols,
+        "tile_overlap": req.tile_overlap,
     }
 
-    if sync:
+    if req.sync:
         with _active_jobs_lock:
             _active_job_ids.add(job["id"])
         try:
@@ -3452,6 +4139,7 @@ async def process_video(
             return {
                 "success": True,
                 "job_id": job["id"],
+                "job": job,
                 "mission_id": mission_id,
                 "status": "PROCESSING",
                 "stage": "VALIDATING",
@@ -3485,6 +4173,7 @@ async def process_video(
             return {
                 "success": True,
                 "job_id": job["id"],
+                "job": job,
                 "mission_id": mission_id,
                 "status": "QUEUED",
                 "stage": "QUEUED",
@@ -3759,12 +4448,21 @@ def _run_yolo_detection(
         all_tracks.append(track)
 
     scene_analysis = build_scene_analysis({"observations": observations}, all_tracks)
-    by_class = {}
-    for track in all_tracks:
-        by_class[track["class"]] = by_class.get(track["class"], 0) + 1
+    
+    # Level 1: Detections (per-frame observations by class) -> sum(detections_by_class.values()) == len(observations)
+    detections_by_class = {}
+    for obs in observations:
+        cls_name = obs.get("class", "unknown")
+        detections_by_class[cls_name] = detections_by_class.get(cls_name, 0) + 1
 
-    logger.info("[_run_yolo_detection] Final summary: %d unique tracks, %d observations, scene_analysis total=%d",
-                len(all_tracks), len(observations), scene_analysis.get("total", 0))
+    # Level 2: Tracks (unique multi-frame tracks by class) -> sum(tracks_by_class.values()) == len(all_tracks)
+    tracks_by_class = {}
+    for track in all_tracks:
+        cls_name = track.get("class", "unknown")
+        tracks_by_class[cls_name] = tracks_by_class.get(cls_name, 0) + 1
+
+    logger.info("[_run_yolo_detection] Final summary: %d unique tracks (%s), %d observations (%s), scene_analysis total=%d",
+                len(all_tracks), tracks_by_class, len(observations), detections_by_class, scene_analysis.get("total", 0))
 
     return {
         "video": {"filename": video_path.name},
@@ -3781,11 +4479,16 @@ def _run_yolo_detection(
             "total_detections": len(observations),
             "count": len(observations),
             "byGroup": {},
-            "byClass": by_class,
+            "byClass": detections_by_class,
+            "detections_by_class": detections_by_class,
             "observations": observations,
             "scene_analysis": scene_analysis,
         },
         "tracks": all_tracks,
+        "tracking": {
+            "unique_tracks": len(all_tracks),
+            "tracks_by_class": tracks_by_class,
+        },
         "frameQuality": {"estimated": True, "average": {}, "samples": []},
         "scene_analysis": scene_analysis,
     }
@@ -3795,6 +4498,7 @@ def _run_yolo_detection(
 # 3D RECONSTRUCTION
 # ============================================================
 
+@app.get("/api/v1/missions/{mission_id}/reconstruction")
 @app.get("/api/missions/{mission_id}/reconstruction")
 async def get_mission_reconstruction(mission_id: str):
     """Return the stored reconstruction metadata for a mission."""
@@ -3859,6 +4563,7 @@ async def get_mission_reconstruction(mission_id: str):
     return {"success": is_success, "reconstruction": reconstruction}
 
 
+@app.get("/api/v1/model-status")
 @app.get("/api/model-status")
 async def get_model_status():
     from backend.model_registry import ModelRegistry
@@ -3888,24 +4593,28 @@ def _object_payload(mission_id: str) -> dict:
     }}
 
 
+@app.get("/api/v1/missions/{mission_id}/detections")
 @app.get("/api/missions/{mission_id}/detections")
 async def get_mission_detections(mission_id: str):
     payload = _object_payload(mission_id)
     return {"success": True, "mission_id": mission_id, "detections": payload["detections"]}
 
 
+@app.get("/api/v1/missions/{mission_id}/tracks")
 @app.get("/api/missions/{mission_id}/tracks")
 async def get_mission_tracks(mission_id: str):
     payload = _object_payload(mission_id)
     return {"success": True, "mission_id": mission_id, "tracks": payload["tracks"]}
 
 
+@app.get("/api/v1/missions/{mission_id}/objects")
 @app.get("/api/missions/{mission_id}/objects")
 async def get_mission_objects(mission_id: str):
     payload = _object_payload(mission_id)
     return {"success": True, "mission_id": mission_id, "objects": payload["tracks"], "summary": payload["summary"]}
 
 
+@app.get("/api/v1/missions/{mission_id}/object-summary")
 @app.get("/api/missions/{mission_id}/object-summary")
 async def get_mission_object_summary(mission_id: str):
     payload = _object_payload(mission_id)
@@ -3961,6 +4670,7 @@ def _get_mission_fused_objects(mission_id: str, mission: MissionData) -> list:
 
 
 
+@app.get("/api/v1/missions/{mission_id}/semantic-scene")
 @app.get("/api/missions/{mission_id}/semantic-scene")
 async def get_mission_semantic_scene(mission_id: str):
     """Return the 3D semantic scene representation with spatial fusion results."""
@@ -3989,6 +4699,7 @@ async def get_mission_semantic_scene(mission_id: str):
     return {"success": True, "mission_id": mission_id, "semantic_scene": scene}
 
 
+@app.get("/api/v1/missions/{mission_id}/objects-3d")
 @app.get("/api/missions/{mission_id}/objects-3d")
 async def get_mission_objects_3d(mission_id: str):
     """Return the list of 3D objects associated with the reconstructed scene."""
@@ -4013,6 +4724,7 @@ async def get_mission_objects_3d(mission_id: str):
     }
 
 
+@app.get("/api/v1/missions/{mission_id}/objects/{object_id}/3d")
 @app.get("/api/missions/{mission_id}/objects/{object_id}/3d")
 async def get_mission_object_3d(mission_id: str, object_id: str):
     """Return 3D spatial fusion details, trajectory, and reprojection evidence for a specific object."""
@@ -4033,6 +4745,7 @@ async def get_mission_object_3d(mission_id: str, object_id: str):
     return {"success": True, "mission_id": mission_id, "object": match}
 
 
+@app.get("/api/v1/missions/{mission_id}/objects/{object_id}/evidence")
 @app.get("/api/missions/{mission_id}/objects/{object_id}/evidence")
 async def get_mission_object_evidence(mission_id: str, object_id: str):
     """Return source video observations, 2D bounding boxes, and reprojection error overlays for an object."""
@@ -4101,6 +4814,7 @@ async def get_mission_object_evidence(mission_id: str, object_id: str):
     }
 
 
+@app.get("/api/v1/missions/{mission_id}/evidence/overlays/{image_name}")
 @app.get("/api/missions/{mission_id}/evidence/overlays/{image_name}")
 async def get_evidence_overlay(mission_id: str, image_name: str):
     """Serve visual reprojection overlay images."""
@@ -4115,6 +4829,7 @@ async def get_evidence_overlay(mission_id: str, image_name: str):
     raise HTTPException(status_code=404, detail="Evidence overlay image not found")
 
 
+@app.get("/api/v1/missions/{mission_id}/evidence/frames/{frame_name}")
 @app.get("/api/missions/{mission_id}/evidence/frames/{frame_name}")
 async def get_evidence_frame(mission_id: str, frame_name: str):
     """Serve source video keyframe images."""
@@ -4125,6 +4840,7 @@ async def get_evidence_frame(mission_id: str, frame_name: str):
     raise HTTPException(status_code=404, detail="Source frame not found")
 
 
+@app.post("/api/v1/missions/{mission_id}/fuse-3d")
 @app.post("/api/missions/{mission_id}/fuse-3d")
 async def fuse_mission_objects_3d(mission_id: str, reprojection_threshold_px: float = 25.0):
     """Trigger AI-to-3D spatial fusion for a mission."""
@@ -4197,6 +4913,7 @@ async def get_mission_mesh(mission_id: str):
     )
 
 
+@app.post("/api/v1/missions/{mission_id}/reconstruct")
 @app.post("/api/missions/{mission_id}/reconstruct")
 async def generate_reconstruction(mission_id: str):
     """Generate 3D reconstruction for a mission"""
@@ -4438,6 +5155,7 @@ class MarkingCreateRequest(BaseModel):
     position: list[float] = Field(default_factory=lambda: [0.0, 0.0, 0.0])
     description: str = ""
 
+@app.get("/api/v1/missions/{mission_id}/markings")
 @app.get("/api/missions/{mission_id}/markings")
 async def get_mission_markings(mission_id: str):
     """Retrieve custom 3D markings saved by operators for this mission."""
@@ -4447,6 +5165,7 @@ async def get_mission_markings(mission_id: str):
     markings = mission.data.get("markings", [])
     return {"success": True, "mission_id": mission_id, "markings": markings}
 
+@app.post("/api/v1/missions/{mission_id}/markings")
 @app.post("/api/missions/{mission_id}/markings")
 async def add_mission_marking(mission_id: str, req: MarkingCreateRequest):
     """Save an operator-placed labeled 3D marker."""
@@ -4469,6 +5188,7 @@ async def add_mission_marking(mission_id: str, req: MarkingCreateRequest):
     mission.save()
     return {"success": True, "marking": marking}
 
+@app.delete("/api/v1/missions/{mission_id}/markings/{marking_id}")
 @app.delete("/api/missions/{mission_id}/markings/{marking_id}")
 async def delete_mission_marking(mission_id: str, marking_id: str):
     """Delete an operator-placed marker."""
@@ -4553,6 +5273,7 @@ async def get_mission_keyframes(mission_id: str):
     }
 
 
+@app.get("/api/v1/missions/{mission_id}/calibrations")
 @app.get("/api/missions/{mission_id}/calibrations")
 async def get_mission_calibrations(mission_id: str):
     """List scale calibrations and current active calibration."""
@@ -4574,6 +5295,7 @@ async def get_mission_calibrations(mission_id: str):
     }
 
 
+@app.post("/api/v1/missions/{mission_id}/calibrations/reference-distance")
 @app.post("/api/missions/{mission_id}/calibrations/reference-distance")
 async def calibrate_by_reference_distance(mission_id: str, req: ReferenceDistanceCalibrationRequest):
     """Calibrate photogrammetric scale using two known 3D points and a known physical distance."""
@@ -4601,6 +5323,7 @@ async def calibrate_by_reference_distance(mission_id: str, req: ReferenceDistanc
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@app.post("/api/v1/missions/{mission_id}/calibrations/object-size")
 @app.post("/api/missions/{mission_id}/calibrations/object-size")
 async def calibrate_by_object_size(mission_id: str, req: KnownObjectSizeCalibrationRequest):
     """Calibrate photogrammetric scale using a known physical object dimension."""
@@ -4628,6 +5351,7 @@ async def calibrate_by_object_size(mission_id: str, req: KnownObjectSizeCalibrat
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@app.post("/api/v1/missions/{mission_id}/calibrations/{calibration_id}/activate")
 @app.post("/api/missions/{mission_id}/calibrations/{calibration_id}/activate")
 async def activate_calibration(mission_id: str, calibration_id: str):
     """Activate a specific calibration record."""
@@ -4643,6 +5367,7 @@ async def activate_calibration(mission_id: str, calibration_id: str):
     return {"success": True, "calibration": record.to_dict()}
 
 
+@app.post("/api/v1/missions/{mission_id}/calibrations/deactivate")
 @app.post("/api/missions/{mission_id}/calibrations/deactivate")
 async def deactivate_calibrations(mission_id: str):
     """Deactivate all calibrations, returning scene to uncalibrated relative scale."""
@@ -4655,6 +5380,7 @@ async def deactivate_calibrations(mission_id: str):
     return {"success": True, "scale_status": ScaleStatus.RELATIVE_SCALE.value}
 
 
+@app.delete("/api/v1/missions/{mission_id}/calibrations/{calibration_id}")
 @app.delete("/api/missions/{mission_id}/calibrations/{calibration_id}")
 async def delete_calibration(mission_id: str, calibration_id: str):
     """Delete a calibration record."""
@@ -4671,6 +5397,7 @@ async def delete_calibration(mission_id: str, calibration_id: str):
     return {"success": True, "deleted": calibration_id}
 
 
+@app.get("/api/v1/missions/{mission_id}/measurements")
 @app.get("/api/missions/{mission_id}/measurements")
 async def get_measurements(mission_id: str):
     """Get measurements for a mission with scale and calibration status transparency."""
@@ -4704,6 +5431,7 @@ async def get_measurements(mission_id: str):
     }
 
 
+@app.post("/api/v1/missions/{mission_id}/measurements")
 @app.post("/api/missions/{mission_id}/measurements")
 async def create_measurement(
     mission_id: str,
@@ -4730,6 +5458,7 @@ async def create_measurement(
     }
 
 
+@app.post("/api/v1/missions/{mission_id}/measurements/distance")
 @app.post("/api/missions/{mission_id}/measurements/distance")
 async def measure_distance_3d(mission_id: str, req: DistanceMeasurementRequest):
     """Compute 3D Euclidean distance between two points."""
@@ -4759,6 +5488,7 @@ async def measure_distance_3d(mission_id: str, req: DistanceMeasurementRequest):
     return {"success": True, "measurement": res_dict}
 
 
+@app.post("/api/v1/missions/{mission_id}/measurements/polygon")
 @app.post("/api/missions/{mission_id}/measurements/polygon")
 async def measure_polygon(mission_id: str, req: PolygonMeasurementRequest):
     """Compute 3D planar polygon area and perimeter using Stokes' theorem / Newell's method."""
@@ -4783,6 +5513,7 @@ async def measure_polygon(mission_id: str, req: PolygonMeasurementRequest):
         raise HTTPException(status_code=400, detail=str(e))
 
 
+@app.post("/api/v1/missions/{mission_id}/measurements/elevation")
 @app.post("/api/missions/{mission_id}/measurements/elevation")
 async def measure_elevation(mission_id: str, req: ElevationMeasurementRequest):
     """Compute vertical difference and slope angle between two points."""
@@ -4809,6 +5540,7 @@ async def measure_elevation(mission_id: str, req: ElevationMeasurementRequest):
     return {"success": True, "measurement": res_dict}
 
 
+@app.post("/api/v1/missions/{mission_id}/measurements/object/{object_id}")
 @app.post("/api/missions/{mission_id}/measurements/object/{object_id}")
 async def measure_object_dimensions(mission_id: str, object_id: str, req: ObjectMeasurementRequest = None):
     """Measure physical dimensions of a 3D fused object with INSUFFICIENT_GEOMETRY guards."""
@@ -4864,6 +5596,7 @@ async def measure_object_dimensions(mission_id: str, object_id: str, req: Object
     return {"success": True, "measurement": res_dict}
 
 
+@app.post("/api/v1/missions/{mission_id}/measurements/volume")
 @app.post("/api/missions/{mission_id}/measurements/volume")
 async def measure_volume(mission_id: str, req: VolumeMeasurementRequest):
     """Compute 3D volume, requiring verified closed/watertight geometry."""
@@ -4902,6 +5635,7 @@ from backend.reporting import (
 )
 
 
+@app.get("/api/v1/missions/{mission_id}/report")
 @app.get("/api/missions/{mission_id}/report")
 async def generate_report(
     mission_id: str,
@@ -4928,6 +5662,7 @@ async def generate_report(
     }
 
 
+@app.get("/api/v1/missions/{mission_id}/report/pdf", dependencies=[Depends(rate_limit_dependency)])
 @app.get("/api/missions/{mission_id}/report/pdf", dependencies=[Depends(rate_limit_dependency)])
 def export_mission_pdf(
     mission_id: str,

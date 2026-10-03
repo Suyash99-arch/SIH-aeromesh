@@ -14,18 +14,79 @@ class Base(DeclarativeBase):
     pass
 
 
+def normalize_database_url(url: str | None) -> str | None:
+    """
+    Normalize DATABASE_URL for SQLAlchemy 2.0 and psycopg v3 driver.
+    Rewrites legacy 'postgres://' and standard 'postgresql://' to 'postgresql+psycopg://'.
+    Preserves existing 'postgresql+psycopg://' and other schemes (like sqlite://).
+    """
+    if not url:
+        return None
+    trimmed = str(url).strip()
+    if not trimmed:
+        return None
+    if trimmed.startswith("postgres://"):
+        return "postgresql+psycopg://" + trimmed[len("postgres://"):]
+    if trimmed.startswith("postgresql://"):
+        return "postgresql+psycopg://" + trimmed[len("postgresql://"):]
+    if trimmed.startswith("postgresql+psycopg2://"):
+        return "postgresql+psycopg://" + trimmed[len("postgresql+psycopg2://"):]
+    return trimmed
+
+
+def mask_database_url(url: str | None) -> str:
+    """
+    Safely mask credentials in a database URL so it can be logged or returned in error messages.
+    """
+    if not url:
+        return ""
+    try:
+        from urllib.parse import urlsplit, urlunsplit
+        parts = urlsplit(str(url).strip())
+        if parts.password:
+            netloc = parts.netloc.replace(f":{parts.password}@", ":***@")
+            return urlunsplit((parts.scheme, netloc, parts.path, parts.query, parts.fragment))
+        return str(url).strip()
+    except Exception:
+        return "<sanitized-url>"
+
+
+def validate_production_database_url(url: str | None) -> tuple[bool, str]:
+    """
+    Validate that DATABASE_URL is configured correctly for production.
+    Returns (is_valid, error_message).
+    Ensures URL is present, uses a PostgreSQL scheme, and prevents password leakage.
+    """
+    if not url or not str(url).strip():
+        return False, "DATABASE_URL is missing. Production requires a PostgreSQL database (e.g. Render Postgres). JSON storage fallback is strictly forbidden."
+    
+    raw = str(url).strip()
+    normalized = normalize_database_url(raw)
+    masked = mask_database_url(normalized)
+    
+    try:
+        from urllib.parse import urlsplit
+        scheme = urlsplit(raw).scheme.lower()
+    except Exception as exc:
+        return False, f"DATABASE_URL format is invalid: {exc}. [Sanitized URL: {masked}]"
+        
+    valid_schemes = {"postgres", "postgresql", "postgresql+psycopg", "postgresql+psycopg2"}
+    if scheme not in valid_schemes:
+        return False, (
+            f"DATABASE_URL scheme '{scheme}' is invalid. Production requires a PostgreSQL database "
+            f"(e.g., 'postgresql://user:pass@host:5432/dbname' or 'postgresql+psycopg://...'). [Sanitized URL: {masked}]. "
+            f"JSON storage fallback is strictly forbidden."
+        )
+    return True, ""
+
+
 def get_database_url() -> str | None:
     raw = os.getenv("DATABASE_URL", "").strip()
-    if not raw:
-        return None
-    # Fix Render / Heroku legacy postgres:// schema to SQLAlchemy 2.0 compatible postgresql://
-    if raw.startswith("postgres://"):
-        raw = "postgresql://" + raw[len("postgres://"):]
-    return raw
+    return normalize_database_url(raw)
 
 
 def create_database_engine(database_url: str | None = None):
-    url = database_url or get_database_url()
+    url = normalize_database_url(database_url) if database_url else get_database_url()
     if not url:
         return None
     connect_args = {"check_same_thread": False} if url.startswith("sqlite") else {}

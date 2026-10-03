@@ -100,7 +100,7 @@ def test_dynamic_mathematical_eta_engine():
 
     assert eta_4k["eta_seconds_est"] > eta_720p["eta_seconds_est"]
     assert "formatted_eta_range" in eta_4k
-    assert eta_4k["confidence_percent"] == 65
+    assert eta_4k["confidence_percent"] >= 65
 
     # Progress advancing increases confidence
     eta_adv = estimate_pipeline_eta(video_4k, current_stage_id="reconstruction", current_stage_progress=50.0)

@@ -287,12 +287,14 @@ def test_api_authentication_login_flow():
     assert unknown_res.status_code == 401
 
 
-def test_api_demo_users_endpoint():
-    """Verify demo users endpoint returns safe non-sensitive profiles."""
+def test_api_demo_users_endpoint(monkeypatch):
+    """Verify demo users endpoint returns safe non-sensitive profiles in development and 404 in production."""
     from backend.main import app
     client = TestClient(app)
 
-    res = client.get("/api/auth/demo-users")
+    # 1. In development, profiles are returned but never include credentials
+    monkeypatch.setenv("ENVIRONMENT", "development")
+    res = client.get("/api/v1/auth/demo-users")
     assert res.status_code == 200
     users = res.json()["users"]
     roles = {u["role"] for u in users}
@@ -301,6 +303,15 @@ def test_api_demo_users_endpoint():
     assert ROLE_OPERATOR in roles
     for u in users:
         assert "hashed_password" not in u
+        assert "demo_password" not in u
+        assert "password" not in u
+
+    # 2. In production, demo users endpoint is strictly gated and returns 404
+    monkeypatch.setenv("ENVIRONMENT", "production")
+    res_prod_v1 = client.get("/api/v1/auth/demo-users")
+    assert res_prod_v1.status_code == 404
+    res_prod_legacy = client.get("/api/auth/demo-users")
+    assert res_prod_legacy.status_code == 404
 
 
 def test_api_upload_path_traversal_rejection():
@@ -325,5 +336,30 @@ def test_safe_error_handling_no_stack_trace_leak():
     assert res.status_code in (400, 404)
     # Must never return Python traceback in response
     assert "Traceback (most recent call last)" not in res.text
+
+
+def test_pipeline_disabled_worker_disconnected_returns_503(monkeypatch):
+    """Verify upload and process endpoints return 503 when PIPELINE_ENABLED=false and no WORKER_URL."""
+    from backend import main
+    client = TestClient(main.app)
+
+    monkeypatch.setenv("PIPELINE_ENABLED", "false")
+    monkeypatch.delenv("WORKER_URL", raising=False)
+
+    # 1. Process endpoints return 503
+    res_proc_v1 = client.post("/api/v1/missions/phase5_drone_validation/process")
+    assert res_proc_v1.status_code == 503
+    assert "Processing worker not connected" in res_proc_v1.json()["detail"]
+
+    res_proc_leg = client.post("/api/missions/phase5_drone_validation/process")
+    assert res_proc_leg.status_code == 503
+    assert "Processing worker not connected" in res_proc_leg.json()["detail"]
+
+    # 2. Upload endpoint returns 503
+    mp4_bytes = b"\x00\x00\x00\x20ftypisom\x00\x00\x02\x00isomiso2avc1mp41" + b"\x00" * 4000
+    files = {"file": ("flight.mp4", mp4_bytes, "video/mp4")}
+    res_up = client.post("/api/v1/missions/phase5_drone_validation/upload", files=files)
+    assert res_up.status_code == 503
+    assert "Processing worker not connected" in res_up.json()["detail"]
 
 

@@ -39,7 +39,9 @@ def create_job(mission_id: str, parameters: dict[str, Any] | None = None) -> dic
     return payload
 
 
-def get_job(job_id: str) -> dict[str, Any] | None:
+def get_job(job_id: Any) -> dict[str, Any] | None:
+    if isinstance(job_id, dict):
+        job_id = str(job_id.get("id"))
     if job_id in _local_jobs:
         return dict(_local_jobs[job_id])
     engine = get_configured_engine()
@@ -54,7 +56,7 @@ def get_job(job_id: str) -> dict[str, Any] | None:
 
 
 def update_job(
-    job_id: str,
+    job_id: Any,
     *,
     status: str | None = None,
     stage: str | None = None,
@@ -66,6 +68,8 @@ def update_job(
     failed_stage: str | None = None,
     details: dict[str, Any] | None = None,
 ) -> dict[str, Any] | None:
+    if isinstance(job_id, dict):
+        job_id = str(job_id.get("id"))
     job = _local_jobs.get(job_id)
     if job is not None:
         if status is not None: job["status"] = status
