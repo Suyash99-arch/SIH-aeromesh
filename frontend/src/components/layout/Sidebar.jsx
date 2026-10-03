@@ -9,33 +9,65 @@ import {
   systemNavigation,
 } from "../../data/navigation";
 
-/** Checks /api/v1/health; returns { reconstruction, detection, geospatial } readiness */
+/** Checks /api/v1/ai-engine/status; returns live detector, reconstruction, compute, and tiling status */
 function useEngineStatus() {
-  const [status, setStatus] = useState({ reconstruction: null, detection: null, geospatial: null, overall: null });
+  const [status, setStatus] = useState({
+    detector: null,
+    reconstruction: null,
+    compute: null,
+    tiling: null,
+    overall: null,
+  });
 
   useEffect(() => {
     let cancelled = false;
     const check = async () => {
       try {
-        const res = await fetch("/api/v1/health");
+        const res = await fetch("/api/v1/ai-engine/status");
         if (cancelled) return;
         if (res.ok) {
           const json = await res.json();
-          const online = json?.status === "healthy";
-          const cvReady = json?.opencv_status === "ready" || json?.opencv_status === true;
-          const ffReady = json?.ffmpeg_status === "ready" || json?.ffmpeg_status === true;
+          const detReady = json?.detector?.status === "READY";
+          const reconReady = json?.reconstruction?.status === "READY";
+          const overall = (detReady && reconReady) ? "ONLINE" : (detReady || reconReady) ? "PARTIAL" : "DEGRADED";
           setStatus({
-            overall: online ? "ONLINE" : "DEGRADED",
-            reconstruction: online ? "READY" : "UNAVAILABLE",
-            detection: (online && cvReady) ? "READY" : online ? "PARTIAL" : "UNAVAILABLE",
-            geospatial: online ? "READY" : "UNAVAILABLE",
+            detector: json?.detector?.label || (detReady ? "YOLO Ready" : "Detector: not loaded"),
+            detectorStatus: json?.detector?.status || "NOT_LOADED",
+            reconstruction: json?.reconstruction?.label || (reconReady ? "pycolmap 4.1.1" : "Reconstruction Offline"),
+            reconstructionStatus: json?.reconstruction?.status || "UNAVAILABLE",
+            compute: json?.compute?.label || "CPU only",
+            computeDevice: json?.compute?.device || "cpu",
+            tiling: json?.tiling?.label || "2x2 Tiling",
+            tilingStatus: json?.tiling?.status || "ACTIVE",
+            overall,
           });
         } else {
-          setStatus({ overall: "OFFLINE", reconstruction: "OFFLINE", detection: "OFFLINE", geospatial: "OFFLINE" });
+          setStatus({
+            detector: "Detector: not loaded",
+            detectorStatus: "OFFLINE",
+            reconstruction: "pycolmap Offline",
+            reconstructionStatus: "OFFLINE",
+            compute: "CPU only",
+            computeDevice: "cpu",
+            tiling: "Tiling Inactive",
+            tilingStatus: "OFFLINE",
+            overall: "OFFLINE",
+          });
         }
       } catch {
-        if (!cancelled)
-          setStatus({ overall: "OFFLINE", reconstruction: "OFFLINE", detection: "OFFLINE", geospatial: "OFFLINE" });
+        if (!cancelled) {
+          setStatus({
+            detector: "Detector: not loaded",
+            detectorStatus: "OFFLINE",
+            reconstruction: "pycolmap Offline",
+            reconstructionStatus: "OFFLINE",
+            compute: "CPU only",
+            computeDevice: "cpu",
+            tiling: "Tiling Inactive",
+            tilingStatus: "OFFLINE",
+            overall: "OFFLINE",
+          });
+        }
       }
     };
     check();
@@ -164,21 +196,56 @@ export default function Sidebar({
               {engineStatus.overall || "CHECKING"}
             </b>
           </header>
-          {[
-            ["Reconstruction", engineStatus.reconstruction],
-            ["Detection", engineStatus.detection],
-            ["Geospatial", engineStatus.geospatial],
-          ].map(([label, st]) => {
-            const color = st === "READY" ? '#10b981' : st === "PARTIAL" ? '#fbbf24' : st === null ? '#64748b' : '#f87171';
-            return (
-              <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '3px 0' }}>
-                <span>{label}</span>
-                <b style={{ color, fontSize: '10px', background: `${color}1e`, padding: '1px 6px', borderRadius: '4px' }}>
-                  {st || "…"}
-                </b>
-              </div>
-            );
-          })}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '6px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '2px 0' }}>
+              <span style={{ fontSize: '11px', color: '#94a3b8' }}>Detection</span>
+              <b style={{
+                color: engineStatus.detectorStatus === 'READY' ? '#10b981' : '#f87171',
+                fontSize: '9.5px',
+                background: engineStatus.detectorStatus === 'READY' ? '#10b9811e' : '#f871711e',
+                padding: '1px 5px',
+                borderRadius: '4px',
+              }}>
+                {engineStatus.detector || 'Loading…'}
+              </b>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '2px 0' }}>
+              <span style={{ fontSize: '11px', color: '#94a3b8' }}>SfM 3D</span>
+              <b style={{
+                color: engineStatus.reconstructionStatus === 'READY' ? '#10b981' : '#f87171',
+                fontSize: '9.5px',
+                background: engineStatus.reconstructionStatus === 'READY' ? '#10b9811e' : '#f871711e',
+                padding: '1px 5px',
+                borderRadius: '4px',
+              }}>
+                {engineStatus.reconstruction || 'Loading…'}
+              </b>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '2px 0' }}>
+              <span style={{ fontSize: '11px', color: '#94a3b8' }}>Hardware</span>
+              <b style={{
+                color: engineStatus.computeDevice === 'cuda' ? '#38bdf8' : '#e2e8f0',
+                fontSize: '9.5px',
+                background: 'rgba(255,255,255,0.06)',
+                padding: '1px 5px',
+                borderRadius: '4px',
+              }}>
+                {engineStatus.compute || 'CPU only'}
+              </b>
+            </div>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '2px 0' }}>
+              <span style={{ fontSize: '11px', color: '#94a3b8' }}>Inference</span>
+              <b style={{
+                color: '#38bdf8',
+                fontSize: '9.5px',
+                background: '#38bdf81e',
+                padding: '1px 5px',
+                borderRadius: '4px',
+              }}>
+                {engineStatus.tiling || '2x2 Tiled'}
+              </b>
+            </div>
+          </div>
         </div>
 
         <Nav

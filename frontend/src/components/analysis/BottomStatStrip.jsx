@@ -24,7 +24,7 @@ export default function BottomStatStrip({
     ? `${Number(meshVertices).toLocaleString()} Vertices`
     : pointCount
       ? `${Number(pointCount).toLocaleString()} Points`
-      : "Active 3D Mesh";
+      : "No Reconstruction";
 
   return (
     <footer className="incident-bottom-stat-strip" aria-label="Incident Detection Summary">

@@ -1928,106 +1928,58 @@ function Reports({ mission, notice }) {
           err,
         );
         if (active) {
-          setReport({
-            missionId: missionId,
-            missionName: mission?.name || "AEROMESH Mission",
-            status: mission?.status || "COMPLETED",
-            generatedAt: new Date().toISOString(),
-            mission: {
-              id: missionId,
-              name: mission?.name || "AEROMESH Mission",
-              type: mission?.type || "infrastructure",
-              location: mission?.sector || "Operational Flight Zone",
-              operator: "AEROMESH Inspection Team",
-              status: mission?.status || "COMPLETED",
-            },
-            video: {
-              filename: mission?.video?.filename || "mission_capture.mp4",
-              resolution: formatResolution(
-                mission?.video?.resolution,
-                "3840 × 2160",
-              ),
-              fps: 24.0,
-              duration_seconds: 30.0,
-              total_frames: mission?.frames || 720,
-            },
-            detection: {
-              model: "yolo11n",
-              model_version: "yolo11n-official",
-              total_detections: 399,
-              detections_by_class: { car: 383, train: 15, truck: 1 },
-              confidence_stats: { min: 0.35, max: 0.71, mean: 0.495 },
-              sample_fps: 2.0,
-              frames_processed: 61,
-            },
-            tracking: {
-              tracker: "Ultralytics persistent ByteTrack",
-              unique_tracks: 23,
-              tracks_by_class: { car: 21, train: 1, truck: 1 },
-            },
-            reconstruction: {
-              camera_model: "SIMPLE_PINHOLE",
-              registered_cameras: 20,
-              total_images: 20,
-              sparse_points_count: 12916,
-              mean_reprojection_error_px: 0.98,
-              mesh_status: "AVAILABLE",
-              mesh_vertices: 28139,
-              mesh_faces: 56120,
-              dense_reconstruction_status: "UNAVAILABLE",
-              coordinate_system: "LOCAL_ARBITRARY",
-              scale_status: "RELATIVE_SCALE",
-              georeferencing_status: "UNREFERENCED",
-            },
-            spatial_fusion: {
-              authoritative_tracks: 23,
-              tracks_used_for_fusion: 3,
-              status_breakdown: {
-                VALID: 1,
-                LOW_CONFIDENCE: 1,
-                INSUFFICIENT_EVIDENCE: 1,
+          if (mission) {
+            setReport({
+              missionId: missionId,
+              missionName: mission.name || "Mission",
+              status: mission.status || "NOT_RUN",
+              generatedAt: new Date().toISOString(),
+              mission: {
+                id: missionId,
+                name: mission.name || "Mission",
+                type: mission.type || "infrastructure",
+                location: mission.location || mission.sector || "Not set",
+                operator: mission.operator || "Not set",
+                status: mission.status || "NOT_RUN",
               },
-              reprojection_statistics: {
-                mean_px: 2.39,
-                threshold_px: 25.0,
-                acceptance_rate_pct: 100,
+              video: {
+                filename: mission.video?.filename || "Not uploaded",
+                resolution: formatResolution(mission.video?.resolution, "Not recorded"),
+                fps: mission.video?.fps || null,
+                duration_seconds: mission.video?.duration_seconds || null,
+                total_frames: mission.video?.total_frames || mission.frames || 0,
               },
-            },
-            measurements: {
-              items: [
-                {
-                  label: "Ground Baseline Distance",
-                  value: 15.0,
-                  unit: "m",
-                  status: "METRIC_CALIBRATED",
-                  confidence: 0.95,
-                },
-                {
-                  label: "Target Object Dimension",
-                  length: 4.54,
-                  width: 2.15,
-                  height: 1.67,
-                  unit: "m",
-                  status: "METRIC_CALIBRATED",
-                  confidence: 0.85,
-                },
+              detection: mission.detections || {
+                total_detections: 0,
+                detections_by_class: {},
+              },
+              tracking: mission.tracking || {
+                unique_tracks: 0,
+                tracks_by_class: {},
+              },
+              reconstruction: mission.reconstruction || {
+                registered_cameras: 0,
+                total_images: 0,
+                sparse_points_count: 0,
+                mesh_status: "UNAVAILABLE",
+                mesh_vertices: 0,
+                mesh_faces: 0,
+              },
+              spatial_fusion: mission.spatial_fusion || {
+                authoritative_tracks: 0,
+                tracks_used_for_fusion: 0,
+              },
+              measurements: mission.measurements || {
+                items: [],
+              },
+              limitations: [
+                "LOCAL_ARBITRARY: Reconstruction coordinates are arbitrary relative units, not true meters or GPS.",
+                "RELATIVE_SCALE: Monocular video SfM is scale-ambiguous without verified ground reference.",
               ],
-              active_calibration: {
-                calibration_id: `CAL_${missionId}_01`,
-                method: "KNOWN_REFERENCE_DISTANCE",
-                scale_factor: 2.3904,
-                unit: "m",
-                known_value: 15.0,
-                confidence: 0.95,
-              },
-            },
-            limitations: [
-              "LOCAL_ARBITRARY: Reconstruction coordinates are arbitrary relative units, not true meters or GPS.",
-              "RELATIVE_SCALE: Monocular video SfM is scale-ambiguous without verified ground reference.",
-              "UNREFERENCED: Scene is unreferenced against EPSG/WGS84. GeoJSON export is unavailable.",
-              "DENSE_MVS_UNAVAILABLE: Dense stereo reconstruction requires CUDA/HIP; sparse geometry is preserved as authoritative.",
-            ],
-          });
+            });
+          } else {
+            setReport(null);
+          }
           setGeoJsonStatus({
             available: false,
             reason: "Scene is not georeferenced.",
@@ -2469,19 +2421,19 @@ function Reports({ mission, notice }) {
                     <td>
                       <b>Video File</b>
                     </td>
-                    <td>{repVideo.filename || "WhatsApp Video.mp4"}</td>
+                    <td>{repVideo.filename || "Not recorded"}</td>
                     <td>
                       <b>Resolution</b>
                     </td>
                     <td>
-                      {formatResolution(repVideo.resolution, "3840 × 2160")}
+                      {formatResolution(repVideo.resolution, "Not recorded")}
                     </td>
                   </tr>
                   <tr>
                     <td>
                       <b>Native FPS</b>
                     </td>
-                    <td>{repVideo.fps || 24.0} FPS</td>
+                    <td>{repVideo.fps ? `${repVideo.fps} FPS` : "Not recorded"}</td>
                     <td>
                       <b>Duration / Frames</b>
                     </td>

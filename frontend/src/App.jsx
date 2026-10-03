@@ -355,7 +355,7 @@ export default function App() {
 
             <main className="main">
               <Topbar
-                title={pageTitles[activePage] || "Tactical Command"}
+                title={pageTitles[activePage] || "Mission Command"}
                 theme={theme}
                 setTheme={setTheme}
                 notice={notice}

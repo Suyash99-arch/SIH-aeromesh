@@ -35,9 +35,16 @@ export default function AuthPage({ onAuthenticated, onCancel, notice, initialPor
   const [demoUsers, setDemoUsers] = useState([]);
 
   useEffect(() => {
-    fetchDemoUsers().then((users) => {
-      if (users && users.length) setDemoUsers(users);
-    });
+    fetch("/api/v1/health")
+      .then((r) => (r.ok ? r.json() : {}))
+      .then((health) => {
+        if (health?.dev_only) {
+          fetchDemoUsers().then((users) => {
+            if (users && users.length) setDemoUsers(users);
+          });
+        }
+      })
+      .catch(() => {});
   }, []);
 
   const handleLoginSubmit = async (e) => {
@@ -97,8 +104,6 @@ export default function AuthPage({ onAuthenticated, onCancel, notice, initialPor
       portal_type: portal === "gov" ? "GOVERNMENT_ORG" : "INDIVIDUAL",
       organization_name: portal === "gov" ? orgName.trim() : null,
       department: portal === "gov" ? department.trim() : null,
-      role: portal === "gov" ? orgRole : "OPERATOR",
-      mfa_enabled: portal === "gov" ? enableMfa : false,
     };
 
     const res = await registerUser(payload);

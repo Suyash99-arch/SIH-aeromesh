@@ -453,8 +453,8 @@ export default function NewIncidentWorkspace({ onClose, onMissionCreated, curren
 
                 <div className="form-field form-field-full">
                   <label htmlFor="inc-location">
-                    Incident Location (Offline Tactical Input)
-                    <span className="field-hint">Manual coordinates, sector code, or landmark</span>
+                    Incident Location
+                    <span className="field-hint">Coordinates, sector code, or landmark</span>
                   </label>
                   <div className="location-input-wrap">
                     <Icon name="MapPin" size={15} className="location-icon" />

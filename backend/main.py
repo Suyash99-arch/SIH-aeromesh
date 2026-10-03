@@ -1078,6 +1078,74 @@ async def startup_hardware_detection():
 
 
 
+@app.get("/api/v1/ai-engine/status")
+@app.get("/api/ai-engine/status")
+async def get_ai_engine_status():
+    """Live status of AI inference models, pycolmap photogrammetry, compute hardware, and tiling."""
+    model_path = Path(os.getenv("YOLO_MODEL_PATH", "backend/models/aeromesh_yolo.pt"))
+    weights_present = model_path.exists() and model_path.stat().st_size > 1000
+    detector_loadable = False
+    if weights_present:
+        try:
+            from backend.model_registry import ModelRegistry
+            registry = ModelRegistry(model_path)
+            rec = registry.inspect()
+            detector_loadable = bool(rec.available)
+        except Exception:
+            detector_loadable = False
+
+    try:
+        import pycolmap  # type: ignore
+        has_colmap = True
+        colmap_ver = getattr(pycolmap, "__version__", "4.1.1")
+    except ImportError:
+        has_colmap = False
+        colmap_ver = None
+
+    comp_device = detect_compute_device()
+    is_cuda = comp_device.get("is_cuda", False) or comp_device.get("device") == "cuda"
+    device_label = comp_device.get("name") if is_cuda else "CPU only"
+
+    tile_iou = float(os.getenv("DETECTION_TILE_IOU", "0.5"))
+    tile_overlap = float(os.getenv("DETECTION_TILE_OVERLAP", "0.15"))
+
+    detector_label = "YOLO Object Detection" if (weights_present and detector_loadable) else "Detector: not loaded"
+    detector_status = "READY" if (weights_present and detector_loadable) else "NOT_LOADED"
+    
+    colmap_label = f"pycolmap {colmap_ver}" if has_colmap else "pycolmap not importable"
+    colmap_status = "READY" if has_colmap else "UNAVAILABLE"
+
+    return {
+        "success": True,
+        "detector": {
+            "status": detector_status,
+            "label": detector_label,
+            "weights_present": weights_present,
+            "loadable": detector_loadable,
+            "model_path": str(model_path),
+        },
+        "reconstruction": {
+            "status": colmap_status,
+            "label": colmap_label,
+            "importable": has_colmap,
+            "version": colmap_ver,
+        },
+        "compute": {
+            "device": "cuda" if is_cuda else "cpu",
+            "label": device_label,
+            "profile": comp_device,
+        },
+        "tiling": {
+            "status": "ACTIVE",
+            "label": f"2x2 Tiled ({int(tile_overlap * 100)}% Overlap)",
+            "rows": 2,
+            "cols": 2,
+            "overlap": tile_overlap,
+            "iou": tile_iou,
+        },
+    }
+
+
 @app.get("/api/v1/system/compute-device")
 @app.get("/api/system/compute-device", deprecated=True)
 async def get_system_compute_device():
@@ -2302,11 +2370,9 @@ async def list_missions(
                     continue
 
                 is_benchmark_mission = bool(
-                    m_id == "phase5_drone_validation"
-                    or m.get("is_benchmark")
+                    m.get("is_benchmark")
                     or m.get("is_test")
                     or str(m_id).startswith("test_")
-                    or str(m_id).startswith("phase5_")
                 )
                 if is_benchmark_mission and not include_benchmarks:
                     continue
@@ -2813,24 +2879,18 @@ def get_mission_artifact_info(mission: MissionData, artifact_name: str) -> dict:
     file_exists = False
     if artifact_name == "video":
         storage = get_storage()
-        for key in [
-            f"missions/{m_id}/original/video.mp4",
-            f"missions/{m_id}/original/flight-video.mp4",
-            f"missions/{m_id}/flight-video.mp4",
-            f"missions/{m_id}/video.mp4",
-            f"{m_id}/video.mp4",
-        ]:
-            if storage.exists(key):
-                file_exists = True
-                break
+        v_info = mission.data.get("video") or {}
+        v_key = v_info.get("storage_key") or f"missions/{m_id}/original/{v_info.get('filename', 'video.mp4')}"
+        if storage.exists(v_key) or storage.exists(f"missions/{m_id}/original/video.mp4") or storage.exists(f"{m_id}/video.mp4"):
+            file_exists = True
         if not file_exists:
             for base_dir in [MISSIONS_DIR / m_id, DATA_DIR / "objects" / "missions" / m_id]:
                 if base_dir.exists():
-                    if (base_dir / "video.mp4").is_file() or (base_dir / "flight-video.mp4").is_file():
-                        file_exists = True
-                        break
-                    if list(base_dir.glob("video.*")):
-                        file_exists = True
+                    for ext in [".mp4", ".mov", ".mkv", ".avi", ".webm"]:
+                        if any(base_dir.glob(f"*{ext}")) or any((base_dir / "original").glob(f"*{ext}")):
+                            file_exists = True
+                            break
+                    if file_exists:
                         break
             if not file_exists and mission.get("video_path") and Path(mission.get("video_path")).is_file():
                 file_exists = True
@@ -3009,10 +3069,12 @@ async def get_mission_video(mission_id: str, request: Request):
     storage = get_storage()
 
     # 1. Check storage keys using the storage abstraction
+    mission = MissionData(mission_id)
+    v_info = mission.data.get("video") or {}
+    v_key = v_info.get("storage_key") or f"missions/{mission_id}/original/{v_info.get('filename', 'video.mp4')}"
     for key_candidate in [
+        v_key,
         f"missions/{mission_id}/original/video.mp4",
-        f"missions/{mission_id}/original/flight-video.mp4",
-        f"missions/{mission_id}/flight-video.mp4",
         f"missions/{mission_id}/video.mp4",
         f"{mission_id}/video.mp4",
     ]:
@@ -3028,13 +3090,10 @@ async def get_mission_video(mission_id: str, request: Request):
     # 2. Check direct mission directories in MISSIONS_DIR and DATA_DIR
     for base_dir in [MISSIONS_DIR / mission_id, DATA_DIR / "objects" / "missions" / mission_id]:
         if base_dir.exists():
-            for name in ["flight-video.mp4", "video.mp4"]:
-                cand = base_dir / name
-                if cand.is_file() and is_safe_path(cand) and cand not in candidate_files:
-                    candidate_files.append(cand)
-            for cand in base_dir.glob("video.*"):
-                if cand.is_file() and is_safe_path(cand) and cand not in candidate_files:
-                    candidate_files.append(cand)
+            for ext in [".mp4", ".mov", ".mkv", ".avi", ".webm"]:
+                for cand in list(base_dir.glob(f"*{ext}")) + list((base_dir / "original").glob(f"*{ext}")):
+                    if cand.is_file() and is_safe_path(cand) and cand not in candidate_files:
+                        candidate_files.append(cand)
 
     # 3. Check mission manifest/metadata
     mission = MissionData(mission_id)
@@ -3098,10 +3157,11 @@ async def get_mission_video_proxy(mission_id: str, request: Request):
 
     # Check storage-backed path first
     storage = get_storage()
+    video_meta = mission.get("video") or {}
+    storage_key = video_meta.get("storage_key") or f"missions/{mission_id}/original/{video_meta.get('filename', 'video.mp4')}"
     for key_candidate in [
+        storage_key,
         f"missions/{mission_id}/original/video.mp4",
-        f"missions/{mission_id}/original/flight-video.mp4",
-        f"missions/{mission_id}/flight-video.mp4",
         f"missions/{mission_id}/video.mp4",
     ]:
         if storage.exists(key_candidate) and hasattr(storage, "_path"):
@@ -3113,10 +3173,12 @@ async def get_mission_video_proxy(mission_id: str, request: Request):
     if not original_path:
         for base_dir in [MISSIONS_DIR / mission_id, DATA_DIR / "objects" / "missions" / mission_id]:
             if base_dir.exists():
-                for name in ["flight-video.mp4", "video.mp4"]:
-                    cand = base_dir / name
-                    if cand.is_file() and is_safe(cand):
-                        original_path = cand
+                for ext in [".mp4", ".mov", ".mkv", ".avi", ".webm"]:
+                    for cand in list(base_dir.glob(f"*{ext}")) + list((base_dir / "original").glob(f"*{ext}")):
+                        if cand.is_file() and is_safe(cand):
+                            original_path = cand
+                            break
+                    if original_path:
                         break
             if original_path:
                 break
@@ -4816,7 +4878,7 @@ def _get_mission_fused_objects(mission_id: str, mission: MissionData) -> list:
         except Exception as exc:
             logger.warning("Failed to load %s: %s", obj_semantic_file, exc)
 
-    # Check phase 6 validation artifact for phase5_drone_validation
+    # Check validation artifact
     phase6_file = DATA_DIR / "validation" / "phase6" / "phase6_fusion.json"
     if phase6_file.exists():
         try:
@@ -5093,14 +5155,18 @@ async def generate_reconstruction(mission_id: str):
     video_path_cand = None
     if video_path_raw and Path(video_path_raw).exists():
         video_path_cand = Path(video_path_raw)
-    elif (MISSIONS_DIR / mission_id / "video.mp4").exists():
-        video_path_cand = MISSIONS_DIR / mission_id / "video.mp4"
     elif isinstance(mission.get("video"), dict) and mission.get("video").get("storage_key"):
         s_cand = DATA_DIR / "objects" / mission.get("video")["storage_key"]
         if s_cand.exists():
             video_path_cand = s_cand
-    elif (BASE_DIR / "frontend" / "public" / "assets" / "missions" / mission_id / "flight-video.mp4").exists():
-        video_path_cand = BASE_DIR / "frontend" / "public" / "assets" / "missions" / mission_id / "flight-video.mp4"
+    if not video_path_cand:
+        m_dir = MISSIONS_DIR / mission_id
+        if m_dir.exists():
+            for ext in [".mp4", ".mov", ".mkv", ".avi", ".webm"]:
+                found = list(m_dir.glob(f"*{ext}")) + list((m_dir / "original").glob(f"*{ext}"))
+                if found and found[0].is_file():
+                    video_path_cand = found[0]
+                    break
 
     if video_path_cand:
         recon_res = run_reconstruction_for_mission(mission_id, video_path_cand)

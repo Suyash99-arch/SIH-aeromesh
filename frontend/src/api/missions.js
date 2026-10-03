@@ -311,9 +311,6 @@ export async function getMission(missionId, forceRefresh = true) {
     if (data.success) {
       const mission = normalizeMission(data.mission);
       missionCache.set(missionId, mission);
-      console.log(`[Mission] Loaded mission ${missionId} from API`, {
-        video: mission.assets?.video || "no video",
-      });
       return mission;
     }
 
@@ -1039,7 +1036,7 @@ export function getAuthHeaders(customHeaders = {}) {
   return headers;
 }
 
-export async function registerUser(optionsOrEmail, maybePassword, maybeFullName = "", maybeRole = "OPERATOR") {
+export async function registerUser(optionsOrEmail, maybePassword, maybeFullName = "") {
   try {
     const payload = typeof optionsOrEmail === "object" && optionsOrEmail !== null
       ? optionsOrEmail
@@ -1047,7 +1044,6 @@ export async function registerUser(optionsOrEmail, maybePassword, maybeFullName 
           email: optionsOrEmail,
           password: maybePassword,
           full_name: maybeFullName,
-          role: maybeRole,
           portal_type: "INDIVIDUAL",
         };
 

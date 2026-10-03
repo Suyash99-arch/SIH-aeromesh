@@ -461,126 +461,23 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
     };
   }, [objects]);
 
-  // Dynamically classify structure / scene entity type from real photogrammetry & detected objects
+  // Authoritative structure / scene entity type from real photogrammetry classifier
   const detectedSceneType = useMemo(() => {
-    const rawType = `${mission?.type || ""} ${mission?.sector || ""} ${mission?.name || ""}`.toLowerCase();
-    
-    // Count class frequencies among detected objects
-    const classCounts = {};
-    objects.forEach((obj) => {
-      const cls = (obj.class || obj.class_name || "").toLowerCase();
-      const cat = (obj.category || "").toLowerCase();
-      if (cls === "boat" || cls === "ship" || cls === "vessel" || cat === "maritime") {
-        classCounts["maritime"] = (classCounts["maritime"] || 0) + 1;
-      } else if (cls === "car" || cls === "truck" || cls === "bus" || cls === "van" || cat === "vehicle") {
-        classCounts["vehicle"] = (classCounts["vehicle"] || 0) + 1;
-      } else if (cls === "person" || cls === "pedestrian" || cat === "people") {
-        classCounts["people"] = (classCounts["people"] || 0) + 1;
-      } else if (cls === "airplane" || cat === "aircraft") {
-        classCounts["aircraft"] = (classCounts["aircraft"] || 0) + 1;
-      }
-    });
-
-    const boats = classCounts["maritime"] || 0;
-    const vehicles = classCounts["vehicle"] || 0;
-    const people = classCounts["people"] || 0;
-    const aircraft = classCounts["aircraft"] || 0;
-
-    if (boats > 0 && boats >= vehicles) {
+    const sc = mission?.scene_classification || mission?.canonical_summary?.scene_classification;
+    if (sc && sc.label && sc.confidence != null) {
       return {
-        label: "Harbor / Maritime Marina",
-        tag: "MARITIME FACILITY",
-        category: "Port & Marine Infrastructure",
-        detail: `${boats} maritime vessel${boats > 1 ? "s" : ""} localized on water basin surface`,
-        icon: "Anchor",
-        accent: "#0ea5e9",
-        confidence: Math.min(99, 78 + boats * 4),
-        primaryClass: "boat",
+        label: sc.label,
+        tag: sc.tag || "CLASSIFIED SCENE",
+        category: sc.category || "Scene Classification",
+        detail: sc.detail || `${sc.confidence}% classification confidence`,
+        icon: sc.icon || "MapPin",
+        accent: sc.accent || "#38bdf8",
+        confidence: Math.round(sc.confidence <= 1 ? sc.confidence * 100 : sc.confidence),
+        primaryClass: sc.primaryClass || "scene",
       };
     }
-    if (vehicles > 0 && vehicles >= people) {
-      if (rawType.includes("bridge") || rawType.includes("overpass") || rawType.includes("span")) {
-        return {
-          label: "Bridge / Elevated Span",
-          tag: "ELEVATED CORRIDOR",
-          category: "Transportation Infrastructure",
-          detail: `${vehicles} vehicles along elevated roadway corridor`,
-          icon: "Layers",
-          accent: "#f59e0b",
-          confidence: Math.min(99, 80 + vehicles * 3),
-          primaryClass: "vehicle",
-        };
-      }
-      return {
-        label: "Urban Street / Transit Corridor",
-        tag: "CIVIL ROADWAY",
-        category: "Urban Transportation",
-        detail: `${vehicles} vehicles along roadway surface envelope`,
-        icon: "Navigation",
-        accent: "#38bdf8",
-        confidence: Math.min(99, 75 + vehicles * 3),
-        primaryClass: "vehicle",
-      };
-    }
-    if (people > 2) {
-      return {
-        label: "Pedestrian Zone / Public Plaza",
-        tag: "ASSEMBLY PLAZA",
-        category: "Urban Pedestrian Space",
-        detail: `${people} individuals localized across surface plane`,
-        icon: "Users",
-        accent: "#10b981",
-        confidence: 88,
-        primaryClass: "person",
-      };
-    }
-    if (aircraft > 0) {
-      return {
-        label: "Airfield / Runway Facility",
-        tag: "AVIATION SITE",
-        category: "Aviation Infrastructure",
-        detail: `${aircraft} aircraft localized along runway grid`,
-        icon: "Compass",
-        accent: "#8b5cf6",
-        confidence: 92,
-        primaryClass: "airplane",
-      };
-    }
-    if (rawType.includes("building") || rawType.includes("facility") || rawType.includes("industrial")) {
-      return {
-        label: "Industrial / Commercial Facility",
-        tag: "BUILT STRUCTURE",
-        category: "Commercial Infrastructure",
-        detail: "Volumetric surface envelope reconstructed",
-        icon: "Box",
-        accent: "#6366f1",
-        confidence: 85,
-        primaryClass: "structure",
-      };
-    }
-    if (rawType.includes("harbor") || rawType.includes("port") || rawType.includes("marina")) {
-      return {
-        label: "Harbor / Port District",
-        tag: "MARITIME FACILITY",
-        category: "Port & Marine Infrastructure",
-        detail: "Coastal harbor basin photogrammetric geometry",
-        icon: "Anchor",
-        accent: "#0ea5e9",
-        confidence: 86,
-        primaryClass: "boat",
-      };
-    }
-    return {
-      label: "Urban Infrastructure / Terrain",
-      tag: "CIVIL ENVELOPE",
-      category: "Photogrammetric Scene",
-      detail: "Multi-view surface geometry reconstructed",
-      icon: "MapPin",
-      accent: "#38bdf8",
-      confidence: 80,
-      primaryClass: "terrain",
-    };
-  }, [objects, mission]);
+    return null;
+  }, [mission]);
 
   const isMetricCalibrated = Boolean(
     activeCalibration ||
@@ -590,10 +487,14 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
 
   // Measurement triggers
   const handleMeasureDistance = async () => {
+    if (!selectedObject?.position_3d) {
+      if (notice) notice("Select an object with 3D coordinates to measure.", "warning");
+      return;
+    }
     setMeasuring(true);
     try {
-      const p1 = selectedObject?.position_3d || [-17.52, -5.48, 145.64];
-      const p2 = [-18.0, -5.53, 148.34];
+      const p1 = selectedObject.position_3d;
+      const p2 = [p1[0] + 1.0, p1[1], p1[2]];
       const res = await measureDistance3D(missionId, {
         point_a: p1,
         point_b: p2,
@@ -857,13 +758,15 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
       <main className="analysis-center">
 
         {/* Floating Structure & Scene Classification Pill (Top-Left) */}
-        <div className="scene-classification-pill" title="Dynamic Photogrammetric Scene Classification">
-          <span className="scene-pill-dot" style={{ background: detectedSceneType.accent }} />
-          <span className="scene-pill-text">{detectedSceneType.label}</span>
-          <span className="scene-pill-tag" style={{ color: detectedSceneType.accent, borderColor: `${detectedSceneType.accent}50` }}>
-            {detectedSceneType.tag}
-          </span>
-        </div>
+        {detectedSceneType && (
+          <div className="scene-classification-pill" title="Dynamic Photogrammetric Scene Classification">
+            <span className="scene-pill-dot" style={{ background: detectedSceneType.accent }} />
+            <span className="scene-pill-text">{detectedSceneType.label}</span>
+            <span className="scene-pill-tag" style={{ color: detectedSceneType.accent, borderColor: `${detectedSceneType.accent}50` }}>
+              {detectedSceneType.tag}
+            </span>
+          </div>
+        )}
 
         {/* Floating Layers Popover */}
         {showLayerPopover && (
@@ -944,8 +847,8 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
           cameraTarget={cameraTarget}
           activeTool={activeTool}
           viewerRef={viewerRef}
-          sceneType={detectedSceneType.label}
-          sceneTypeTag={detectedSceneType.tag}
+          sceneType={detectedSceneType?.label || ""}
+          sceneTypeTag={detectedSceneType?.tag || ""}
           customMarkings={customMarkings}
           selectedMarkingId={selectedMarkingId}
           onSelectMarking={setSelectedMarkingId}
@@ -1022,42 +925,44 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
           {activeTab === "overview" && (
             <>
               {/* Dynamic Structure / Scene Classification Card */}
-              <div className="inspector-scene-card">
-                <div className="scene-card-top">
-                  <span
-                    className="scene-badge"
-                    style={{
-                      borderColor: `${detectedSceneType.accent}60`,
-                      color: detectedSceneType.accent,
-                      background: `${detectedSceneType.accent}15`,
-                    }}
-                  >
-                    {detectedSceneType.tag}
-                  </span>
-                  <span className="scene-confidence">
-                    {detectedSceneType.confidence}% confidence
-                  </span>
-                </div>
-                <div className="scene-card-heading">
-                  <span
-                    className="scene-icon-wrap"
-                    style={{
-                      background: `${detectedSceneType.accent}20`,
-                      color: detectedSceneType.accent,
-                      border: `1px solid ${detectedSceneType.accent}40`,
-                    }}
-                  >
-                    <Icon name={detectedSceneType.icon} size={18} />
-                  </span>
-                  <div>
-                    <h3 className="scene-card-title">{detectedSceneType.label}</h3>
-                    <span className="scene-card-category">{detectedSceneType.category}</span>
+              {detectedSceneType && (
+                <div className="inspector-scene-card">
+                  <div className="scene-card-top">
+                    <span
+                      className="scene-badge"
+                      style={{
+                        borderColor: `${detectedSceneType.accent}60`,
+                        color: detectedSceneType.accent,
+                        background: `${detectedSceneType.accent}15`,
+                      }}
+                    >
+                      {detectedSceneType.tag}
+                    </span>
+                    <span className="scene-confidence">
+                      {detectedSceneType.confidence}% confidence
+                    </span>
                   </div>
+                  <div className="scene-card-heading">
+                    <span
+                      className="scene-icon-wrap"
+                      style={{
+                        background: `${detectedSceneType.accent}20`,
+                        color: detectedSceneType.accent,
+                        border: `1px solid ${detectedSceneType.accent}40`,
+                      }}
+                    >
+                      <Icon name={detectedSceneType.icon} size={18} />
+                    </span>
+                    <div>
+                      <h3 className="scene-card-title">{detectedSceneType.label}</h3>
+                      <span className="scene-card-category">{detectedSceneType.category}</span>
+                    </div>
+                  </div>
+                  <p className="scene-card-detail">
+                    {detectedSceneType.detail}
+                  </p>
                 </div>
-                <p className="scene-card-detail">
-                  {detectedSceneType.detail}
-                </p>
-              </div>
+              )}
 
               <div className="inspector-section-title">
                 <span>Model Architecture</span>
@@ -1155,6 +1060,11 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
                     setActiveTab("objects");
                   }}
                   id="btn-explore-detections"
+                  disabled={(analytics.valid > 0 ? analytics.valid : objects.length) === 0}
+                  style={{
+                    opacity: (analytics.valid > 0 ? analytics.valid : objects.length) === 0 ? 0.45 : 1,
+                    cursor: (analytics.valid > 0 ? analytics.valid : objects.length) === 0 ? "not-allowed" : "pointer",
+                  }}
                 >
                   <svg
                     width="12"
