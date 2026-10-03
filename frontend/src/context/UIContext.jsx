@@ -6,10 +6,18 @@ const UIContext = createContext();
 export function UIProvider({ children }) {
   const [language, setLanguage] = useState(() => localStorage.getItem("hexaspark_lang") || "en");
   const [unitSystem, setUnitSystem] = useState(() => localStorage.getItem("hexaspark_units") || "metric");
-  const [theme, setTheme] = useState(() => localStorage.getItem("hexaspark_theme") || "dark");
+  const [theme, setTheme] = useState(() => {
+    const saved = localStorage.getItem("hexaspark_theme");
+    if (saved) return saved;
+    if (typeof window !== "undefined" && window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches) {
+      return "light";
+    }
+    return "dark";
+  });
 
   useEffect(() => {
     localStorage.setItem("hexaspark_lang", language);
+    document.documentElement.setAttribute("lang", language);
   }, [language]);
 
   useEffect(() => {

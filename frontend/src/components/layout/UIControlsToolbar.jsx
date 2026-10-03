@@ -102,7 +102,7 @@ export default function UIControlsToolbar({ className = "" }) {
           transition: "all 0.2s ease",
         }}
       >
-        {theme === "dark" ? "☀️ Light" : "🌙 Dark"}
+        {theme === "dark" ? `🌙 ${t("darkMode")}` : `☀️ ${t("lightMode")}`}
       </button>
     </div>
   );
