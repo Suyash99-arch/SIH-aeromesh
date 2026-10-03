@@ -25,6 +25,13 @@ frontend/test-results/
 .env
 .env.*
 !.env.example
+*.pem
+*.key
+*.pfx
+*.pkcs12
+*.crt
+credentials*
+*.credentials
 
 # User credentials / test users
 data/users.json
@@ -86,6 +93,8 @@ run_final.json
 pip_versions.txt
 *.png
 *.jpg
+!docs/screenshots/**/*.png
+!docs/screenshots/**/*.jpg
 !frontend/public/**/*.png
 !frontend/public/**/*.jpg
 !frontend/src/**/*.png
@@ -93,14 +102,15 @@ pip_versions.txt
 
 # Ad-hoc frontend test / verification scripts
 frontend/*.cjs
+!frontend/scripts/generate_vercel_config.cjs
 frontend/*.mjs
-frontend/scripts/
 scratch_inspect_pcd.py
 process_demo_missions_real.py
 test_live_eval_priority1.py
 verify_aa710.py
 verify_all_missions.py
 test-results/
+tools/
 .venv312/
 .venv311/
 .venv310/
