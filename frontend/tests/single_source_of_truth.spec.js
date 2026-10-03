@@ -1,8 +1,6 @@
 import { test, expect } from "@playwright/test";
 
 test.describe("Single Source of Truth E2E Tests", () => {
-  test.setTimeout(60000);
-
   const testMissions = [
     {
       id: "36c675a7-d7c4-4730-b76a-d2a6e2f2662f",
@@ -19,6 +17,7 @@ test.describe("Single Source of Truth E2E Tests", () => {
       page,
       request,
     }) => {
+      test.setTimeout(60000);
       // 1. Read single source of truth from API
       const res = await request.get(`http://127.0.0.1:8000/api/v1/missions/${m.id}/summary`);
       expect(res.status()).toBe(200);

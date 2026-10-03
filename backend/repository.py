@@ -52,9 +52,7 @@ class MissionRepository:
         query = select(Mission).order_by(Mission.created_at.desc())
         if not include_benchmarks:
             query = query.where(
-                not_(Mission.id.in_(["phase5_drone_validation"])),
                 not_(Mission.id.like("test_%")),
-                not_(Mission.id.like("phase5_%")),
             )
         if user is not None:
             is_superadmin = (getattr(user, "role", "") == "ADMIN" and not getattr(user, "organization_name", None))

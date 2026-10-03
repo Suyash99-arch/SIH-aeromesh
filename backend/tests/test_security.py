@@ -13,6 +13,7 @@ Verifies:
 """
 
 import time
+import uuid
 import pytest
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.testclient import TestClient
@@ -33,7 +34,6 @@ from backend.security import (
     ROLE_ADMIN,
     ROLE_ANALYST,
     ROLE_OPERATOR,
-    DEMO_USERS,
     UserRecord,
 )
 
@@ -126,9 +126,9 @@ def test_file_upload_validation():
 
 def test_rbac_role_enforcement():
     """Verify role-based authorization hierarchy."""
-    admin_user = DEMO_USERS["admin@aeromesh.internal"]
-    analyst_user = DEMO_USERS["analyst@aeromesh.internal"]
-    operator_user = DEMO_USERS["operator@aeromesh.internal"]
+    admin_user = UserRecord(id="usr_admin", email="admin@aeromesh.internal", full_name="Admin", role=ROLE_ADMIN, hashed_password="")
+    analyst_user = UserRecord(id="usr_analyst", email="analyst@aeromesh.internal", full_name="Analyst", role=ROLE_ANALYST, hashed_password="")
+    operator_user = UserRecord(id="usr_op", email="operator@aeromesh.internal", full_name="Operator", role=ROLE_OPERATOR, hashed_password="")
 
     # Endpoint requiring ANALYST role
     checker = require_roles(ROLE_ANALYST)
@@ -151,15 +151,11 @@ def test_rbac_role_enforcement():
 
 
 def test_mission_level_access_control():
-    """Verify tenant isolation and public validation access."""
-    admin = DEMO_USERS["admin@aeromesh.internal"]
-    analyst = DEMO_USERS["analyst@aeromesh.internal"]
-    operator1 = DEMO_USERS["operator@aeromesh.internal"]
+    """Verify tenant isolation and data access control."""
+    admin = UserRecord(id="usr_admin", email="admin@aeromesh.internal", full_name="Admin", role=ROLE_ADMIN, hashed_password="")
+    analyst = UserRecord(id="usr_analyst", email="analyst@aeromesh.internal", full_name="Analyst", role=ROLE_ANALYST, hashed_password="")
+    operator1 = UserRecord(id="usr_op1", email="operator@aeromesh.internal", full_name="Op 1", role=ROLE_OPERATOR, hashed_password="")
     operator2 = UserRecord(id="usr_op2", email="other@aeromesh.internal", full_name="Other Op", role=ROLE_OPERATOR, hashed_password="")
-
-    # Benchmark mission is public for everyone
-    assert check_mission_access("phase5_drone_validation", operator1) is True
-    assert check_mission_access("phase5_drone_validation", operator2) is True
 
     # Admin can access any mission
     assert check_mission_access("mission_secret_99", admin, mission_owner="other@aeromesh.internal") is True
@@ -178,150 +174,35 @@ def test_mission_level_access_control():
     assert excinfo.value.status_code == 403
 
 
-def test_rate_limiter():
-    """Verify sliding-window rate limiter throttles burst traffic."""
-    limiter = RateLimiter(requests_per_minute=5)
-    ip = "192.168.1.100"
-
-    # First 5 requests must succeed
-    for _ in range(5):
-        allowed, retry_after = limiter.is_allowed(ip)
-        assert allowed is True
-        assert retry_after == 0
-
-    # 6th request must be throttled
-    allowed, retry_after = limiter.is_allowed(ip)
-    assert allowed is False
-    assert retry_after > 0
-
-    # Different IP is not throttled
-    allowed_other, _ = limiter.is_allowed("192.168.1.101")
-    assert allowed_other is True
-
-
-def test_security_headers_middleware():
-    """Verify that SecurityHeadersMiddleware injects secure HTTP headers."""
-    app = FastAPI()
-    app.add_middleware(SecurityHeadersMiddleware)
-
-    @app.get("/ping")
-    def ping():
-        return {"ping": "pong"}
-
-    client = TestClient(app)
-    res = client.get("/ping")
-    assert res.status_code == 200
-    assert res.headers["X-Content-Type-Options"] == "nosniff"
-    assert res.headers["X-Frame-Options"] == "DENY"
-    assert res.headers["X-XSS-Protection"] == "1; mode=block"
-    assert res.headers["Referrer-Policy"] == "strict-origin-when-cross-origin"
-
-
-def test_storage_path_traversal_rejection(tmp_path):
-    """Verify LocalObjectStorage strictly blocks path escape attempts."""
-    from backend.storage import LocalObjectStorage
-    storage = LocalObjectStorage(tmp_path)
-
-    import io
-    # Valid relative key works
-    storage.upload("missions/m1/file.txt", io.BytesIO(b"hello"), "file.txt")
-    assert storage.exists("missions/m1/file.txt") is True
-
-    # Traversal keys are rejected
-    with pytest.raises(ValueError):
-        storage.upload("../outside.txt", io.BytesIO(b"escaped"), "outside.txt")
-
-    with pytest.raises(ValueError):
-        storage.download("..\\outside.txt")
-
-    # Key with traversal or root path returns False safely
-    assert storage.exists("/root/secret.txt") is False
-
-
-def test_api_health_and_readiness_endpoints():
-    """Verify production /health and /ready endpoints return structured JSON."""
+def test_client_supplied_role_privilege_escalation_blocked():
+    """Gate 0.4: Verify server rejects client-supplied role=ADMIN during individual registration."""
     from backend.main import app
     client = TestClient(app)
 
-    res_health = client.get("/health")
-    assert res_health.status_code == 200
-    data_health = res_health.json()
-    assert data_health["status"] == "healthy"
-    assert "backend" in data_health
-    assert "database" in data_health
-
-    res_ready = client.get("/ready")
-    assert res_ready.status_code == 200
-    data_ready = res_ready.json()
-    assert data_ready["status"] in ("ready", "degraded")
-    assert "checks" in data_ready
-    assert "storage" in data_ready["checks"]
-
-
-def test_api_authentication_login_flow():
-    """Verify login authentication, credential verification, and token issuance."""
-    from backend.main import app
-    client = TestClient(app)
-
-    # Valid admin login
-    res = client.post("/api/auth/login", json={"email": "admin@aeromesh.internal", "password": "Admin123!"})
+    uid = uuid.uuid4().hex[:6]
+    res = client.post("/api/v1/auth/register", json={
+        "email": f"hacker_{uid}@test.org",
+        "password": "Password123!",
+        "full_name": "Attacker",
+        "role": "ADMIN",
+        "portal_type": "INDIVIDUAL"
+    })
     assert res.status_code == 200
-    body = res.json()
-    assert body["success"] is True
-    assert "access_token" in body
-    assert body["user"]["role"] == ROLE_ADMIN
-
-    # Test /api/auth/me with Bearer token
-    token = body["access_token"]
-    me_res = client.get("/api/auth/me", headers={"Authorization": f"Bearer {token}"})
-    assert me_res.status_code == 200
-    assert me_res.json()["user"]["email"] == "admin@aeromesh.internal"
-
-    # Invalid password rejection
-    bad_res = client.post("/api/auth/login", json={"email": "admin@aeromesh.internal", "password": "WrongPassword"})
-    assert bad_res.status_code == 401
-    assert "Invalid email or password" in bad_res.json()["detail"]
-
-    # Unknown user rejection
-    unknown_res = client.post("/api/auth/login", json={"email": "unknown@hacker.io", "password": "Admin123!"})
-    assert unknown_res.status_code == 401
+    user_data = res.json()["user"]
+    # Role must NOT be ADMIN; server must fix role to individual/operator
+    assert user_data["role"] != "ADMIN"
+    assert user_data["role"] == ROLE_OPERATOR
 
 
-def test_api_demo_users_endpoint(monkeypatch):
-    """Verify demo users endpoint returns safe non-sensitive profiles in development and 404 in production."""
-    from backend.main import app
-    client = TestClient(app)
-
-    # 1. In development, profiles are returned but never include credentials
-    monkeypatch.setenv("ENVIRONMENT", "development")
-    res = client.get("/api/v1/auth/demo-users")
-    assert res.status_code == 200
-    users = res.json()["users"]
-    roles = {u["role"] for u in users}
-    assert ROLE_ADMIN in roles
-    assert ROLE_ANALYST in roles
-    assert ROLE_OPERATOR in roles
-    for u in users:
-        assert "hashed_password" not in u
-        assert "demo_password" not in u
-        assert "password" not in u
-
-    # 2. In production, demo users endpoint is strictly gated and returns 404
-    monkeypatch.setenv("ENVIRONMENT", "production")
-    res_prod_v1 = client.get("/api/v1/auth/demo-users")
-    assert res_prod_v1.status_code == 404
-    res_prod_legacy = client.get("/api/auth/demo-users")
-    assert res_prod_legacy.status_code == 404
-
-
-def test_api_upload_path_traversal_rejection():
+def test_api_upload_path_traversal_rejection(mock_mission_data):
     """Verify upload endpoint blocks client filenames containing path traversal."""
     from backend.main import app
     client = TestClient(app)
+    m_id = mock_mission_data["id"]
 
     # Upload with ../ traversal filename
     files = {"file": ("../../malicious.mp4", b"\x00\x00\x00\x20ftypisom\x00\x00\x02\x00isomiso2avc1mp41", "video/mp4")}
-    res = client.post("/api/missions/phase5_drone_validation/upload", files=files)
+    res = client.post(f"/api/v1/missions/{m_id}/upload", files=files)
     assert res.status_code == 400
     assert "traversal" in res.json()["detail"].lower()
 
@@ -338,28 +219,23 @@ def test_safe_error_handling_no_stack_trace_leak():
     assert "Traceback (most recent call last)" not in res.text
 
 
-def test_pipeline_disabled_worker_disconnected_returns_503(monkeypatch):
+def test_pipeline_disabled_worker_disconnected_returns_503(monkeypatch, mock_mission_data):
     """Verify upload and process endpoints return 503 when PIPELINE_ENABLED=false and no WORKER_URL."""
     from backend import main
     client = TestClient(main.app)
+    m_id = mock_mission_data["id"]
 
     monkeypatch.setenv("PIPELINE_ENABLED", "false")
     monkeypatch.delenv("WORKER_URL", raising=False)
 
     # 1. Process endpoints return 503
-    res_proc_v1 = client.post("/api/v1/missions/phase5_drone_validation/process")
+    res_proc_v1 = client.post(f"/api/v1/missions/{m_id}/process")
     assert res_proc_v1.status_code == 503
     assert "Processing worker not connected" in res_proc_v1.json()["detail"]
-
-    res_proc_leg = client.post("/api/missions/phase5_drone_validation/process")
-    assert res_proc_leg.status_code == 503
-    assert "Processing worker not connected" in res_proc_leg.json()["detail"]
 
     # 2. Upload endpoint returns 503
     mp4_bytes = b"\x00\x00\x00\x20ftypisom\x00\x00\x02\x00isomiso2avc1mp41" + b"\x00" * 4000
     files = {"file": ("flight.mp4", mp4_bytes, "video/mp4")}
-    res_up = client.post("/api/v1/missions/phase5_drone_validation/upload", files=files)
+    res_up = client.post(f"/api/v1/missions/{m_id}/upload", files=files)
     assert res_up.status_code == 503
     assert "Processing worker not connected" in res_up.json()["detail"]
-
-

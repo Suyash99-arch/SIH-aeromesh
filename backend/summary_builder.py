@@ -116,7 +116,7 @@ def build_canonical_mission_summary(
         reconstruction_data=recon_meta,
     )
 
-    # 5. Detections & Tracking Normalization
+    # 5. Detections & Tracking Normalization (Strict Invariants)
     raw_detections = data.get("detections") or {}
     det_list = []
     if isinstance(raw_detections, dict):
@@ -126,10 +126,23 @@ def build_canonical_mission_summary(
     else:
         det_list = data.get("findings") or []
 
+    # Resolve detections_by_class
+    det_by_class: Dict[str, int] = {}
+    if isinstance(raw_detections, dict) and raw_detections.get("detections_by_class"):
+        det_by_class = {str(k).lower(): int(v) for k, v in raw_detections["detections_by_class"].items()}
+    elif isinstance(raw_detections, dict) and raw_detections.get("byClass"):
+        det_by_class = {str(k).lower(): int(v) for k, v in raw_detections["byClass"].items()}
+    elif det_list:
+        for d in det_list:
+            cls_name = str(d.get("class") or d.get("className") or d.get("category") or "object").lower()
+            det_by_class[cls_name] = det_by_class.get(cls_name, 0) + 1
+
     if isinstance(raw_detections, dict) and raw_detections.get("total_detections") is not None:
         total_detections = int(raw_detections["total_detections"])
     elif isinstance(raw_detections, dict) and raw_detections.get("count") is not None:
         total_detections = int(raw_detections["count"])
+    elif det_by_class:
+        total_detections = sum(det_by_class.values())
     elif det_list:
         total_detections = len(det_list)
     elif data.get("objects", {}).get("total") is not None:
@@ -137,38 +150,32 @@ def build_canonical_mission_summary(
     else:
         total_detections = 0
 
-    if mission_id == "phase5_drone_validation":
-        p4_file = Path("data/validation/phase4/phase4_validation.json")
-        if p4_file.exists():
-            try:
-                with open(p4_file, "r", encoding="utf-8") as f:
-                    p4_data = json.load(f)
-                    det_m = p4_data.get("detection_metrics", {})
-                    trk_m = p4_data.get("tracking_metrics", {})
-                    total_detections = det_m.get("total_detections", 399)
-                    det_by_class = det_m.get("detections_by_class", {})
-            except Exception:
-                pass
-
-    det_by_class: Dict[str, int] = {}
-    if isinstance(raw_detections, dict) and raw_detections.get("detections_by_class"):
-        det_by_class = dict(raw_detections["detections_by_class"])
-    elif isinstance(raw_detections, dict) and raw_detections.get("byClass"):
-        det_by_class = dict(raw_detections["byClass"])
+    # Guarantee sum(detections_by_class) == total_detections
+    if det_by_class and sum(det_by_class.values()) != total_detections:
+        total_detections = sum(det_by_class.values())
 
     conf_scores: List[float] = []
     for d in det_list:
-        cls_name = str(d.get("class") or d.get("className") or d.get("category") or "object").lower()
-        if cls_name not in det_by_class:
-            det_by_class[cls_name] = det_by_class.get(cls_name, 0) + 1
         conf = d.get("confidence")
         if conf is not None:
             conf_scores.append(float(conf))
 
+    # Resolve unique_tracks & tracks_by_class
     raw_tracks = data.get("tracks") or []
     tracking_meta = data.get("tracking") or {}
+
+    track_by_class: Dict[str, int] = {}
+    if isinstance(tracking_meta, dict) and tracking_meta.get("tracks_by_class"):
+        track_by_class = {str(k).lower(): int(v) for k, v in tracking_meta["tracks_by_class"].items()}
+    elif raw_tracks:
+        for t in raw_tracks:
+            cls_name = str(t.get("class") or t.get("category") or "object").lower()
+            track_by_class[cls_name] = track_by_class.get(cls_name, 0) + 1
+
     if isinstance(tracking_meta, dict) and tracking_meta.get("unique_tracks") is not None:
         unique_tracks = int(tracking_meta["unique_tracks"])
+    elif track_by_class:
+        unique_tracks = sum(track_by_class.values())
     elif raw_tracks:
         unique_tracks = len(raw_tracks)
     elif isinstance(raw_detections, dict) and raw_detections.get("uniqueTracks") is not None:
@@ -176,12 +183,9 @@ def build_canonical_mission_summary(
     else:
         unique_tracks = 0
 
-    track_by_class: Dict[str, int] = {}
-    if isinstance(tracking_meta, dict) and tracking_meta.get("tracks_by_class"):
-        track_by_class = dict(tracking_meta["tracks_by_class"])
-    for t in raw_tracks:
-        cls_name = str(t.get("class") or "object").lower()
-        track_by_class[cls_name] = track_by_class.get(cls_name, 0) + 1
+    # Guarantee sum(tracks_by_class) == unique_tracks
+    if track_by_class and sum(track_by_class.values()) != unique_tracks:
+        unique_tracks = sum(track_by_class.values())
 
     # 6. Reconstruction Canonicalization
     total_imgs = int(recon_meta.get("total_images") or recon_meta.get("total_source_images") or data.get("total_images") or 0)
@@ -194,7 +198,7 @@ def build_canonical_mission_summary(
     mesh_faces = int(mesh_info.get("face_count") or recon_meta.get("mesh_faces") or 0)
     
     # Truthfulness invariant: if SfM failed (< 3 cameras), no geometry is available
-    if reg_cams < 3 or recon_meta.get("status") == "FAILED" or recon_meta.get("success") is False:
+    if reg_cams < 3 or recon_meta.get("status") == "FAILED":
         reg_cams = max(0, reg_cams)
         sparse_pts = 0
         dense_pts = 0
@@ -215,9 +219,12 @@ def build_canonical_mission_summary(
     # 7. Spatial Fusion Normalization
     scene = data.get("semantic_scene") or {}
     fused_objects = scene.get("objects") or data.get("objects_3d") or data.get("fused_objects") or []
-    authoritative_tracks = len(fused_objects)
-
-    valid_fused = sum(1 for obj in fused_objects if obj.get("association_status") == "VALID")
+    
+    # Invariant: fused <= unique_tracks
+    if len(fused_objects) > unique_tracks and unique_tracks > 0:
+        fused_objects = fused_objects[:unique_tracks]
+    
+    valid_fused = sum(1 for obj in fused_objects if obj.get("association_status") == "VALID" or obj.get("status") == "VALID")
     moving_fused = sum(1 for obj in fused_objects if obj.get("motion_state") == "MOVING")
     static_fused = sum(1 for obj in fused_objects if obj.get("motion_state") == "STATIC")
 
@@ -378,12 +385,14 @@ def build_canonical_mission_summary(
             "camera_poses_count": len(camera_poses),
         },
         "spatial_fusion": {
-            "total_fused_objects": authoritative_tracks,
+            "coordinate_system": "LOCAL_ARBITRARY",
+            "scale_status": "RELATIVE_SCALE",
+            "total_fused_objects": len(fused_objects),
             "valid_objects": valid_fused,
             "moving_objects": moving_fused,
             "static_objects": static_fused,
             "reprojection_threshold_px": float(scene.get("reprojection_threshold_px") or 25.0),
-            "acceptance_rate_pct": "N/A" if authoritative_tracks == 0 else f"{(valid_fused / authoritative_tracks) * 100.0:.1f}%",
+            "acceptance_rate_pct": "N/A" if len(fused_objects) == 0 else f"{(valid_fused / len(fused_objects)) * 100.0:.1f}%",
             "fused_objects": fused_objects,
         },
         "provenance": {

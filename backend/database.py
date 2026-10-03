@@ -82,6 +82,13 @@ def validate_production_database_url(url: str | None) -> tuple[bool, str]:
 
 def get_database_url() -> str | None:
     raw = os.getenv("DATABASE_URL", "").strip()
+    if not raw:
+        if os.getenv("ENVIRONMENT", "development").lower() != "production":
+            data_dir = Path(__file__).resolve().parent.parent / "data"
+            data_dir.mkdir(parents=True, exist_ok=True)
+            db_file = data_dir / "aeromesh.db"
+            return f"sqlite:///{db_file.as_posix()}"
+        return None
     return normalize_database_url(raw)
 
 
@@ -89,8 +96,17 @@ def create_database_engine(database_url: str | None = None):
     url = normalize_database_url(database_url) if database_url else get_database_url()
     if not url:
         return None
-    connect_args = {"check_same_thread": False} if url.startswith("sqlite") else {}
-    return create_engine(url, future=True, pool_pre_ping=True, connect_args=connect_args)
+    connect_args = {"check_same_thread": False, "timeout": 30.0} if url.startswith("sqlite") else {}
+    engine = create_engine(url, future=True, pool_pre_ping=True, connect_args=connect_args)
+    if url.startswith("sqlite"):
+        from sqlalchemy import event
+        @event.listens_for(engine, "connect")
+        def set_sqlite_pragma(dbapi_connection, connection_record):
+            cursor = dbapi_connection.cursor()
+            cursor.execute("PRAGMA journal_mode=WAL")
+            cursor.execute("PRAGMA synchronous=NORMAL")
+            cursor.close()
+    return engine
 
 
 _cached_engine = None
@@ -101,6 +117,8 @@ def get_configured_engine():
     global _cached_engine, _cached_db_url
     url = get_database_url()
     if not url:
+        _cached_engine = None
+        _cached_db_url = None
         return None
     if _cached_engine is not None and _cached_db_url == url:
         return _cached_engine

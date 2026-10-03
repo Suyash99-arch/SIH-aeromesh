@@ -545,28 +545,13 @@ class MissionData:
         ]
         for mission_file in candidate_files:
             if mission_file.exists():
-                try:
-                    with open(mission_file, "r", encoding="utf-8") as f:
-                        self.data = json.load(f)
-                        return
-                except Exception as exc:
-                    logger.warning("Failed reading %s: %s", mission_file, exc)
-
-        if self.mission_id == "phase5_drone_validation":
-            val_file = DATA_DIR / "validation" / "phase5" / "phase5_reconstruction.json"
-            if val_file.exists():
-                try:
-                    with open(val_file, "r", encoding="utf-8") as f:
-                        self.data = json.load(f)
-                        self.data.setdefault("id", "phase5_drone_validation")
-                        self.data.setdefault("name", "Phase 5 Drone Validation Mission")
-                        self.data.setdefault("type", "infrastructure")
-                        self.data.setdefault("location", "Operational Flight Zone")
-                        self.data.setdefault("operator", "Unknown operator")
-                        self.data.setdefault("status", "MESH_GENERATED")
-                except Exception as exc:
-                    logger.warning("Failed reading phase5 validation data: %s", exc)
-
+                for _ in range(3):
+                    try:
+                        with open(mission_file, "r", encoding="utf-8") as f:
+                            self.data = json.load(f)
+                            return
+                    except Exception as exc:
+                        time.sleep(0.005)
     
     def save(self):
         database_engine = get_configured_engine()
@@ -583,10 +568,17 @@ class MissionData:
         try:
             MISSIONS_DIR.mkdir(parents=True, exist_ok=True)
             mission_file = MISSIONS_DIR / f"{self.mission_id}.json"
-            temp_file = MISSIONS_DIR / f"{self.mission_id}.json.tmp.{os.getpid()}"
+            temp_file = MISSIONS_DIR / f"{self.mission_id}.json.tmp.{uuid.uuid4().hex}"
             with open(temp_file, "w", encoding="utf-8") as f:
                 json.dump(self.data, f, indent=2)
-            os.replace(temp_file, mission_file)
+            try:
+                os.replace(temp_file, mission_file)
+            except Exception:
+                try:
+                    if temp_file.exists():
+                        temp_file.unlink()
+                except Exception:
+                    pass
         except Exception as exc:
             logger.warning("Failed writing mission JSON to disk: %s", exc)
     
@@ -1122,9 +1114,14 @@ async def health():
     database_engine = get_configured_engine()
     database_configured = database_engine is not None
     database_ready = check_database(database_engine) if database_configured else False
-    db_url = (get_database_url() or "").lower()
+    db_url = (get_database_url() or (str(database_engine.url) if database_engine else "")).lower()
     if database_ready:
-        db_status = "postgres" if ("postgres" in db_url) else "ready"
+        if "postgres" in db_url:
+            db_status = "postgres"
+        elif "sqlite" in db_url:
+            db_status = "sqlite"
+        else:
+            db_status = "ready"
     else:
         db_status = "configured_unavailable" if database_configured else "json_fallback"
     
@@ -1320,11 +1317,17 @@ async def register(req: RegisterRequest, response: Response):
     user_id = f"usr_{uuid.uuid4().hex[:12]}"
     full_name = (req.full_name or "").strip() or email.split("@")[0].replace(".", " ").title()
 
-    # Determine default role based on portal type
-    if req.role and req.role in (ROLE_ADMIN, ROLE_ANALYST, ROLE_OPERATOR, ROLE_VIEWER):
-        role = req.role
+    # Server strictly assigns role (never accept client-supplied role or privilege)
+    invite_token = getattr(req, "invite_token", None) or os.getenv("ORG_INVITE_TOKEN", "")
+    if portal_type == PORTAL_GOV_ORG:
+        # Organization signup: first user becomes pending_org_admin (or org_admin if valid invite token provided)
+        role = "org_admin" if (invite_token and invite_token == os.getenv("ORG_INVITE_TOKEN")) else "pending_org_admin"
     else:
-        role = ROLE_ADMIN if portal_type == PORTAL_GOV_ORG else ROLE_OPERATOR
+        # Individual signup: server fixes role strictly to individual/operator
+        role = ROLE_OPERATOR
+        portal_type = PORTAL_INDIVIDUAL
+        org_name = None
+        department = None
 
     hashed_pwd = hash_password(req.password)
     created_at = datetime.utcnow().isoformat() + "Z"
@@ -1644,7 +1647,7 @@ async def invite_team_member(req: InviteRequest, current_user: UserRecord = Depe
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Team invitations are only available for Organization accounts",
         )
-    if current_user.role not in (ROLE_ADMIN, ROLE_ANALYST):
+    if current_user.role not in (ROLE_ADMIN, ROLE_ANALYST, "org_admin", "pending_org_admin"):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only Organization Admins and Analysts can invite team members",

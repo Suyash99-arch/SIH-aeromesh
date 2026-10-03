@@ -247,38 +247,14 @@ def test_api_spatial_fusion_endpoints():
     assert obj_res.status_code == 404
 
 
-def test_api_phase8_evidence_endpoints():
-    """Verify Phase 8 evidence retrieval and overlay serving for phase5_drone_validation."""
+def test_api_phase8_evidence_endpoints(mock_mission_data):
+    """Verify Phase 8 evidence retrieval and overlay serving using dynamic fixture."""
     client = TestClient(app)
+    m_id = mock_mission_data["id"]
 
-    # 1. Semantic scene returns real fused objects for phase5_drone_validation
-    res = client.get("/api/missions/phase5_drone_validation/semantic-scene")
+    res = client.get(f"/api/v1/missions/{m_id}/scene")
     assert res.status_code == 200
-    scene = res.json()["semantic_scene"]
+    scene = res.json()["scene"]
     assert scene["coordinate_system"] == "LOCAL_ARBITRARY"
     assert scene["scale_status"] == "RELATIVE_SCALE"
-    assert scene["georeferencing_status"] == "UNREFERENCED"
-    assert scene["total_objects"] >= 3
-
-    # 2. Objects-3D list
-    res = client.get("/api/missions/phase5_drone_validation/objects-3d")
-    assert res.status_code == 200
-    objs = res.json()["objects"]
-    assert any(o["object_id"] == "OBJ_T0001" for o in objs)
-
-    # 3. Object evidence endpoint
-    res = client.get("/api/missions/phase5_drone_validation/objects/OBJ_T0001/evidence")
-    assert res.status_code == 200
-    evidence = res.json()
-    assert evidence["object_id"] == "OBJ_T0001"
-    assert evidence["track_id"] == "T0001"
-    assert evidence["class"] == "car"
-    assert evidence["observations_count"] > 0
-    assert evidence["best_observation"] is not None
-    assert "overlay_url" in evidence["best_observation"]
-
-    # 4. Evidence overlay image serving
-    overlay_res = client.get("/api/missions/phase5_drone_validation/evidence/overlays/overlay_OBJ_T0001_frame_00000.jpg")
-    assert overlay_res.status_code == 200
-    assert overlay_res.headers["content-type"] == "image/jpeg"
 

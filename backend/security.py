@@ -473,9 +473,6 @@ def check_mission_access(
     - Government/Org users can access any mission shared within their organization.
     - Individual and Guest users can strictly access only their own missions.
     """
-    if mission_id == "phase5_drone_validation":
-        return True
-
     if user is None:
         if AUTH_OPTIONAL_MODE:
             return True

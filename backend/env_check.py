@@ -120,7 +120,8 @@ def check_worker_shared_state(strict: bool = False, force_enforce: bool = False)
     is_split = is_split_worker_mode() or force_enforce
 
     if is_split:
-        if not db_url:
+        env_raw_db = os.getenv("DATABASE_URL", "").strip()
+        if not env_raw_db:
             msg = "WORKER STARTUP HALTED: DATABASE_URL environment variable is missing. Worker requires shared PostgreSQL database to synchronize with API."
             logger.critical(msg)
             raise RuntimeError(msg)
