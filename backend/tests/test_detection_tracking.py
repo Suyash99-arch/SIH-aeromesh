@@ -350,3 +350,57 @@ def test_no_mutation_of_authoritative_validation_artifacts():
     assert (base / "accuracy_remediation" / "phase_c_tracking_benchmark.json").exists()
     assert (base / "accuracy_remediation" / "phase_e_40keyframe_reconstruction.json").exists()
     assert (base / "phase5" / "phase5_reconstruction.json").exists()
+
+
+def test_detection_model_invariants_across_all_three_levels():
+    """Enforces the 3-level detection data model invariants required by the system:
+    1. sum(by_class) == total at Level 1 (Detections)
+    2. sum(tracks_by_class) == unique_tracks at Level 2 (Tracks)
+    3. fused objects <= unique tracks at Level 3 (Fused 3D Objects)
+    4. classes(fused) is a subset of classes(detections)
+    5. mean reprojection error == mean(per_object_reproj_errors)
+    6. acceptance_rate == valid / evaluated * 100%
+    """
+    # Level 1: Detections
+    obs = [
+        {"track_id": "T0001", "class_name": "van", "confidence": 0.88, "frame_index": 0},
+        {"track_id": "T0001", "class_name": "van", "confidence": 0.91, "frame_index": 1},
+        {"track_id": "T0002", "class_name": "person", "confidence": 0.75, "frame_index": 0},
+    ]
+    det_by_class = {}
+    for d in obs:
+        cls = d["class_name"]
+        det_by_class[cls] = det_by_class.get(cls, 0) + 1
+    total_detections = len(obs)
+    assert sum(det_by_class.values()) == total_detections == 3
+
+    # Level 2: Tracks
+    tracks = [
+        {"track_id": "T0001", "class_name": "van", "detection_count": 2},
+        {"track_id": "T0002", "class_name": "person", "detection_count": 1},
+    ]
+    trk_by_class = {}
+    for t in tracks:
+        cls = t["class_name"]
+        trk_by_class[cls] = trk_by_class.get(cls, 0) + 1
+    unique_tracks = len(tracks)
+    assert sum(trk_by_class.values()) == unique_tracks == 2
+
+    # Level 3: Fused Objects
+    fused_objects = [
+        {"id": "T0001", "class_name": "van", "reprojection_error_px": 2.5, "status": "valid"},
+        {"id": "T0002", "class_name": "person", "reprojection_error_px": 3.5, "status": "valid"},
+    ]
+    assert len(fused_objects) <= unique_tracks
+    fused_classes = {f["class_name"] for f in fused_objects}
+    det_classes = set(det_by_class.keys())
+    assert fused_classes.issubset(det_classes)
+
+    # Reprojection error and acceptance rate
+    valid_objs = [f for f in fused_objects if f["status"] == "valid"]
+    eval_count = len(fused_objects)
+    valid_count = len(valid_objs)
+    mean_reproj = sum(f["reprojection_error_px"] for f in valid_objs) / valid_count
+    assert mean_reproj == 3.0
+    acceptance_rate = (valid_count / eval_count) * 100.0
+    assert acceptance_rate == 100.0

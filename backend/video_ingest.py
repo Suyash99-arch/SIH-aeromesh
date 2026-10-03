@@ -208,3 +208,102 @@ def transcode_to_normalized_h264(
         progress_callback(100.0)
 
     return output_path
+
+
+def create_browser_proxy(
+    input_path: Path,
+    output_path: Path,
+    max_width: int = 1280,
+    progress_callback: Optional[Callable[[float], None]] = None,
+) -> Path:
+    """
+    Create a browser-friendly playback proxy with:
+    - H.264 / yuv420p (universal browser support)
+    - Width capped at max_width (default 1280), height scaled proportionally
+    - +faststart: moves moov atom to the FRONT of the file so seeking works immediately
+    - Keyframe interval ~1s (for accurate seeking)
+    - Audio preserved as AAC stereo
+
+    The original file is NEVER modified; the proxy is a separate file.
+    Browsers play the proxy; the pipeline uses the original.
+    """
+    ffmpeg_bin = get_ffmpeg_bin()
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Probe to get real fps (used for keyframe interval)
+    probe = probe_video(input_path)
+    fps = probe.get("fps") or 25.0
+    gop = max(1, round(fps))  # keyframe interval ~1 second
+
+    # Scale filter: cap width at max_width, keep aspect ratio, ensure even dimensions
+    vf = f"scale='min({max_width},iw):-2'"
+
+    cmd = [
+        ffmpeg_bin,
+        "-y",
+        "-i", str(input_path),
+        "-c:v", "libx264",
+        "-pix_fmt", "yuv420p",
+        "-preset", "fast",
+        "-crf", "23",
+        "-vf", vf,
+        "-g", str(gop),                 # keyframe interval
+        "-keyint_min", str(gop),
+        "-sc_threshold", "0",           # disable scene-cut keyframes for predictable seeking
+        "-c:a", "aac",
+        "-b:a", "128k",
+        "-ac", "2",                     # stereo
+        "-movflags", "+faststart",      # ← moves moov atom to front → enables immediate seeking
+        str(output_path),
+    ]
+
+    logger.info("Creating browser proxy: %s → %s", input_path, output_path)
+    process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    if progress_callback:
+        progress_callback(5.0)
+
+    stderr_output = []
+    while True:
+        line = process.stderr.readline() if process.stderr else ""
+        if not line and process.poll() is not None:
+            break
+        if line:
+            stderr_output.append(line)
+
+    retcode = process.poll()
+    if retcode != 0:
+        err_msg = "".join(stderr_output)
+        raise RuntimeError(f"Browser proxy creation failed (code {retcode}): {err_msg[-800:]}")
+
+    if progress_callback:
+        progress_callback(100.0)
+
+    logger.info("Browser proxy created: %s (%.1f MB)", output_path, output_path.stat().st_size / 1e6)
+    return output_path
+
+
+def get_or_create_browser_proxy(
+    original_path: Path,
+    mission_dir: Path,
+    max_width: int = 1280,
+    progress_callback: Optional[Callable[[float], None]] = None,
+) -> Optional[Path]:
+    """
+    Returns the path to the browser proxy, creating it if needed.
+    Proxy is stored at mission_dir/proxy/video_proxy.mp4.
+    Returns None on failure.
+    """
+    proxy_dir = mission_dir / "proxy"
+    proxy_path = proxy_dir / "video_proxy.mp4"
+
+    if proxy_path.exists() and proxy_path.stat().st_size > 10_000:
+        logger.debug("Browser proxy already exists: %s", proxy_path)
+        return proxy_path
+
+    try:
+        create_browser_proxy(original_path, proxy_path, max_width=max_width, progress_callback=progress_callback)
+        return proxy_path
+    except Exception as exc:
+        logger.error("Failed to create browser proxy for %s: %s", original_path, exc)
+        return None
+

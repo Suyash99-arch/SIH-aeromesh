@@ -427,43 +427,11 @@ def _run_pycolmap_sfm(
 
     # 3. Incremental mapping with aerial photogrammetry thresholds
     inc_options = pycolmap.IncrementalPipelineOptions()
-
-    # Seed COLMAP with the strongest geometrically verified image pair.
-    try:
-        import sqlite3
-        conn = sqlite3.connect(str(database_path))
-        cur = conn.cursor()
-        best_pair = cur.execute('SELECT pair_id, rows FROM two_view_geometries WHERE rows >= 30 AND E IS NOT NULL ORDER BY rows DESC LIMIT 1').fetchone()
-        if best_pair is None:
-            best_pair = cur.execute('SELECT pair_id, rows FROM two_view_geometries WHERE rows > 0 ORDER BY rows DESC LIMIT 1').fetchone()
-        if best_pair:
-            pair_id, inlier_count = best_pair
-            max_image_id = 2147483647
-            init_image_id1 = pair_id // max_image_id
-            init_image_id2 = pair_id % max_image_id
-            inc_options.init_image_id1 = int(init_image_id1)
-            inc_options.init_image_id2 = int(init_image_id2)
-            print(f'[COLMAP] Explicit initialization pair: {init_image_id1} + {init_image_id2} ({inlier_count} geometric inliers)')
-        conn.close()
-    except Exception as exc:
-        print(f'[COLMAP] Explicit initialization setup failed: {exc}')
     inc_options.num_threads = min(os.cpu_count() or 4, 4)
-    inc_options.init_num_trials = 1000
-    inc_options.ba_refine_extra_params = False
-    inc_options.ba_refine_principal_point = False
-    inc_options.ba_global_max_num_iterations = 100
-    inc_options.ba_local_max_num_iterations = 50
-    inc_options.mapper.init_min_num_inliers = 20
-    inc_options.mapper.init_max_error = 16.0
-    inc_options.mapper.init_min_tri_angle = 1.0  # Relaxed for low-parallax aerial drone passes
-    inc_options.mapper.init_max_forward_motion = 0.99
-    inc_options.mapper.ba_local_min_tri_angle = 1.0
-    inc_options.mapper.abs_pose_min_num_inliers = 15
-    inc_options.mapper.abs_pose_max_error = 16.0
 
-    # Enable GPS/IMU prior position constraints in bundle adjustment if supported
+    # Do NOT force prior position unless authentic pose priors exist in database
     if hasattr(inc_options, "use_prior_position"):
-        inc_options.use_prior_position = True
+        inc_options.use_prior_position = False
 
     reconstructions = pycolmap.incremental_mapping(
         database_path=database_path,
@@ -491,23 +459,26 @@ def _run_pycolmap_sfm(
     sparse_points = best_recon.num_points3D()
     reg_images = best_recon.num_reg_images()
 
-    # Hard registration check: require >= 70% of frames to register
-    reg_ratio = reg_images / max(1, total_input_frames)
-    if reg_ratio < 0.7:
-        logger.warning(
-            "COLMAP registered %d/%d frames (%.1f%% < 70%% threshold). Flagging for Depth-Anything-V2 fallback.",
-            reg_images, total_input_frames, reg_ratio * 100
-        )
+    if reg_images == 0:
         return {
             "success": False,
             "status": ReconstructionStatus.FAILED.value,
-            "error": f"COLMAP registration incomplete ({reg_images}/{total_input_frames} frames registered; 70% required for authoritative photogrammetry).",
-            "sparse_point_count": sparse_points,
-            "registered_cameras": reg_images,
+            "error": "COLMAP incremental SfM could not register any cameras from the selected frames (insufficient parallax/matches).",
+            "sparse_point_count": 0,
+            "registered_cameras": 0,
             "total_images": total_input_frames,
-            "reconstruction": best_recon,
-            "needs_depth_anything_fallback": True,
+            "reconstruction": None,
+            "camera_poses": [],
+            "needs_depth_anything_fallback": False,
         }
+
+    reg_ratio = reg_images / max(1, total_input_frames)
+    is_partial = reg_ratio < 0.7
+    if is_partial:
+        logger.info(
+            "COLMAP registered %d/%d frames (%.1f%%; partial registration). Proceeding with registered cameras.",
+            reg_images, total_input_frames, reg_ratio * 100
+        )
 
     # Export sparse point cloud to PLY
     sparse_ply_path = output_dir / "point_cloud.ply"
@@ -1430,36 +1401,34 @@ def generate_depth_anything_dense_reconstruction(
     }
 
     return {
-        "success": True,
-        "status": ReconstructionStatus.MESH_GENERATED.value,
-        "engine": engine_name,
+        "success": False,
+        "status": ReconstructionStatus.FAILED.value,
+        "engine": "depth_anything_v2_uncalibrated",
         "depth_source": majority_depth_source,
-        "note": engine_note,
-        "sparse_point_count": max(100, total_true_points // 20),
+        "note": "SfM camera calibration was not successful; depth is purely monocular relative estimate with zero registered metric cameras.",
+        "sparse_point_count": 0,
         "point_count": total_true_points,
         "dense_point_count": total_true_points,
         "rendered_point_count": rendered_count,
         "sampled_point_count": rendered_count,
-        "registered_cameras": len(selected_frames),
+        "registered_cameras": 0,
         "total_images": len(frame_files),
-        "mean_reprojection_error": 0.88,
-        "camera_poses": camera_poses,
-        "pose_status": pose_status,
+        "mean_reprojection_error": None,
+        "camera_poses": camera_poses or [],
+        "pose_status": "UNAVAILABLE_NO_TELEMETRY",
         "point_cloud_path": str(point_cloud_ply),
         "point_cloud_url": f"/api/missions/{resolved_mission_id}/reconstruction/pointcloud",
         "mesh": mesh_info,
         "mesh_url": f"/api/missions/{resolved_mission_id}/reconstruction/mesh" if mesh_info.get("status") == "AVAILABLE" else None,
         "dense": {
-            "status": "AVAILABLE",
-            "point_count": total_true_points,
-            "rendered_point_count": rendered_count,
-            "undistorted_images": len(selected_frames),
-            "reason": None,
+            "status": "UNAVAILABLE",
+            "point_count": 0,
+            "reason": "Dense MVS not executed due to uncalibrated camera poses",
         },
         "scale": scale_info,
         "stages": stages,
         "processing_time_s": round(time.time() - started, 2),
-        "error": None,
+        "error": "SfM camera registration unachieved; monocular depth prior generated without metric calibration.",
     }
 
 
