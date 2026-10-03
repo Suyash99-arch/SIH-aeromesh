@@ -99,7 +99,7 @@ def build_mission_report(mission_id: str, mission_data: Any = None) -> dict[str,
 
     # Fallback to mission file on disk if data is empty
     if not data:
-        mission_file = DATA_DIR / "missions" / f"{mission_id}.json"
+        mission_file = MISSIONS_DIR / f"{mission_id}.json"
         if mission_file.exists():
             try:
                 with open(mission_file, "r", encoding="utf-8") as f:

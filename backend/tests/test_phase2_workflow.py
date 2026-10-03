@@ -20,12 +20,12 @@ from pathlib import Path
 import pytest
 from starlette.testclient import TestClient
 
-from backend.main import app, DATA_DIR, MISSIONS_DIR
+from backend import main
 from backend.eta_engine import estimate_pipeline_eta
 from backend.measurement_engine import compute_scene_spatial_extents
 from backend.exporters_3d import generate_share_token, verify_share_token, export_mesh_to_glb, export_cloud_to_las
 
-client = TestClient(app)
+client = TestClient(main.app)
 
 
 def test_corrupt_video_rejection(tmp_path, monkeypatch):

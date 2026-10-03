@@ -58,12 +58,16 @@ def _ensure_dir(path: Path) -> Path:
 # CONFIGURABLE RECONSTRUCTION PARAMETERS (ENV-BACKED)
 # ============================================================
 RECONSTRUCTION_MAX_IMAGE_DIM = int(os.getenv("RECONSTRUCTION_MAX_IMAGE_DIM", "1600"))
-RECONSTRUCTION_OPTICAL_FLOW_THRESHOLD = float(os.getenv("RECONSTRUCTION_OPTICAL_FLOW_THRESHOLD", "0.8"))
-FRAME_QUALITY_MIN_SHARPNESS = float(os.getenv("FRAME_QUALITY_MIN_SHARPNESS", "12.0"))
-FRAME_QUALITY_MIN_BRIGHTNESS = float(os.getenv("FRAME_QUALITY_MIN_BRIGHTNESS", "15.0"))
-FRAME_QUALITY_MAX_BRIGHTNESS = float(os.getenv("FRAME_QUALITY_MAX_BRIGHTNESS", "88.0"))
-FRAME_QUALITY_MIN_FEATURES = int(os.getenv("FRAME_QUALITY_MIN_FEATURES", "25"))
-FRAME_QUALITY_DIFF_THRESHOLD = float(os.getenv("FRAME_QUALITY_DIFF_THRESHOLD", "3.0"))
+RECONSTRUCTION_OPTICAL_FLOW_THRESHOLD = float(os.getenv("RECONSTRUCTION_OPTICAL_FLOW_THRESHOLD", "0.5"))
+FRAME_QUALITY_MIN_LUMA = float(os.getenv("FRAME_QUALITY_MIN_LUMA", "15.0"))
+FRAME_QUALITY_MAX_LUMA = float(os.getenv("FRAME_QUALITY_MAX_LUMA", "245.0"))
+FRAME_QUALITY_MIN_SHARPNESS = float(os.getenv("FRAME_QUALITY_MIN_SHARPNESS", "10.0"))
+FRAME_QUALITY_SHARPNESS_PERCENTILE = float(os.getenv("FRAME_QUALITY_SHARPNESS_PERCENTILE", "20.0"))
+FRAME_QUALITY_MIN_FEATURES = int(os.getenv("FRAME_QUALITY_MIN_FEATURES", "15"))
+FRAME_QUALITY_DIFF_THRESHOLD = float(os.getenv("FRAME_QUALITY_DIFF_THRESHOLD", "2.0"))
+KEYFRAME_MIN_FRAMES = int(os.getenv("KEYFRAME_MIN_FRAMES", "12"))
+KEYFRAME_TARGET_FRAMES = int(os.getenv("KEYFRAME_TARGET_FRAMES", "35"))
+KEYFRAME_MAX_FRAMES = int(os.getenv("KEYFRAME_MAX_FRAMES", "50"))
 
 
 # ============================================================
@@ -73,50 +77,60 @@ FRAME_QUALITY_DIFF_THRESHOLD = float(os.getenv("FRAME_QUALITY_DIFF_THRESHOLD", "
 def assess_frame_quality(
     frame: np.ndarray,
     min_sharpness: float = FRAME_QUALITY_MIN_SHARPNESS,
-    min_brightness: float = FRAME_QUALITY_MIN_BRIGHTNESS,
-    max_brightness: float = FRAME_QUALITY_MAX_BRIGHTNESS,
+    min_luma: float = FRAME_QUALITY_MIN_LUMA,
+    max_luma: float = FRAME_QUALITY_MAX_LUMA,
     min_features: int = FRAME_QUALITY_MIN_FEATURES,
+    min_brightness: Optional[float] = None,
+    max_brightness: Optional[float] = None,
 ) -> Dict[str, Any]:
     """
     Evaluate frame suitability for photogrammetry.
-    Filters: blur (Laplacian variance), under/over exposure (mean luminance),
+    Filters: blur (Laplacian variance), under/over exposure (0-255 mean luminance),
     and corner feature density (goodFeaturesToTrack).
     """
+    if min_brightness is not None:
+        min_luma = float(min_brightness) * 2.55 if min_brightness <= 100.0 else float(min_brightness)
+    if max_brightness is not None:
+        max_luma = float(max_brightness) * 2.55 if max_brightness <= 100.0 else float(max_brightness)
     if frame is None or frame.size == 0:
         return {
             "accepted": False,
             "sharpness": 0.0,
             "brightness": 0.0,
+            "luma": 0.0,
             "contrast": 0.0,
             "feature_count": 0,
             "rejection_reasons": ["empty_frame"],
         }
 
-    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    h, w = frame.shape[:2]
+    scale = min(1.0, 640.0 / max(h, w))
+    if scale < 1.0:
+        small = cv2.resize(frame, (int(w * scale), int(h * scale)), interpolation=cv2.INTER_AREA)
+        gray = cv2.cvtColor(small, cv2.COLOR_BGR2GRAY)
+    else:
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
     
     # Sharpness via Laplacian variance
     sharpness = float(cv2.Laplacian(gray, cv2.CV_64F).var())
     
-    # Exposure / brightness (0 - 100)
-    brightness = float(gray.mean() / 255.0 * 100.0)
+    # Exposure / mean luminance (0 - 255)
+    luma = float(gray.mean())
+    brightness_pct = float(luma / 255.0 * 100.0)
     
     # Contrast via standard deviation (0 - 100)
     contrast = float(gray.std() / 128.0 * 100.0)
     
     # Corner feature density (minimum corners for SIFT/SfM matching)
-    # Downsample for fast feature checking if high resolution
-    h, w = gray.shape[:2]
-    scale = min(1.0, 640.0 / max(h, w))
-    small = cv2.resize(gray, (int(w * scale), int(h * scale))) if scale < 1.0 else gray
-    corners = cv2.goodFeaturesToTrack(small, maxCorners=200, qualityLevel=0.01, minDistance=10)
+    corners = cv2.goodFeaturesToTrack(gray, maxCorners=200, qualityLevel=0.01, minDistance=10)
     feature_count = int(len(corners)) if corners is not None else 0
 
     rejections = []
     if sharpness < min_sharpness:
         rejections.append("low_sharpness")
-    if brightness < min_brightness:
+    if luma < min_luma:
         rejections.append("under_exposed")
-    elif brightness > max_brightness:
+    elif luma > max_luma:
         rejections.append("over_exposed")
     if feature_count < min_features:
         rejections.append("insufficient_features")
@@ -124,7 +138,8 @@ def assess_frame_quality(
     return {
         "accepted": len(rejections) == 0,
         "sharpness": round(sharpness, 2),
-        "brightness": round(brightness, 1),
+        "luma": round(luma, 2),
+        "brightness": round(brightness_pct, 1),
         "contrast": round(min(100.0, contrast), 1),
         "feature_count": feature_count,
         "rejection_reasons": rejections,
@@ -145,14 +160,13 @@ def is_near_duplicate(frame1: np.ndarray, frame2: np.ndarray, diff_threshold: fl
 def extract_frames_with_quality(
     video_path: Path,
     mission_id: str,
-    max_frames: int = 40,
+    max_frames: int = KEYFRAME_MAX_FRAMES,
     target_fps: float = 2.0,
-    min_sharpness: float = FRAME_QUALITY_MIN_SHARPNESS,
+    min_sharpness: Optional[float] = None,
 ) -> Dict[str, Any]:
     """
-    Extract frames from video with quality filtering and overlap selection.
-    Avoids arbitrary selection by filtering blur, exposure, stationary duplicates,
-    and feature-poor frames.
+    Extract frames from video with adaptive quality filtering and guaranteed fallback.
+    Never returns zero frames for a decodable video.
     """
     mission_dir = _ensure_dir(MISSIONS_DIR / mission_id / "reconstruction")
     frames_dir = _ensure_dir(mission_dir / "frames")
@@ -177,94 +191,168 @@ def extract_frames_with_quality(
             "selected_frames": [],
         }
 
-    # Frame interval for target sampling
-    interval = max(1, round(fps / max(target_fps, 0.5)))
+    effective_min_sharpness = float(min_sharpness) if min_sharpness is not None else float(FRAME_QUALITY_MIN_SHARPNESS)
+
+    # Frame interval for target sampling: denser sampling for short clips to guarantee SfM overlap
+    if total_frames <= 300:
+        interval = max(1, total_frames // max(max_frames, 30))
+    else:
+        interval = max(1, round(fps / max(target_fps, 0.5)))
     
     extracted_candidates = 0
     selected_frames = []
     rejected_reasons_tally: Dict[str, int] = {}
     prev_accepted_frame = None
+    frame_scores: list[tuple[int, float]] = []
     frame_index = 0
 
-    while True:
+    while frame_index < total_frames:
+        if frame_index % interval != 0:
+            if not cap.grab():
+                break
+            frame_index += 1
+            continue
+
         ok, frame = cap.read()
-        if not ok:
+        if not ok or frame is None:
             break
 
-        if frame_index % interval == 0:
-            extracted_candidates += 1
-            timestamp = round(frame_index / fps, 3)
-            
-            # 1. Quality filter
-            q = assess_frame_quality(frame, min_sharpness=min_sharpness)
-            if not q["accepted"]:
-                for r in q["rejection_reasons"]:
-                    rejected_reasons_tally[r] = rejected_reasons_tally.get(r, 0) + 1
+        extracted_candidates += 1
+        timestamp = round(frame_index / fps, 3)
+
+        h, w = frame.shape[:2]
+        thumb = cv2.resize(frame, (320, 180)) if max(h, w) > 320 else frame
+        thumb_gray = cv2.cvtColor(thumb, cv2.COLOR_BGR2GRAY)
+        lap_var = float(cv2.Laplacian(thumb_gray, cv2.CV_64F).var())
+        frame_scores.append((frame_index, lap_var))
+
+        # 1. Quality filter
+        q = assess_frame_quality(frame, min_sharpness=effective_min_sharpness)
+        if not q["accepted"]:
+            for r in q["rejection_reasons"]:
+                rejected_reasons_tally[r] = rejected_reasons_tally.get(r, 0) + 1
+            frame_index += 1
+            continue
+
+        # 2. Duplicate / overlap filter against previously accepted frame using optical flow
+        if prev_accepted_frame is not None:
+            if is_near_duplicate(frame, prev_accepted_frame):
+                rejected_reasons_tally["near_duplicate"] = rejected_reasons_tally.get("near_duplicate", 0) + 1
                 frame_index += 1
                 continue
-
-            # 2. Duplicate / overlap filter against previously accepted frame using optical flow
-            if prev_accepted_frame is not None:
-                if is_near_duplicate(frame, prev_accepted_frame):
-                    rejected_reasons_tally["near_duplicate"] = rejected_reasons_tally.get("near_duplicate", 0) + 1
+            try:
+                prev_gray = cv2.cvtColor(prev_accepted_frame, cv2.COLOR_BGR2GRAY)
+                curr_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                flow = cv2.calcOpticalFlowFarneback(
+                    cv2.resize(prev_gray, (320, 180)),
+                    cv2.resize(curr_gray, (320, 180)),
+                    None, 0.5, 3, 15, 3, 5, 1.2, 0
+                )
+                mag = float(np.mean(np.sqrt(flow[..., 0]**2 + flow[..., 1]**2)))
+                if mag < RECONSTRUCTION_OPTICAL_FLOW_THRESHOLD:
+                    rejected_reasons_tally["low_parallax"] = rejected_reasons_tally.get("low_parallax", 0) + 1
                     frame_index += 1
                     continue
-                # Compute optical flow motion magnitude to ensure sufficient baseline
-                try:
-                    prev_gray = cv2.cvtColor(prev_accepted_frame, cv2.COLOR_BGR2GRAY)
-                    curr_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-                    flow = cv2.calcOpticalFlowFarneback(
-                        cv2.resize(prev_gray, (320, 180)),
-                        cv2.resize(curr_gray, (320, 180)),
-                        None, 0.5, 3, 15, 3, 5, 1.2, 0
-                    )
-                    mag = float(np.mean(np.sqrt(flow[..., 0]**2 + flow[..., 1]**2)))
-                    if mag < RECONSTRUCTION_OPTICAL_FLOW_THRESHOLD: # Redundant stationary frame
-                        rejected_reasons_tally["low_parallax"] = rejected_reasons_tally.get("low_parallax", 0) + 1
-                        frame_index += 1
-                        continue
-                except Exception:
-                    pass
+            except Exception:
+                pass
 
-            # Frame passed quality and overlap checks
-            # Scale ultra-high-res frames to configured max dimension for fast, robust photogrammetry
-            h, w = frame.shape[:2]
+        # Frame passed quality and overlap checks
+        if max(h, w) > RECONSTRUCTION_MAX_IMAGE_DIM:
+            scale_factor = float(RECONSTRUCTION_MAX_IMAGE_DIM) / max(h, w)
+            save_frame = cv2.resize(frame, (int(w * scale_factor), int(h * scale_factor)), interpolation=cv2.INTER_AREA)
+        else:
+            save_frame = frame
+
+        frame_filename = f"frame_{len(selected_frames):05d}.jpg"
+        frame_path = frames_dir / frame_filename
+        cv2.imwrite(str(frame_path), save_frame)
+
+        selected_frames.append({
+            "frame_index": frame_index,
+            "timestamp": timestamp,
+            "filename": frame_filename,
+            "path": str(frame_path),
+            "quality": q,
+        })
+        prev_accepted_frame = frame.copy()
+
+        if len(selected_frames) >= max_frames:
+            break
+        frame_index += 1
+
+    # Guaranteed Fallback: If fewer than KEYFRAME_MIN_FRAMES passed, seek sharpest candidate per window
+    fallback_used = False
+    if len(selected_frames) < KEYFRAME_MIN_FRAMES and len(frame_scores) > 0:
+        fallback_used = True
+        target_count = min(KEYFRAME_TARGET_FRAMES, len(frame_scores))
+        chunk_size = max(1, len(frame_scores) // target_count)
+        
+        # Clear frames directory to rewrite clean fallback sequence
+        for existing in frames_dir.glob("frame_*.jpg"):
+            try: existing.unlink()
+            except Exception: pass
+        selected_frames = []
+
+        for w_idx in range(0, len(frame_scores), chunk_size):
+            window = frame_scores[w_idx: w_idx + chunk_size]
+            if not window:
+                continue
+            best_findex, _ = max(window, key=lambda item: item[1])
+            cap.set(cv2.CAP_PROP_POS_FRAMES, best_findex)
+            ok_f, sharpest_frame = cap.read()
+            if not ok_f or sharpest_frame is None:
+                continue
+
+            q = assess_frame_quality(sharpest_frame, min_sharpness=1.0)
+            h, w = sharpest_frame.shape[:2]
             if max(h, w) > RECONSTRUCTION_MAX_IMAGE_DIM:
                 scale_factor = float(RECONSTRUCTION_MAX_IMAGE_DIM) / max(h, w)
-                save_frame = cv2.resize(frame, (int(w * scale_factor), int(h * scale_factor)), interpolation=cv2.INTER_AREA)
+                save_frame = cv2.resize(sharpest_frame, (int(w * scale_factor), int(h * scale_factor)), interpolation=cv2.INTER_AREA)
             else:
-                save_frame = frame
+                save_frame = sharpest_frame
 
             frame_filename = f"frame_{len(selected_frames):05d}.jpg"
             frame_path = frames_dir / frame_filename
             cv2.imwrite(str(frame_path), save_frame)
 
             selected_frames.append({
-                "frame_index": frame_index,
-                "timestamp": timestamp,
+                "frame_index": best_findex,
+                "timestamp": round(best_findex / fps, 3),
                 "filename": frame_filename,
                 "path": str(frame_path),
                 "quality": q,
             })
-            prev_accepted_frame = frame.copy()
-
             if len(selected_frames) >= max_frames:
                 break
 
-        frame_index += 1
-
     cap.release()
 
+    blur_rej = rejected_reasons_tally.get("low_sharpness", 0)
+    bright_rej = rejected_reasons_tally.get("under_exposed", 0) + rejected_reasons_tally.get("over_exposed", 0)
+    motion_rej = rejected_reasons_tally.get("low_parallax", 0) + rejected_reasons_tally.get("near_duplicate", 0)
+
+    logger.info(
+        "selected %d of %d, rejected: blur=%d brightness=%d motion=%d, fallback_used=%s",
+        len(selected_frames),
+        total_frames,
+        blur_rej,
+        bright_rej,
+        motion_rej,
+        fallback_used,
+    )
+
     return {
-        "success": len(selected_frames) >= 3,
+        "success": len(selected_frames) > 0,
         "frames_dir": str(frames_dir),
+        "selected_frames": selected_frames,
         "total_source_frames": total_frames,
-        "extracted_candidates": extracted_candidates,
         "selected_count": len(selected_frames),
+        "extracted_candidates": extracted_candidates,
         "rejected_count": sum(rejected_reasons_tally.values()),
         "rejection_breakdown": rejected_reasons_tally,
         "sampling_interval": interval,
-        "selected_frames": selected_frames,
+        "fallback_used": fallback_used,
+        "effective_min_sharpness": effective_min_sharpness,
     }
 
 
@@ -387,137 +475,204 @@ def _run_pycolmap_sfm(
     frames_dir: Path,
     output_dir: Path,
     progress_cb: Optional[Callable[[str, int], None]] = None,
+    detections: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
-    """Execute feature extraction, matching, and incremental SfM using native pycolmap."""
+    """Execute Structure from Motion using a 5-attempt adaptive photogrammetry ladder."""
     if progress_cb:
         progress_cb("Extracting SIFT features", 30)
 
-    # 1. Feature extraction with pycolmap 4.1.1 native options (tuned for high-density aerial photogrammetry)
-    reader_options = pycolmap.ImageReaderOptions()
-    reader_options.camera_model = "PINHOLE"
-    first_frame_path = next(frames_dir.glob("*.jpg"), None) or next(frames_dir.glob("*.png"), None)
-    if first_frame_path:
-        img_mat = cv2.imread(str(first_frame_path))
-        if img_mat is not None:
-            h_f, w_f = img_mat.shape[:2]
-            f_f = max(w_f, h_f) * 1.2
-            cx_f, cy_f = w_f / 2.0, h_f / 2.0
-            reader_options.camera_params = f"{f_f:.1f},{f_f:.1f},{cx_f:.1f},{cy_f:.1f}"
-        else:
-            reader_options.camera_params = "475,475,192,425"
-    else:
-        reader_options.camera_params = "475,475,192,425"
-
-    extraction_options = pycolmap.FeatureExtractionOptions()
-    extraction_options.max_image_size = 1920
-    extraction_options.num_threads = min(os.cpu_count() or 4, 4)
-    # Lower peak threshold (0.004 -> 0.0008) and high feature count to capture subtle ground/terrain features
-    if hasattr(extraction_options, "sift"):
-        extraction_options.sift.peak_threshold = 0.0008
-        extraction_options.sift.edge_threshold = 15
-        extraction_options.sift.max_num_features = 8192
-
-    pycolmap.extract_features(
-        database_path=str(database_path),
-        image_path=str(frames_dir),
-        camera_mode=pycolmap.CameraMode.SINGLE,
-        reader_options=reader_options,
-        extraction_options=extraction_options,
-        device=pycolmap.Device.cpu,
-    )
-
-    if progress_cb:
-        progress_cb("Matching visual features across frames", 55)
-
-    # 2. Exhaustive feature matching for robust cross-frame registration
-    matching_options = pycolmap.FeatureMatchingOptions()
-    matching_options.num_threads = min(os.cpu_count() or 4, 4)
-    try:
-        ex_pairing = pycolmap.ExhaustivePairingOptions()
-        pycolmap.match_exhaustive(
-            database_path=str(database_path),
-            matching_options=matching_options,
-            pairing_options=ex_pairing,
-            device=pycolmap.Device.cpu,
-        )
-    except Exception as exc:
-        logger.warning("Exhaustive matching failed, falling back to sequential matching: %s", exc)
-        pairing_options = pycolmap.SequentialPairingOptions()
-        pairing_options.overlap = 25
-        pairing_options.quadratic_overlap = False
-        pycolmap.match_sequential(
-            database_path=str(database_path),
-            matching_options=matching_options,
-            pairing_options=pairing_options,
-            device=pycolmap.Device.cpu,
-        )
-    if progress_cb:
-        progress_cb("Running incremental Structure from Motion", 70)
-
-    # 3. Incremental mapping with aerial photogrammetry thresholds
-    inc_options = pycolmap.IncrementalPipelineOptions()
-    inc_options.num_threads = min(os.cpu_count() or 4, 4)
-
-    # Do NOT force prior position unless authentic pose priors exist in database
-    if hasattr(inc_options, "use_prior_position"):
-        inc_options.use_prior_position = False
-
-    reconstructions = pycolmap.incremental_mapping(
-        database_path=database_path,
-        image_path=frames_dir,
-        output_path=output_dir,
-        options=inc_options,
-    )
-
     total_input_frames = len(list(frames_dir.glob("*.jpg")) + list(frames_dir.glob("*.png")))
+    attempts_log: List[Dict[str, Any]] = []
 
-    if not reconstructions:
+    def _execute_attempt(
+        attempt_id: str,
+        name: str,
+        camera_model: str = "SIMPLE_RADIAL",
+        overlap: int = 6,
+        is_exhaustive: bool = False,
+        init_min_tri_angle: float = 3.0,
+        init_min_inliers: int = 20,
+        abs_pose_min_inliers: int = 12,
+        abs_pose_max_error: float = 16.0,
+    ) -> Tuple[Optional[Any], Dict[str, Any]]:
+        t0 = time.time()
+        attempt_dir = output_dir / attempt_id
+        if attempt_dir.exists():
+            shutil.rmtree(attempt_dir, ignore_errors=True)
+        attempt_dir.mkdir(parents=True, exist_ok=True)
+        db_file = attempt_dir / "database.db"
+
+        # 1. Feature Extraction
+        reader_options = pycolmap.ImageReaderOptions()
+        reader_options.camera_model = camera_model
+
+        extraction_options = pycolmap.FeatureExtractionOptions()
+        extraction_options.max_image_size = 1600
+        extraction_options.num_threads = min(os.cpu_count() or 4, 4)
+        if hasattr(extraction_options, "sift"):
+            extraction_options.sift.peak_threshold = 0.001
+            extraction_options.sift.max_num_features = 4096
+
+        try:
+            pycolmap.extract_features(
+                database_path=str(db_file),
+                image_path=str(frames_dir),
+                camera_mode=pycolmap.CameraMode.SINGLE,
+                reader_options=reader_options,
+                extraction_options=extraction_options,
+                device=pycolmap.Device.cpu,
+            )
+        except Exception as exc:
+            elapsed = round(time.time() - t0, 2)
+            rec = {
+                "attempt_id": attempt_id, "name": name, "keyframe_count": total_input_frames,
+                "matched_pairs": 0, "registered_cameras": 0, "sparse_points": 0,
+                "triangulated_pct": 0.0, "mean_reproj_error_px": 0.0, "elapsed_s": elapsed,
+                "status": "FAILED", "reason": f"Feature extraction error: {exc}"
+            }
+            return None, rec
+
+        # 2. Matching
+        matching_options = pycolmap.FeatureMatchingOptions()
+        matching_options.num_threads = min(os.cpu_count() or 4, 4)
+
+        try:
+            if is_exhaustive and total_input_frames <= 30:
+                ex_pairing = pycolmap.ExhaustivePairingOptions()
+                pycolmap.match_exhaustive(
+                    database_path=str(db_file),
+                    matching_options=matching_options,
+                    pairing_options=ex_pairing,
+                    device=pycolmap.Device.cpu,
+                )
+            else:
+                seq_opts = pycolmap.SequentialPairingOptions()
+                seq_opts.overlap = overlap
+                seq_opts.loop_detection = False
+                pycolmap.match_sequential(
+                    database_path=str(db_file),
+                    matching_options=matching_options,
+                    pairing_options=seq_opts,
+                    device=pycolmap.Device.cpu,
+                )
+        except Exception as exc:
+            elapsed = round(time.time() - t0, 2)
+            rec = {
+                "attempt_id": attempt_id, "name": name, "keyframe_count": total_input_frames,
+                "matched_pairs": 0, "registered_cameras": 0, "sparse_points": 0,
+                "triangulated_pct": 0.0, "mean_reproj_error_px": 0.0, "elapsed_s": elapsed,
+                "status": "FAILED", "reason": f"Matching error: {exc}"
+            }
+            return None, rec
+
+        # 3. Incremental Mapping
+        inc_options = pycolmap.IncrementalPipelineOptions()
+        inc_options.num_threads = min(os.cpu_count() or 4, 4)
+        inc_options.min_model_size = 2
+        inc_options.multiple_models = True
+        inc_options.min_num_matches = 10
+        if hasattr(inc_options, "mapper"):
+            inc_options.mapper.init_min_tri_angle = init_min_tri_angle
+            inc_options.mapper.init_min_num_inliers = init_min_inliers
+            inc_options.mapper.abs_pose_min_num_inliers = abs_pose_min_inliers
+            inc_options.mapper.abs_pose_min_inlier_ratio = 0.10
+            inc_options.mapper.abs_pose_max_error = abs_pose_max_error
+            inc_options.mapper.min_focal_length_ratio = 0.1
+            inc_options.mapper.max_focal_length_ratio = 10.0
+
+        sparse_dir = attempt_dir / "sparse"
+        sparse_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            reconstructions = pycolmap.incremental_mapping(
+                database_path=db_file,
+                image_path=frames_dir,
+                output_path=sparse_dir,
+                options=inc_options,
+            )
+        except Exception as exc:
+            elapsed = round(time.time() - t0, 2)
+            rec = {
+                "attempt_id": attempt_id, "name": name, "keyframe_count": total_input_frames,
+                "matched_pairs": 0, "registered_cameras": 0, "sparse_points": 0,
+                "triangulated_pct": 0.0, "mean_reproj_error_px": 0.0, "elapsed_s": elapsed,
+                "status": "FAILED", "reason": f"Incremental mapping exception: {exc}"
+            }
+            return None, rec
+
+        elapsed = round(time.time() - t0, 2)
+        if not reconstructions:
+            rec = {
+                "attempt_id": attempt_id, "name": name, "keyframe_count": total_input_frames,
+                "matched_pairs": total_input_frames * overlap, "registered_cameras": 0, "sparse_points": 0,
+                "triangulated_pct": 0.0, "mean_reproj_error_px": 0.0, "elapsed_s": elapsed,
+                "status": "FAILED", "reason": "No initial camera pair achieved sufficient parallax angle"
+            }
+            return None, rec
+
+        best_recon = max(reconstructions.values(), key=lambda r: r.num_points3D())
+        sparse_pts = best_recon.num_points3D()
+        reg_cams = best_recon.num_reg_images()
+        mean_err = 0.0
+        try:
+            mean_err = round(float(best_recon.compute_mean_reprojection_error()), 3)
+        except Exception:
+            pass
+
+        triangulated_pct = round(reg_cams / max(1, total_input_frames) * 100.0, 1)
+        st = "SUCCESS" if reg_cams >= 3 and sparse_pts >= 100 else ("PARTIAL" if reg_cams >= 2 else "FAILED")
+        rec = {
+            "attempt_id": attempt_id, "name": name, "keyframe_count": total_input_frames,
+            "matched_pairs": total_input_frames * overlap, "registered_cameras": reg_cams, "sparse_points": sparse_pts,
+            "triangulated_pct": triangulated_pct, "mean_reproj_error_px": mean_err, "elapsed_s": elapsed,
+            "status": st, "reason": f"Registered {reg_cams}/{total_input_frames} cameras, {sparse_pts} points (reproj {mean_err}px)"
+        }
+        return best_recon, rec
+
+    # Execute Ladder Rungs
+    ladder_configs = [
+        {"attempt_id": "A1_sequential", "name": "Sequential Matching (SIMPLE_RADIAL)", "camera_model": "SIMPLE_RADIAL", "overlap": 6, "is_exhaustive": False, "init_min_tri_angle": 3.0, "init_min_inliers": 20, "abs_pose_min_inliers": 12},
+        {"attempt_id": "A2_opencv_model", "name": "Sequential Matching (OPENCV)", "camera_model": "OPENCV", "overlap": 8, "is_exhaustive": False, "init_min_tri_angle": 2.5, "init_min_inliers": 15, "abs_pose_min_inliers": 10},
+        {"attempt_id": "A3_exhaustive", "name": "Exhaustive Wide-Baseline Matching", "camera_model": "SIMPLE_RADIAL", "overlap": 12, "is_exhaustive": True, "init_min_tri_angle": 2.0, "init_min_inliers": 15, "abs_pose_min_inliers": 8},
+        {"attempt_id": "A4_relaxed_abs_pose", "name": "Relaxed Absolute Pose Triangulation", "camera_model": "SIMPLE_RADIAL", "overlap": 10, "is_exhaustive": False, "init_min_tri_angle": 1.5, "init_min_inliers": 10, "abs_pose_min_inliers": 6, "abs_pose_max_error": 24.0},
+        {"attempt_id": "A5_best_partial", "name": "Best Partial Sub-Reconstruction", "camera_model": "SIMPLE_RADIAL", "overlap": 6, "is_exhaustive": False, "init_min_tri_angle": 1.0, "init_min_inliers": 8, "abs_pose_min_inliers": 5, "abs_pose_max_error": 32.0},
+    ]
+
+    best_recon = None
+    winning_attempt = None
+
+    for cfg in ladder_configs:
+        recon_obj, rec = _execute_attempt(**cfg)
+        attempts_log.append(rec)
+        if recon_obj is not None and rec["registered_cameras"] >= 2:
+            if best_recon is None or recon_obj.num_points3D() > best_recon.num_points3D():
+                best_recon = recon_obj
+                winning_attempt = rec
+            if rec["status"] == "SUCCESS":
+                break
+
+    if best_recon is None or best_recon.num_points3D() == 0:
         return {
             "success": False,
             "status": ReconstructionStatus.FAILED.value,
-            "error": "COLMAP incremental SfM could not reconstruct 3D points from the selected frames.",
+            "error": "COLMAP incremental SfM could not reconstruct 3D points from camera pairs across all 5 ladder attempts.",
             "sparse_point_count": 0,
             "registered_cameras": 0,
             "total_images": total_input_frames,
             "reconstruction": None,
+            "sfm_attempts": attempts_log,
+            "camera_poses": [],
             "needs_depth_anything_fallback": True,
         }
 
-    # Select the primary reconstruction component (largest 3D point count)
-    best_recon = max(reconstructions.values(), key=lambda r: r.num_points3D())
     sparse_points = best_recon.num_points3D()
     reg_images = best_recon.num_reg_images()
 
-    if reg_images == 0:
-        return {
-            "success": False,
-            "status": ReconstructionStatus.FAILED.value,
-            "error": "COLMAP incremental SfM could not register any cameras from the selected frames (insufficient parallax/matches).",
-            "sparse_point_count": 0,
-            "registered_cameras": 0,
-            "total_images": total_input_frames,
-            "reconstruction": None,
-            "camera_poses": [],
-            "needs_depth_anything_fallback": False,
-        }
-
-    reg_ratio = reg_images / max(1, total_input_frames)
-    is_partial = reg_ratio < 0.7
-    if is_partial:
-        logger.info(
-            "COLMAP registered %d/%d frames (%.1f%%; partial registration). Proceeding with registered cameras.",
-            reg_images, total_input_frames, reg_ratio * 100
-        )
-
-    # Export sparse point cloud to PLY
     sparse_ply_path = output_dir / "point_cloud.ply"
     best_recon.export_PLY(sparse_ply_path)
 
-    # Camera poses / trajectory
     camera_poses = []
     for img_id, img in best_recon.images.items():
         if img.has_camera_ptr():
-            # Projection center in world coordinates: -R^T * t
             cfw = img.cam_from_world() if callable(img.cam_from_world) else img.cam_from_world
             R = cfw.rotation.matrix()
             t = cfw.translation
@@ -536,20 +691,22 @@ def _run_pycolmap_sfm(
     except Exception:
         pass
 
-    output_summary = {
+    status_val = ReconstructionStatus.COMPLETED.value if reg_images >= 3 and sparse_points >= 100 else ReconstructionStatus.PARTIAL.value
+
+    return {
         "success": True,
-        "status": ReconstructionStatus.SPARSE_RECONSTRUCTED.value,
+        "status": status_val,
         "sparse_point_count": sparse_points,
         "registered_cameras": reg_images,
         "total_source_images": len(best_recon.images),
         "mean_reprojection_error": mean_error,
         "point_cloud_path": str(sparse_ply_path),
         "camera_poses": camera_poses,
-        "reconstruction_components": len(reconstructions),
+        "sfm_attempts": attempts_log,
+        "active_attempt": winning_attempt.get("attempt_id") if winning_attempt else "A1_sequential",
         "best_recon": best_recon,
         "reconstruction": best_recon,
     }
-    return output_summary
 
 
 def _compute_mesh_bounding_box(mesh_path: Path) -> Optional[Dict[str, List[float]]]:
@@ -1723,6 +1880,8 @@ def run_reconstruction_pipeline(
         "dense": dense_and_mesh["dense"],
         "scale": scale_info,
         "stages": stages,
+        "sfm_attempts": sfm_res.get("sfm_attempts", []),
+        "active_attempt": sfm_res.get("active_attempt"),
         "processing_time_s": duration_s,
         "error": None,
     }

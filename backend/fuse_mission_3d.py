@@ -31,6 +31,7 @@ logger = logging.getLogger(__name__)
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE_DIR / "data"
+MISSIONS_DIR = DATA_DIR / "missions"
 
 # Target classes for aerial infrastructure, maritime, and disaster response
 TARGET_CLASSES = {
@@ -91,7 +92,7 @@ def run_3d_fusion_for_mission(
     Execute end-to-end AI-to-3D spatial fusion on mission keyframes.
     Consumes authoritative 2D tracks and observations from the mission manifest.
     """
-    mission_dir = DATA_DIR / "missions" / mission_id
+    mission_dir = MISSIONS_DIR / mission_id
     recon_dir = mission_dir / "reconstruction"
     frames_dir = recon_dir / "frames"
     evidence_dir = mission_dir / "evidence"

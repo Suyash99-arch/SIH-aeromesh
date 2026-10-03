@@ -32,13 +32,49 @@ def init_test_db():
     if engine is not None:
         init_database(engine)
 
+@pytest.fixture(autouse=True)
+def isolate_test_missions(tmp_path, monkeypatch):
+    """Ensure all tests use an isolated temporary missions directory, leaving data/missions untouched."""
+    test_data_dir = tmp_path / "data"
+    test_data_dir.mkdir(parents=True, exist_ok=True)
+    test_missions_dir = tmp_path / "isolated_missions"
+    test_missions_dir.mkdir(parents=True, exist_ok=True)
+    
+    monkeypatch.setenv("OBJECT_STORAGE_ROOT", str(test_data_dir / "objects"))
+    
+    import backend.main as b_main
+    monkeypatch.setattr(b_main, "DATA_DIR", test_data_dir)
+    monkeypatch.setattr(b_main, "MISSIONS_DIR", test_missions_dir)
+    
+    for mod_name in ["reconstruction", "reporting", "scenes", "seeds", "summary_builder", "tasks", "eta_engine", "exporters_3d", "storage", "fuse_mission_3d", "spatial_fusion"]:
+        try:
+            mod = __import__(f"backend.{mod_name}", fromlist=["MISSIONS_DIR", "DATA_DIR"])
+            if hasattr(mod, "MISSIONS_DIR"):
+                monkeypatch.setattr(mod, "MISSIONS_DIR", test_missions_dir)
+            if hasattr(mod, "DATA_DIR"):
+                monkeypatch.setattr(mod, "DATA_DIR", test_data_dir)
+        except Exception:
+            pass
+
+    for test_mod_name in ["test_phase2_workflow", "test_part1_integrity"]:
+        try:
+            mod = __import__(f"backend.tests.{test_mod_name}", fromlist=["MISSIONS_DIR", "DATA_DIR"])
+            if hasattr(mod, "MISSIONS_DIR"):
+                monkeypatch.setattr(mod, "MISSIONS_DIR", test_missions_dir)
+            if hasattr(mod, "DATA_DIR"):
+                monkeypatch.setattr(mod, "DATA_DIR", test_data_dir)
+        except Exception:
+            pass
+
+
 @pytest.fixture
-def mock_mission_data(tmp_path):
-    """Fixture producing a clean, self-contained mission fixture without relying on local data/."""
+def mock_mission_data(tmp_path, monkeypatch):
+    """Fixture producing a clean, self-contained mission fixture in an isolated directory."""
     from backend.database import get_configured_engine, session_scope
     from backend.repository import MissionRepository
-    from backend.main import MISSIONS_DIR, DATA_DIR
+    import backend.main as b_main
     
+    MISSIONS_DIR = b_main.MISSIONS_DIR
     m_id = "test_fixture_mission_01"
     m_dir = MISSIONS_DIR / m_id
     m_dir.mkdir(parents=True, exist_ok=True)

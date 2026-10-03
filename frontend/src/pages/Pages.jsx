@@ -249,8 +249,8 @@ export function OverviewPage({ mission, navigate }) {
   return (
     <div className="executive-overview">
       <Header
-        kicker="AEROMESH / MISSION COMMAND"
-        title={`${safeMission.name || "Mission"} — ${safeMission.sector || "Overview"}`}
+        kicker="HEXA SPARK / MISSION COMMAND"
+        title={`${safeMission.name && safeMission.name !== "mission" ? safeMission.name : (safeMission.video_name || safeMission.video_filename || "Mission Analysis")} — ${safeMission.sector || "Overview"}`}
         copy="Executive aerial intelligence mission summary and dispatch status."
       >
         <Status tone={isMissionFailed ? "critical" : isProcessing ? "info" : "success"}>
@@ -369,7 +369,7 @@ export function OverviewPage({ mission, navigate }) {
           </strong>
           <p className="dispatch-meta">
             {(safeMission.reconstruction?.registered_cameras ?? safeMission.reconstruction?.camera_count ?? 0) < 3
-              ? `SfM registered ${safeMission.reconstruction?.registered_cameras ?? safeMission.reconstruction?.camera_count ?? 0} cameras · Insufficient visual overlap`
+              ? (safeMission.reconstruction?.error || `SfM registered ${safeMission.reconstruction?.registered_cameras ?? safeMission.reconstruction?.camera_count ?? 0} cameras`)
               : `Surface mesh generated from ${safeMission.reconstruction?.registered_cameras ?? safeMission.reconstruction?.camera_count ?? safeMission.reconstruction?.registered_images ?? 0} registered keyframe cameras · ${Number(safeMission.reconstruction?.point_count || safeMission.reconstruction?.sparse_point_count || 0).toLocaleString()} sparse points`}
           </p>
           <div className="dispatch-action-link">
@@ -2953,7 +2953,7 @@ function Reports({ mission, notice }) {
           >
             <button onClick={() => setOpenModal(false)}>×</button>
             <span className="eyebrow">
-              AEROMESH / DECISION REPORT PREVIEW
+              HEXA SPARK / DECISION REPORT PREVIEW
             </span>
             <h2>
               {repMission.name || mission.name} — {mission.sector}

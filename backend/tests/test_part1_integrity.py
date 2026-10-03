@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 from starlette.testclient import TestClient
 
-from backend.main import app, DATA_DIR, MISSIONS_DIR
+from backend import main
 from backend.reporting import build_mission_report, generate_mission_pdf
 from backend.summary_builder import build_canonical_mission_summary
 
@@ -35,7 +35,7 @@ def test_two_missions_different_reports(mock_mission_data):
             else:
                 repo.update(m2_id, m2_data)
 
-    m2_file = MISSIONS_DIR / f"{m2_id}.json"
+    m2_file = main.MISSIONS_DIR / f"{m2_id}.json"
     with open(m2_file, "w", encoding="utf-8") as f:
         json.dump(m2_data, f, indent=2)
 
