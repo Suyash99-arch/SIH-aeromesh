@@ -125,41 +125,38 @@ export default function AuthPage({ onAuthenticated, onCancel, notice, initialPor
     }
   };
 
-  const handleGoogleOAuth = () => {
-    // Graceful Google OAuth handler
+  const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID || "";
+
+  const handleGoogleOAuth = async (idToken) => {
+    if (!idToken) return;
     setLoading(true);
-    setTimeout(async () => {
-      setLoading(false);
-      // Create or log into an individual account with google provider
-      const mockGoogleEmail = `user.${Math.random().toString(36).substring(2, 7)}@gmail.com`;
-      const res = await registerUser({
-        email: mockGoogleEmail,
-        password: "OAuthSecurePassword2026!",
-        full_name: "Google Authenticated User",
-        portal_type: "INDIVIDUAL",
-        role: "OPERATOR",
+    setError(null);
+    try {
+      const res = await fetch("/api/v1/auth/google", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id_token: idToken }),
       });
-      if (res.success) {
+      const data = await res.json();
+      setLoading(false);
+      if (res.ok && data.success) {
+        if (data.access_token) {
+          localStorage.setItem("aeromesh_auth_token", data.access_token);
+        }
         if (notice) notice("Signed in via Google Workspace.", "success");
-        onAuthenticated(res.user);
+        onAuthenticated(data.user);
       } else {
-        // Fallback login
-        const lRes = await loginUser(mockGoogleEmail, "OAuthSecurePassword2026!");
-        if (lRes.success) onAuthenticated(lRes.user);
+        setError(data.detail || "Google authentication failed.");
       }
-    }, 600);
+    } catch (err) {
+      setLoading(false);
+      setError(err.message || "Failed to reach authentication server.");
+    }
   };
 
   const fillDemoCredentials = (user) => {
     setEmail(user.email);
-    setPassword(
-      user.demo_password ||
-      (user.role === "ADMIN"
-        ? "Admin123!"
-        : user.role === "ANALYST"
-        ? "Analyst123!"
-        : "Operator123!")
-    );
+    setPassword(user.demo_password || "");
     if (user.portal_type === "GOVERNMENT_ORG") {
       setPortal("gov");
     } else {
@@ -520,10 +517,17 @@ export default function AuthPage({ onAuthenticated, onCancel, notice, initialPor
               {loading ? "Authenticating..." : portal === "gov" ? "Authorize & Enter Command" : "Enter Personal Workspace"}
             </button>
 
-            {portal === "indiv" && (
+            {portal === "indiv" && Boolean(googleClientId) && (
               <button
                 type="button"
-                onClick={handleGoogleOAuth}
+                id="btn-google-oauth"
+                onClick={() => {
+                  if (window.google?.accounts?.id) {
+                    window.google.accounts.id.prompt();
+                  } else {
+                    setError("Google Identity Services script is not initialized.");
+                  }
+                }}
                 disabled={loading}
                 style={{
                   padding: "10px",
@@ -541,7 +545,7 @@ export default function AuthPage({ onAuthenticated, onCancel, notice, initialPor
                 }}
               >
                 <span>🌐</span>
-                <span>Continue with Google OAuth</span>
+                <span>Continue with Google</span>
               </button>
             )}
           </form>

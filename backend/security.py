@@ -109,7 +109,7 @@ def hash_password(password: str) -> str:
 
 def verify_password(password: str, hashed: str) -> bool:
     """Verify a plain password supporting Argon2id, Bcrypt, and PBKDF2-HMAC-SHA256."""
-    if not password or not hashed:
+    if not password or not hashed or hashed.startswith("OAUTH_DISABLED_"):
         return False
     # 1. Argon2id / Argon2i
     if hashed.startswith("$argon2"):
@@ -156,6 +156,7 @@ class UserRecord:
     mfa_enabled: bool = False
     mfa_secret: Optional[str] = None
     guest_expires_at: Optional[str] = None
+    password_login_disabled: bool = False
     is_active: bool = True
     created_at: str = "2026-09-01T00:00:00Z"
 
@@ -170,6 +171,7 @@ class UserRecord:
             "department": self.department,
             "mfa_enabled": self.mfa_enabled,
             "guest_expires_at": self.guest_expires_at,
+            "password_login_disabled": self.password_login_disabled,
             "is_active": self.is_active,
             "created_at": self.created_at,
         }

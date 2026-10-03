@@ -144,9 +144,46 @@ def check_worker_shared_state(strict: bool = False, force_enforce: bool = False)
     }
 
 
+def check_production_config(strict: bool = False, force_enforce: bool = False) -> Dict[str, Any]:
+    """
+    Validate production safety constraints:
+    1. In production, AEROMESH_AUTH_OPTIONAL must NOT be 1/true.
+    2. In production with allow_credentials=True, CORS_ALLOWED_ORIGINS cannot contain wildcards (*).
+    """
+    env_name = (os.getenv("ENVIRONMENT") or os.getenv("APP_ENV") or "").lower().strip()
+    is_prod = env_name == "production" or os.getenv("RENDER", "").lower() in ("true", "1")
+    should_enforce = is_prod or force_enforce
+
+    auth_opt = os.getenv("AEROMESH_AUTH_OPTIONAL", "0").lower().strip() in ("1", "true", "yes")
+    if should_enforce and auth_opt:
+        msg = "PRODUCTION CONFIG ERROR: AEROMESH_AUTH_OPTIONAL is enabled (1). Production deployments require strict authentication (AEROMESH_AUTH_OPTIONAL=0)."
+        logger.critical(msg)
+        raise RuntimeError(msg)
+
+    cors_origins_env = os.getenv("CORS_ALLOWED_ORIGINS", "").strip()
+    if cors_origins_env:
+        origins = [o.strip() for o in cors_origins_env.split(",") if o.strip()]
+        for origin in origins:
+            if "*" in origin:
+                msg = f"PRODUCTION CONFIG ERROR: Wildcard CORS origin '{origin}' is forbidden when credentials are allowed. Specify exact origin URLs."
+                if should_enforce:
+                    logger.critical(msg)
+                    raise RuntimeError(msg)
+                else:
+                    logger.warning(msg)
+
+    return {
+        "status": "ready",
+        "is_production": is_prod,
+        "auth_optional": auth_opt,
+    }
+
+
 def verify_environment(strict: bool = False) -> Dict[str, Any]:
     return {
         "opencv": check_opencv_environment(strict=strict),
         "ffmpeg": check_ffmpeg_environment(strict=strict),
         "worker_shared_state": check_worker_shared_state(strict=strict),
+        "production_config": check_production_config(strict=strict),
     }
+

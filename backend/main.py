@@ -236,17 +236,23 @@ dev_origins = [
     "http://localhost:4173",
     "http://127.0.0.1:4173",
 ]
+is_prod_cors = (os.getenv("ENVIRONMENT", "").lower() == "production" or
+                os.getenv("APP_ENV", "").lower() == "production" or
+                os.getenv("RENDER", "").lower() in ("true", "1"))
 cors_origins_env = os.getenv("CORS_ALLOWED_ORIGINS", "").strip()
+allowed_origins_list = list(dev_origins)
 if cors_origins_env:
     for origin in cors_origins_env.split(","):
         o = origin.strip()
-        if o and o not in dev_origins:
-            dev_origins.append(o)
+        if "*" in o and is_prod_cors:
+            raise RuntimeError(f"PRODUCTION CONFIG ERROR: Wildcard CORS origin '{o}' is forbidden when credentials are allowed.")
+        if o and o not in allowed_origins_list:
+            allowed_origins_list.append(o)
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=dev_origins,
-    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1|.*\.vercel\.app)(:\d+)?$",
+    allow_origins=allowed_origins_list,
+    allow_origin_regex=None if is_prod_cors else r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -1397,6 +1403,125 @@ async def register(req: RegisterRequest, response: Response):
     }
 
 
+class GoogleAuthRequest(BaseModel):
+    id_token: str
+
+
+@app.post("/api/v1/auth/google", dependencies=[Depends(rate_limit_dependency)])
+@app.post("/api/auth/google", dependencies=[Depends(rate_limit_dependency)])
+async def google_auth(req: GoogleAuthRequest, response: Response):
+    """Authenticate or register user via Google OAuth ID token with server-controlled role assignment."""
+    token = req.id_token.strip()
+    if not token:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Google ID token is required",
+        )
+
+    google_client_id = os.getenv("GOOGLE_CLIENT_ID", "").strip()
+    if not google_client_id:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Google OAuth is not configured on this server (GOOGLE_CLIENT_ID missing)",
+        )
+
+    try:
+        from google.oauth2 import id_token as google_id_token
+        from google.auth.transport import requests as google_requests
+        id_info = google_id_token.verify_oauth2_token(token, google_requests.Request(), google_client_id)
+    except Exception as exc:
+        logger.warning("Google ID token verification failed: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired Google OAuth token",
+        )
+
+    email = id_info.get("email", "").strip().lower()
+    if not email:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Google token missing email claim",
+        )
+
+    full_name = id_info.get("name", "").strip() or email.split("@")[0].title()
+
+    # Find existing or create new individual user
+    user = find_user_by_email(email)
+    database_engine = get_configured_engine()
+
+    if user is None:
+        user_id = f"usr_{uuid.uuid4().hex[:12]}"
+        unusable_pwd_hash = f"OAUTH_DISABLED_${uuid.uuid4().hex}_${secrets.token_urlsafe(32)}"
+        role = ROLE_OPERATOR
+        portal_type = PORTAL_INDIVIDUAL
+        created_at = datetime.utcnow().isoformat() + "Z"
+
+        if database_engine is not None and check_database(database_engine):
+            try:
+                with session_scope(database_engine) as session:
+                    from backend.models import User as UserModel
+                    new_db_user = UserModel(
+                        id=user_id,
+                        email=email,
+                        hashed_password=unusable_pwd_hash,
+                        full_name=full_name,
+                        role=role,
+                        portal_type=portal_type,
+                        organization_name=None,
+                        department=None,
+                        mfa_enabled=False,
+                        is_active=True,
+                        created_at=datetime.utcnow(),
+                    )
+                    session.add(new_db_user)
+            except Exception as exc:
+                logger.warning("Database OAuth user insertion failed: %s", exc)
+
+        user = UserRecord(
+            id=user_id,
+            email=email,
+            full_name=full_name,
+            role=role,
+            portal_type=portal_type,
+            organization_name=None,
+            department=None,
+            mfa_enabled=False,
+            hashed_password=unusable_pwd_hash,
+            password_login_disabled=True,
+            is_active=True,
+            created_at=created_at,
+        )
+        save_persistent_user(user)
+        _record_audit_event("user.oauth_registered", user_id, email, None, {"provider": "google", "role": role})
+
+    access_token = create_access_token({
+        "sub": user.email,
+        "user_id": user.id,
+        "role": user.role,
+        "portal_type": user.portal_type,
+        "organization_name": user.organization_name,
+        "department": user.department,
+        "name": user.full_name,
+    })
+    refresh_token = create_refresh_token({
+        "sub": user.email,
+        "user_id": user.id,
+        "role": user.role,
+        "portal_type": user.portal_type,
+    })
+
+    set_auth_cookies(response, access_token, refresh_token)
+    _record_audit_event("user.oauth_login", user.id, user.email, user.organization_name, {"provider": "google"})
+
+    return {
+        "success": True,
+        "access_token": access_token,
+        "refresh_token": refresh_token,
+        "token_type": "bearer",
+        "user": user.to_dict(),
+    }
+
+
 class LoginRequest(BaseModel):
     email: str
     password: str
@@ -1410,6 +1535,16 @@ async def login(credentials: LoginRequest, response: Response):
     """Authenticate user with email and password supporting MFA challenge and httpOnly cookie issuance."""
     email = credentials.email.strip().lower()
     password = credentials.password
+
+    # Check if account exists with password login disabled (OAuth created account)
+    potential_user = find_user_by_email(email)
+    if potential_user and (getattr(potential_user, "password_login_disabled", False) or (potential_user.hashed_password or "").startswith("OAUTH_DISABLED_")):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Password login is disabled for OAuth-created accounts. Please sign in with Google.",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
     user: Optional[UserRecord] = None
 
     # Check database users if configured
@@ -1420,6 +1555,12 @@ async def login(credentials: LoginRequest, response: Response):
                 from backend.models import User as UserModel
                 db_user = session.query(UserModel).filter(UserModel.email == email).first()
                 if db_user and db_user.is_active:
+                    if (db_user.hashed_password or "").startswith("OAUTH_DISABLED_"):
+                        raise HTTPException(
+                            status_code=status.HTTP_401_UNAUTHORIZED,
+                            detail="Password login is disabled for OAuth-created accounts. Please sign in with Google.",
+                            headers={"WWW-Authenticate": "Bearer"},
+                        )
                     if verify_password(password, db_user.hashed_password):
                         user = UserRecord(
                             id=db_user.id,
@@ -1435,6 +1576,8 @@ async def login(credentials: LoginRequest, response: Response):
                             hashed_password=db_user.hashed_password,
                             is_active=db_user.is_active,
                         )
+        except HTTPException:
+            raise
         except Exception as exc:
             logger.warning("Database user lookup failed, falling back to demo users: %s", exc)
 
