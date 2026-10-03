@@ -191,17 +191,34 @@ def extract_frames_with_quality(
                 frame_index += 1
                 continue
 
-            # 2. Duplicate / overlap filter against previously accepted frame
-            if prev_accepted_frame is not None and is_near_duplicate(frame, prev_accepted_frame):
-                rejected_reasons_tally["near_duplicate"] = rejected_reasons_tally.get("near_duplicate", 0) + 1
-                frame_index += 1
-                continue
+            # 2. Duplicate / overlap filter against previously accepted frame using optical flow
+            if prev_accepted_frame is not None:
+                if is_near_duplicate(frame, prev_accepted_frame):
+                    rejected_reasons_tally["near_duplicate"] = rejected_reasons_tally.get("near_duplicate", 0) + 1
+                    frame_index += 1
+                    continue
+                # Compute optical flow motion magnitude to ensure sufficient baseline
+                try:
+                    prev_gray = cv2.cvtColor(prev_accepted_frame, cv2.COLOR_BGR2GRAY)
+                    curr_gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+                    flow = cv2.calcOpticalFlowFarneback(
+                        cv2.resize(prev_gray, (320, 180)),
+                        cv2.resize(curr_gray, (320, 180)),
+                        None, 0.5, 3, 15, 3, 5, 1.2, 0
+                    )
+                    mag = float(np.mean(np.sqrt(flow[..., 0]**2 + flow[..., 1]**2)))
+                    if mag < 0.8: # Redundant stationary frame
+                        rejected_reasons_tally["low_parallax"] = rejected_reasons_tally.get("low_parallax", 0) + 1
+                        frame_index += 1
+                        continue
+                except Exception:
+                    pass
 
             # Frame passed quality and overlap checks
-            # Scale ultra-high-res 4K frames to 1920p max dimension for memory-safe CPU photogrammetry
+            # Scale ultra-high-res frames to 1600px max dimension for fast, robust photogrammetry
             h, w = frame.shape[:2]
-            if max(h, w) > 1920:
-                scale_factor = 1920.0 / max(h, w)
+            if max(h, w) > 1600:
+                scale_factor = 1600.0 / max(h, w)
                 save_frame = cv2.resize(frame, (int(w * scale_factor), int(h * scale_factor)), interpolation=cv2.INTER_AREA)
             else:
                 save_frame = frame
