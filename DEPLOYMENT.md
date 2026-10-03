@@ -65,8 +65,8 @@ AeroMesh is pre-configured to run out-of-the-box on a local judge or evaluation 
 
 ### Step 1: Start Backend
 ```powershell
-# Activate project virtual environment
-& "d:\SIH\SIH-aeromesh\.venv312\Scripts\python.exe" -m uvicorn backend.main:app --host 127.0.0.1 --port 8000
+# Activate project canonical virtual environment (.venv311)
+& ".\.venv311\Scripts\python.exe" -m uvicorn backend.main:app --host 127.0.0.1 --port 8000
 ```
 
 ### Step 2: Start Frontend

@@ -18,31 +18,27 @@ provided container from the repository root:
 ```powershell
 docker compose -f docker-compose.postgis.yml up -d
 $env:DATABASE_URL = "postgresql+psycopg://aeromesh:aeromesh@localhost:5432/aeromesh"
-.\.venv312\Scripts\python.exe -m alembic upgrade head
+.\.venv311\Scripts\python.exe -m alembic upgrade head
 ```
 
 With `DATABASE_URL` unset, existing JSON mission files remain the development
 fallback. Database-backed tests use SQLite in memory and do not require Docker.
 
 ```powershell
-.\.venv312\Scripts\python.exe -m pytest backend\tests -q
+.\.venv311\Scripts\python.exe -m pytest backend\tests -q
 ```
 
-### 1. Backend Setup (One Time)
+### 1. Backend Setup
 
-```bash
-cd backend
+From repository root:
+```powershell
+# Activate canonical virtual environment
+.\.venv311\Scripts\Activate.ps1
 
-# Create virtual environment (recommended)
-python -m venv venv
-venv\Scripts\activate
-
-# Install dependencies
-pip install -r requirements.txt
-
-# Run server
-python -m uvicorn main:app --reload --port 8000
+# Run server from repo root (canonical command)
+python -m uvicorn backend.main:app --reload --port 8000
 ```
+*(Running `cd backend && python -m uvicorn main:app --reload --port 8000` is also supported)*
 
 Server will start at `http://localhost:8000`
 
