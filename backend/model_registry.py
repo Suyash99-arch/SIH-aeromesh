@@ -24,14 +24,26 @@ class ModelUnavailableError(FileNotFoundError):
     code = "MODEL_NOT_FOUND"
 
 
+_CHECKSUM_CACHE: dict[tuple[str, float], str] = {}
+
+
 def _checksum(path: Path) -> str | None:
     if not path.is_file():
         return None
+    try:
+        mtime = path.stat().st_mtime
+    except OSError:
+        mtime = 0.0
+    cache_key = (str(path.resolve()), mtime)
+    if cache_key in _CHECKSUM_CACHE:
+        return _CHECKSUM_CACHE[cache_key]
     digest = hashlib.sha256()
     with path.open("rb") as stream:
         for chunk in iter(lambda: stream.read(1024 * 1024), b""):
             digest.update(chunk)
-    return digest.hexdigest()
+    c_hash = digest.hexdigest()
+    _CHECKSUM_CACHE[cache_key] = c_hash
+    return c_hash
 
 
 class ModelRegistry:
