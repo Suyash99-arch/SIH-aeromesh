@@ -1,12 +1,12 @@
 export const missionNavigation = [
-  ["overview", "Mission Command", "LayoutDashboard"], ["missions", "Mission Switcher", "Crosshair", "03"],
+  ["overview", "Mission Command", "LayoutDashboard"], ["missions", "Mission Switcher", "Crosshair"],
   ["drone", "Flight Processing", "Radar"], ["reconstruction", "3D Reconstruction", "Box"],
 ];
 export const intelligenceNavigation = [
   ["analytics", "Scene Intelligence", "ChartNoAxesCombined"], ["map", "Geospatial Intelligence", "Map"],
   ["reports", "Reports", "FileText"],
 ];
-export const outputNavigation = [["challenge", "Challenge Coverage", "ShieldCheck"]];
+export const outputNavigation = [];
 export const systemNavigation = [
   ["profile", "Profile & Security", "User"],
   ["settings", "Settings", "Settings"],

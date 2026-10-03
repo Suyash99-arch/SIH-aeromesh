@@ -1,5 +1,5 @@
+import React, { useMemo, useState, useEffect } from "react";
 import { motion, useReducedMotion } from "framer-motion";
-import { useMemo, useState, useEffect } from "react";
 import Icon from "../components/ui/Icon";
 import { Button, CountUp, Panel, Progress, Status } from "../components/ui/UI";
 import { missions, pipelineStages } from "../data/missions";
@@ -115,8 +115,8 @@ const Stat = ({
 function Findings({ mission, onAction }) {
   return (
     <div className="findings-list">
-      {mission.findings.map((f) => (
-        <article className="finding-detail" key={f.id}>
+      {(mission.findings || []).map((f, idx) => (
+        <article className="finding-detail" key={f.id || f.object_id || `finding-${idx}`}>
           <span className={`finding-symbol ${f.severity}`}>
             <Icon name={f.category === "dynamic" ? "Radar" : "TriangleAlert"} />
           </span>
@@ -766,13 +766,39 @@ export function MissionsPage({ mission, setMission, navigate, notice, onCreateMi
 }
 
 export function DronePage({ mission }) {
-  const [frame, setFrame] = useState(mission.findings[0]?.frame || 1);
+  if (!mission) {
+    return (
+      <div className="drone-layout" style={{ padding: "40px", textAlign: "center", color: "#94a3b8" }}>
+        Loading flight telemetry and video stream...
+      </div>
+    );
+  }
+  const [frame, setFrame] = useState(mission.findings?.[0]?.frame || 1);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState("1×");
-  const [quality, setQuality] = useState("blur");
-  const detect = mission.findings[0];
+  const [quality, setQuality] = useState("overall");
+  const detect = mission.findings?.[0];
 
   const speedMultiplier = speed === "0.5×" ? 0.5 : speed === "2×" ? 2 : 1;
+
+  // Extract samples for quality over time
+  const samples = mission.frameQuality?.samples || mission.quality?.samples || [];
+  const currentSample = React.useMemo(() => {
+    if (!samples || samples.length === 0) return null;
+    let closest = samples[0];
+    let minDiff = Math.abs(samples[0].frame - frame);
+    for (const s of samples) {
+      const diff = Math.abs(s.frame - frame);
+      if (diff < minDiff) {
+        minDiff = diff;
+        closest = s;
+      }
+    }
+    return closest;
+  }, [samples, frame]);
+
+  const activeQuality = currentSample || mission.quality || {};
+  const telemetry = mission.telemetry || {};
 
   return (
     <>
@@ -808,18 +834,28 @@ export function DronePage({ mission }) {
                 REC <i /> {playing ? "LIVE" : "PAUSED"}
               </div>
               <div className="hud telemetry">
-                ALT {mission.telemetry.altitude} · SPD {mission.telemetry.speed}
-                <br />
-                HDG {mission.telemetry.heading} · {mission.telemetry.gps}
+                {telemetry.speed || telemetry.altitude ? (
+                  <>
+                    ALT {telemetry.altitude || "—"} · SPD {telemetry.speed || "N/A"}
+                    <br />
+                    HDG {telemetry.heading || "N/A"} · {telemetry.coordinates ? `${telemetry.coordinates[0].toFixed(4)}°, ${telemetry.coordinates[1].toFixed(4)}°` : "Local Frame"}
+                  </>
+                ) : (
+                  <span>Unreferenced local coordinate frame</span>
+                )}
               </div>
               <div className="hud frame-readout">
-                FRAME {frame}/{mission.frames} · QUALITY{" "}
-                {mission.quality.sharpness}%
+                FRAME {frame}/{mission.frames || "—"} · Q{" "}
+                {activeQuality.overall != null
+                  ? `${activeQuality.overall}%`
+                  : activeQuality.sharpness != null
+                  ? `${activeQuality.sharpness}%`
+                  : "Not available"}
               </div>
               <div className="crosshair">+</div>
               {detect && (
                 <div className="detection damage">
-                  {detect?.title.toUpperCase()}
+                  {detect?.title?.toUpperCase()}
                   <b>{detect?.confidence}%</b>
                 </div>
               )}
@@ -839,7 +875,7 @@ export function DronePage({ mission }) {
             <input
               type="range"
               min="1"
-              max={mission.frames}
+              max={mission.frames || 267}
               value={frame}
               onChange={(e) => setFrame(+e.target.value)}
             />
@@ -849,53 +885,148 @@ export function DronePage({ mission }) {
               <option>2×</option>
             </select>
             <span>
-              FRAME {frame} / {mission.frames}
+              FRAME {frame} / {mission.frames || 267}
             </span>
           </div>
+
+          {/* Quality-over-Time interactive sparkline chart */}
+          {samples.length > 1 && (
+            <div style={{ marginTop: 12, padding: "8px 12px", background: "rgba(0,0,0,0.25)", borderRadius: "6px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "0.75rem", color: "var(--dim, #91adb8)", marginBottom: 6 }}>
+                <span>Quality-over-Time Timeline (Click to scrub)</span>
+                <span>Frame {frame}: <strong style={{ color: "var(--cyan, #00d2ff)" }}>{activeQuality.overall ?? "—"}%</strong></span>
+              </div>
+              <svg
+                viewBox="0 0 240 40"
+                style={{ width: "100%", height: "45px", background: "rgba(0,0,0,0.3)", borderRadius: "4px", cursor: "pointer", display: "block" }}
+                onClick={(e) => {
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  const clickX = e.clientX - rect.left;
+                  const ratio = Math.max(0, Math.min(1, clickX / rect.width));
+                  const targetFrame = Math.round(ratio * (mission.frames || 267));
+                  setFrame(Math.max(1, targetFrame));
+                }}
+              >
+                <polyline
+                  points={samples.map((s, idx) => {
+                    const x = (idx / (samples.length - 1)) * 240;
+                    const y = 40 - ((s.overall || s.sharpness || 50) / 100) * 36;
+                    return `${x},${y}`;
+                  }).join(" ")}
+                  fill="none"
+                  stroke="var(--cyan, #00d2ff)"
+                  strokeWidth="1.8"
+                />
+                {currentSample && (
+                  <line
+                    x1={((samples.indexOf(currentSample)) / (samples.length - 1)) * 240}
+                    y1="0"
+                    x2={((samples.indexOf(currentSample)) / (samples.length - 1)) * 240}
+                    y2="40"
+                    stroke="#ff4757"
+                    strokeWidth="2.5"
+                  />
+                )}
+              </svg>
+            </div>
+          )}
+
           <small className="video-source">
-            SOURCE: Local project demo footage · Scenario profile:{" "}
-            {mission.name}
+            SOURCE: {mission?.video?.filename || mission?.video?.source || "mission video"}{" "}
+            · Mission: {mission.name}
           </small>
         </Panel>
 
         <aside className="drone-side">
           <Panel>
             <span className="eyebrow">FLIGHT TELEMETRY</span>
-            <div className="telemetry">
-              {Object.entries(mission.telemetry).map(([k, v]) => (
-                <div key={k}>
-                  <span>{k}</span>
-                  <b>{v}</b>
+            {telemetry.speed || telemetry.altitude || telemetry.source ? (
+              <div className="telemetry" style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                <div>
+                  <span>Source</span>
+                  <b style={{ fontSize: "0.8rem", color: "var(--cyan, #00d2ff)" }}>{telemetry.source || "Telemetry"}</b>
                 </div>
-              ))}
-            </div>
+                {telemetry.speed && (
+                  <div>
+                    <span>Speed</span>
+                    <b>{telemetry.speed}</b>
+                  </div>
+                )}
+                {telemetry.heading && (
+                  <div>
+                    <span>Heading</span>
+                    <b>{telemetry.heading}</b>
+                  </div>
+                )}
+                {telemetry.altitude && (
+                  <div>
+                    <span>Altitude</span>
+                    <b>{telemetry.altitude}</b>
+                  </div>
+                )}
+                <div>
+                  <span>Position</span>
+                  <b style={{ fontSize: "0.8rem" }}>
+                    {telemetry.coordinates
+                      ? `${telemetry.coordinates[0].toFixed(5)}° N, ${telemetry.coordinates[1].toFixed(5)}° E`
+                      : "Unreferenced (relative units)"}
+                  </b>
+                </div>
+              </div>
+            ) : (
+              <div style={{ color: "var(--dim, #91adb8)", fontSize: "0.85rem", padding: "10px 0" }}>
+                Not available: flight telemetry was not recorded for this video
+              </div>
+            )}
           </Panel>
 
           <Panel>
-            <span className="eyebrow">FRAME QUALITY / UNCERTAINTY</span>
-            <div className="quality-list">
-              {Object.entries(mission.quality)
-                .filter(([k]) => k !== "affected")
-                .map(([k, v]) => (
-                  <button
-                    className={quality === k ? "active" : ""}
-                    key={k}
-                    onClick={() => setQuality(k)}
-                  >
-                    <span>{k}</span>
-                    <b>{v}%</b>
-                  </button>
-                ))}
+            <span className="eyebrow">FRAME QUALITY (CURRENT FRAME {frame})</span>
+            {activeQuality && (activeQuality.overall != null || activeQuality.sharpness != null) ? (
+              <div className="quality-list">
+                <button className={quality === "overall" ? "active" : ""} onClick={() => setQuality("overall")}>
+                  <span>Overall Score</span>
+                  <b>{activeQuality.overall ?? "—"}%</b>
+                </button>
+                <button className={quality === "sharpness" ? "active" : ""} onClick={() => setQuality("sharpness")}>
+                  <span>Sharpness (Laplacian)</span>
+                  <b>{activeQuality.sharpness ?? "—"}%</b>
+                </button>
+                <button className={quality === "motion_blur" ? "active" : ""} onClick={() => setQuality("motion_blur")}>
+                  <span>Motion Blur (Anisotropy)</span>
+                  <b>{activeQuality.motion_blur ?? "—"}%</b>
+                </button>
+                <button className={quality === "lighting" ? "active" : ""} onClick={() => setQuality("lighting")}>
+                  <span>Lighting / Exposure</span>
+                  <b>{activeQuality.lighting ?? "—"}%</b>
+                </button>
+                <button className={quality === "compression" ? "active" : ""} onClick={() => setQuality("compression")}>
+                  <span>Compression (Blockiness)</span>
+                  <b>{activeQuality.compression ?? "—"}%</b>
+                </button>
+              </div>
+            ) : (
+              <div style={{ color: "var(--dim, #91adb8)", fontSize: "0.85rem", padding: "10px 0" }}>
+                Not available: frame quality metrics have not been computed
+              </div>
+            )}
+            <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,0.08)", fontSize: "0.8rem", color: "var(--dim, #91adb8)" }}>
+              <span>SfM Uncertainty: </span>
+              <strong style={{ color: "var(--fg, #e5f3f7)" }}>
+                {mission.reconstruction?.mean_reprojection_error != null
+                  ? `${Number(mission.reconstruction.mean_reprojection_error).toFixed(2)} px reprojection error`
+                  : "Not available: SfM reconstruction required"}
+              </strong>
             </div>
           </Panel>
 
           <Panel>
             <span className="eyebrow">DETECTIONS</span>
             <div className="detection-list">
-              {mission.findings.map((f) => (
-                <div key={f.id} className={`detection-badge ${f.severity}`}>
-                  <span>{f.title}</span>
-                  <b>{f.confidence}%</b>
+              {(mission.findings || []).map((f, idx) => (
+                <div key={f.id || f.object_id || `finding-${idx}`} className={`detection-badge ${f.severity || "medium"}`}>
+                  <span>{f.title || f.class || "Detection"}</span>
+                  <b>{f.confidence ? Math.round(Number(f.confidence) > 1 ? Number(f.confidence) : Number(f.confidence) * 100) : 0}%</b>
                 </div>
               ))}
             </div>
@@ -1465,114 +1596,159 @@ export function IntelligencePage({ kind, mission, navigate, notice }) {
   }
 
   if (kind === "map") {
+    const safeMission = mission || {};
+    const poses = safeMission.reconstruction?.camera_poses || safeMission.camera_poses || [];
+    const hasPoses = Array.isArray(poses) && poses.length > 0;
+
+    let polylinePoints = "";
+    let poseMarkers = [];
+    if (hasPoses) {
+      const coords = poses.map((p, idx) => {
+        const pos = p.position || p.center || [0, 0, 0];
+        return { id: p.camera_id || idx, x: Number(pos[0]) || 0, y: Number(pos[1] ?? pos[2]) || 0, name: p.image_name || `Cam ${idx + 1}` };
+      });
+      const xs = coords.map((c) => c.x);
+      const ys = coords.map((c) => c.y);
+      const minX = Math.min(...xs);
+      const maxX = Math.max(...xs);
+      const minY = Math.min(...ys);
+      const maxY = Math.max(...ys);
+      const rangeX = maxX - minX || 1;
+      const rangeY = maxY - minY || 1;
+      const padX = 60;
+      const padY = 60;
+      const width = 600 - padX * 2;
+      const height = 400 - padY * 2;
+
+      poseMarkers = coords.map((c) => ({
+        ...c,
+        svgX: padX + ((c.x - minX) / rangeX) * width,
+        svgY: 400 - (padY + ((c.y - minY) / rangeY) * height),
+      }));
+      polylinePoints = poseMarkers.map((m) => `${m.svgX.toFixed(1)},${m.svgY.toFixed(1)}`).join(" ");
+    }
+
     return (
       <>
         <Header kicker={cfg[0]} title={cfg[1]} copy={cfg[2]} />
         <Panel>
-          <svg viewBox="0 0 600 400" className="mission-map">
-            <defs>
-              <pattern
-                id="grid"
-                width="50"
-                height="50"
-                patternUnits="userSpaceOnUse"
-              >
-                <path
-                  d="M 50 0 L 0 0 0 50"
-                  fill="none"
-                  stroke="#1a4d5c"
-                  strokeWidth="0.5"
-                />
-              </pattern>
-            </defs>
-            <rect width="600" height="400" fill="#061017" />
-            <rect width="600" height="400" fill="url(#grid)" />
-
-            {/* Flight path */}
-            <polyline
-              points="50,300 120,280 200,250 300,200 380,180 450,160 520,200"
-              stroke="#42d7ff"
-              strokeWidth="2"
-              fill="none"
-              markerEnd="url(#arrow)"
-            />
-
-            {/* Coverage area */}
-            <circle
-              cx="300"
-              cy="220"
-              r="150"
-              fill="#42d7ff"
-              fillOpacity="0.1"
-              stroke="#42d7ff"
-              strokeWidth="1"
-              strokeDasharray="5,5"
-            />
-
-            {/* Detections */}
-            {mission.findings.map((f, i) => {
-              const positions = [
-                [200, 150],
-                [400, 200],
-                [300, 320],
-              ];
-              const [x, y] = positions[i] || [300, 200];
-              return (
-                <g key={f.id}>
-                  <circle
-                    cx={x}
-                    cy={y}
-                    r="15"
+          {hasPoses ? (
+            <svg viewBox="0 0 600 400" className="mission-map" style={{ width: "100%", height: "auto" }}>
+              <defs>
+                <pattern
+                  id="grid"
+                  width="50"
+                  height="50"
+                  patternUnits="userSpaceOnUse"
+                >
+                  <path
+                    d="M 50 0 L 0 0 0 50"
                     fill="none"
-                    stroke={f.severity === "critical" ? "#ff7180" : "#f3b45e"}
-                    strokeWidth="2"
+                    stroke="#1a4d5c"
+                    strokeWidth="0.5"
                   />
-                  <text
-                    x={x}
-                    y={y + 30}
-                    textAnchor="middle"
-                    fill={f.severity === "critical" ? "#ff7180" : "#f3b45e"}
-                    fontSize="10"
-                  >
-                    {f.title}
-                  </text>
-                </g>
-              );
-            })}
+                </pattern>
+                <marker
+                  id="arrow"
+                  viewBox="0 0 10 10"
+                  refX="5"
+                  refY="5"
+                  markerWidth="6"
+                  markerHeight="6"
+                  orient="auto-start-reverse"
+                >
+                  <path d="M 0 0 L 10 5 L 0 10 z" fill="#42d7ff" />
+                </marker>
+              </defs>
+              <rect width="600" height="400" fill="#061017" />
+              <rect width="600" height="400" fill="url(#grid)" />
 
-            {/* Legend */}
-            <text x="20" y="30" fill="#e5f3f7" fontSize="12" fontWeight="bold">
-              Mission Map
-            </text>
-            <text x="20" y="360" fill="#91adb8" fontSize="10">
-              Coverage: {mission.coverage} | Duration: {mission.duration}
-            </text>
-          </svg>
+              {/* Real SfM Camera trajectory */}
+              <polyline
+                points={polylinePoints}
+                stroke="#42d7ff"
+                strokeWidth="2"
+                fill="none"
+                markerEnd="url(#arrow)"
+              />
+
+              {/* Camera pose markers */}
+              {poseMarkers.map((m) => (
+                <g key={m.id}>
+                  <circle
+                    cx={m.svgX}
+                    cy={m.svgY}
+                    r="4"
+                    fill="#42d7ff"
+                    stroke="#061017"
+                    strokeWidth="1.5"
+                  />
+                </g>
+              ))}
+
+              {/* Legend & Metadata */}
+              <text x="20" y="30" fill="#e5f3f7" fontSize="12" fontWeight="bold">
+                SfM Camera Plan View ({poses.length} Poses)
+              </text>
+              <text x="20" y="380" fill="#91adb8" fontSize="10">
+                Coverage: {mission.coverage || "Uncalculated"} | Video frames: {mission.frames || "N/A"}
+              </text>
+            </svg>
+          ) : (
+            <div
+              style={{
+                padding: "48px 24px",
+                textAlign: "center",
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                background: "#061017",
+                borderRadius: "8px",
+                border: "1px dashed rgba(66, 215, 255, 0.2)",
+                minHeight: 320,
+              }}
+            >
+              <div style={{ fontSize: 36, marginBottom: 12, opacity: 0.8 }}>🗺️</div>
+              <h4 style={{ margin: "0 0 8px 0", color: "#e5f3f7", fontSize: 16 }}>
+                Not available: SfM poses required for plan view
+              </h4>
+              <p style={{ margin: 0, color: "#91adb8", fontSize: 13, maxWidth: 440, lineHeight: 1.5 }}>
+                Flight plan reconstruction requires calibrated camera poses from photogrammetric Structure from Motion. No camera poses were reconstructed for this mission.
+              </p>
+            </div>
+          )}
         </Panel>
 
         <div className="command-stats">
           {[
             {
               label: "Flight path",
-              value: mission.telemetry.position,
+              value: hasPoses
+                ? `${poses.length} registered poses`
+                : (safeMission.telemetry?.position || "Not available: telemetry not recorded"),
               icon: "Compass",
               tone: "confidence",
             },
             {
               label: "Coverage",
-              value: mission.coverage,
+              value: (safeMission.coverage && safeMission.coverage !== "0.00 km²")
+                ? safeMission.coverage
+                : "Not available: coverage uncalculated",
               icon: "MapPin",
               tone: "confidence",
             },
             {
               label: "Detections",
-              value: mission.findings.length,
+              value: Array.isArray(safeMission.findings) ? safeMission.findings.length : "0",
               icon: "Radar",
               tone: "confidence",
             },
             {
               label: "Accuracy",
-              value: mission.telemetry.accuracy,
+              value: safeMission.telemetry?.accuracy || (safeMission.reconstruction?.mean_reprojection_error != null
+                ? `±${Number(safeMission.reconstruction.mean_reprojection_error).toFixed(2)} px`
+                : "Not available: RTK GNSS not recorded"),
               icon: "Target",
               tone: "confidence",
             },
@@ -1652,8 +1828,8 @@ export function IntelligencePage({ kind, mission, navigate, notice }) {
 
           <Panel>
             <span className="eyebrow">CONFIDENCE DISTRIBUTION</span>
-            {mission.findings.map((f) => (
-              <div key={f.id} className="confidence-bar">
+            {(mission.findings || []).map((f, idx) => (
+              <div key={f.id || f.object_id || `conf-${idx}`} className="confidence-bar">
                 <span>{f.title}</span>
                 <Progress value={f.confidence} />
                 <b>{f.confidence}%</b>
@@ -1948,22 +2124,22 @@ function Reports({ mission, notice }) {
         <div className="command-stats" style={{ marginTop: "10px" }}>
           <Stat
             label="SfM Cameras"
-            value={repRec.registered_cameras ?? 20}
+            value={repRec.registered_cameras ?? repRec.registered_images ?? 0}
             tone="cyan"
           />
           <Stat
             label="Sparse Points"
-            value={repRec.sparse_points_count ?? 12916}
+            value={repRec.sparse_points_count ?? repRec.sparse_point_count ?? 0}
             tone="violet"
           />
           <Stat
             label="Unique Tracks"
-            value={repTrk.unique_tracks ?? 23}
+            value={repTrk.unique_tracks ?? repTrk.uniqueTracks ?? 0}
             tone="emerald"
           />
           <Stat
             label="Fused 3D Objects"
-            value={repFusion.fused_objects_count ?? 3}
+            value={repFusion.fused_objects_count ?? 0}
             tone="amber"
           />
         </div>
@@ -1991,9 +2167,10 @@ function Reports({ mission, notice }) {
               remains disabled.
             </li>
             <li>
-              <b>Reconstruction Integrity:</b> Authoritative sparse SfM (12,916
-              points) is preserved. Dense MVS was unexecuted due to GPU/CUDA
-              constraints and no synthetic dense points were fabricated.
+              <b>Reconstruction Integrity:</b> Authoritative sparse SfM (
+              {repRec.sparse_points_count ?? repRec.sparse_point_count ?? 0}{" "}
+              points) is preserved. Dense MVS is only executed when GPU/CUDA
+              is available, and no synthetic dense points are fabricated.
             </li>
           </ul>
         </div>
@@ -2803,61 +2980,77 @@ export function ChallengePage({ mission }) {
       "Limited viewing angles",
       "Occlusion layer",
       "Visible / partial / occluded surfaces",
-      `${mission.reconstruction.occluded}% occluded`,
+      mission.reconstruction?.occluded != null
+        ? `${mission.reconstruction.occluded}% occluded`
+        : "Not available: 3D occlusion uncalculated",
     ],
     [
       "Motion blur",
       "Frame quality analysis",
       "Affected-frame review",
-      `${mission.quality.blur}% quality`,
+      mission.quality?.blur != null
+        ? `${mission.quality.blur}% quality`
+        : "Not available: blur unmeasured",
     ],
     [
       "Video compression",
       "Frame quality analysis",
       "Compression score",
-      `${mission.quality.compression}% quality`,
+      mission.quality?.compression != null
+        ? `${mission.quality.compression}% quality`
+        : "Not available: compression score unmeasured",
     ],
     [
       "Changing light / shadows",
       "Lighting stability analysis",
       "Exposure quality score",
-      `${mission.quality.lighting}% quality`,
+      mission.quality?.lighting != null
+        ? `${mission.quality.lighting}% quality`
+        : "Not available: lighting unmeasured",
     ],
     [
       "Moving objects",
       "Dynamic/static separation",
       "People and vehicle tracks",
-      `${mission.objects.people + mission.objects.vehicles} dynamic`,
+      mission.objects
+        ? `${(mission.objects.people || 0) + (mission.objects.vehicles || 0)} dynamic`
+        : "0 dynamic",
     ],
     [
       "GPS errors",
       "Trajectory correction",
       "RTK/PPK corrected path",
-      mission.telemetry.accuracy,
+      mission.telemetry?.accuracy || "Not available: RTK GNSS not recorded",
     ],
     [
       "Sensor noise",
       "Quality analysis",
       "Sensor score",
-      `${mission.quality.sensor}% quality`,
+      mission.quality?.sensor != null
+        ? `${mission.quality.sensor}% quality`
+        : "Not available: sensor quality unmeasured",
     ],
     [
       "Occluded surfaces",
       "Occlusion confidence layer",
       "Recommended capture angle",
-      `${mission.reconstruction.partial}% partial`,
+      mission.reconstruction?.partial != null
+        ? `${mission.reconstruction.partial}% partial`
+        : "Not available: partial surface uncalculated",
     ],
     [
       "Near-real-time processing",
       "Interactive pipeline",
       "Current processing state",
-      `${mission.progress}% pipeline`,
+      `${mission.progress || 0}% pipeline`,
     ],
     [
       "Metric accuracy without many GCPs",
       "Confidence-aware measurements",
       "Estimated uncertainty",
-      mission.measurements.uncertainty,
+      mission.measurements?.uncertainty || (mission.reconstruction?.mean_reprojection_error != null
+        ? `±${Number(mission.reconstruction.mean_reprojection_error).toFixed(2)} px`
+        : "Not available: SfM reconstruction required"),
     ],
     [
       "Actionable intelligence",

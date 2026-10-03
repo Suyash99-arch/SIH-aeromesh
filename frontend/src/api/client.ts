@@ -18,11 +18,15 @@ export function getApiBaseUrl(): string {
     (typeof window !== 'undefined' ? '/api/v1' : 'http://localhost:8000/api/v1');
 
   const clean = String(envUrl).replace(/\/+$/, '');
-  if (clean.endsWith('/api/v1') || clean.endsWith('/api')) {
+  if (clean.endsWith('/api/v1')) {
     return clean;
+  }
+  if (clean.endsWith('/api')) {
+    return `${clean}/v1`;
   }
   return `${clean}/api/v1`;
 }
+
 
 export const API_BASE_URL = getApiBaseUrl();
 export const BACKEND_ROOT_URL = API_BASE_URL.replace(/\/api(\/v1)?$/, '');

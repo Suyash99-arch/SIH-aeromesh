@@ -13,7 +13,7 @@ import * as THREE from "three";
 import { PLYLoader } from "three/examples/jsm/loaders/PLYLoader.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
-import { resolveAssetUrl } from "../../api/missions.js";
+import { resolveAssetUrl, fetchArtifactsStatus } from "../../api/missions.js";
 import ErrorBoundary from "../common/ErrorBoundary";
 
 // Global cache for downloaded ArrayBuffers and bounds to eliminate redundant network transfers
@@ -1107,27 +1107,12 @@ function Scene({
   const [modelBounds, setModelBounds] = useState(null);
 
   const pointCloudUrl = useMemo(() => {
-    const mId = mission?.id || null;
-    const raw =
-      propPointCloudUrl ||
-      reconstructionMeta?.point_cloud_url ||
-      mission?.reconstruction?.point_cloud_url ||
-      mission?.assets?.pointCloud ||
-      (mId ? `/api/v1/missions/${mId}/reconstruction/pointcloud` : null);
-    return raw ? resolveAssetUrl(raw) : null;
-  }, [propPointCloudUrl, reconstructionMeta, mission]);
+    return propPointCloudUrl ? resolveAssetUrl(propPointCloudUrl) : null;
+  }, [propPointCloudUrl]);
 
   const meshUrl = useMemo(() => {
-    const mId = mission?.id || null;
-    const raw =
-      propMeshUrl ||
-      reconstructionMeta?.mesh_url ||
-      mission?.reconstruction?.mesh_url ||
-      mission?.assets?.mesh ||
-      (mId ? `/api/v1/missions/${mId}/reconstruction/mesh` : null) ||
-      mission?.assets?.model;
-    return raw ? resolveAssetUrl(raw) : null;
-  }, [propMeshUrl, reconstructionMeta, mission]);
+    return propMeshUrl ? resolveAssetUrl(propMeshUrl) : null;
+  }, [propMeshUrl]);
 
   const isRealReconstruction = Boolean(
     meshUrl ||
@@ -1725,21 +1710,54 @@ export default function ReconstructionViewer({
   );
 
   const mId = mission?.id || null;
-  const meshUrl =
+  const [artifactsStatus, setArtifactsStatus] = useState(null);
+
+  useEffect(() => {
+    let active = true;
+    if (mId) {
+      fetchArtifactsStatus(mId).then((res) => {
+        if (active && res?.artifacts) {
+          setArtifactsStatus(res.artifacts);
+        }
+      });
+    } else {
+      setArtifactsStatus(null);
+    }
+    return () => {
+      active = false;
+    };
+  }, [mId]);
+
+  // Requirement 5: Call GET /api/v1/missions/{id}/artifacts first.
+  // Do not request files that the artifacts endpoint says are not ready.
+  // No 404s in the browser console for missing artifacts.
+  const meshIsReady = Boolean(
     propMeshUrl ||
-    reconstructionMeta?.mesh_url ||
-    mission?.reconstruction?.mesh_url ||
-    (typeof mission?.assets?.mesh === "string" ? mission.assets.mesh : null) ||
-    (mId ? resolveAssetUrl(`/api/v1/missions/${mId}/reconstruction/mesh`) : null) ||
-    (typeof mission?.assets?.model === "string" ? mission.assets.model : null);
-  const pointCloudUrl =
+    artifactsStatus?.mesh?.ready === true ||
+    artifactsStatus?.mesh?.status === "ready"
+  );
+
+  const pointCloudIsReady = Boolean(
     propPointCloudUrl ||
-    reconstructionMeta?.point_cloud_url ||
-    mission?.reconstruction?.point_cloud_url ||
-    (typeof mission?.assets?.pointCloud === "string"
-      ? mission.assets.pointCloud
-      : null) ||
-    (mId ? resolveAssetUrl(`/api/v1/missions/${mId}/reconstruction/pointcloud`) : null);
+    artifactsStatus?.pointcloud?.ready === true ||
+    artifactsStatus?.pointcloud?.status === "ready"
+  );
+
+  const meshUrl = meshIsReady
+    ? (propMeshUrl
+        ? resolveAssetUrl(propMeshUrl)
+        : artifactsStatus?.mesh?.url
+          ? resolveAssetUrl(artifactsStatus.mesh.url)
+          : (mId ? resolveAssetUrl(`/api/v1/missions/${mId}/reconstruction/mesh`) : null))
+    : null;
+
+  const pointCloudUrl = pointCloudIsReady
+    ? (propPointCloudUrl
+        ? resolveAssetUrl(propPointCloudUrl)
+        : artifactsStatus?.pointcloud?.url
+          ? resolveAssetUrl(artifactsStatus.pointcloud.url)
+          : (mId ? resolveAssetUrl(`/api/v1/missions/${mId}/reconstruction/pointcloud`) : null))
+    : null;
 
   const hasMesh = Boolean(meshUrl);
   const hasPointCloud = Boolean(pointCloudUrl);
@@ -1898,10 +1916,10 @@ export default function ReconstructionViewer({
                   <line x1="12" y1="16" x2="12.01" y2="16" />
                 </svg>
                 <h4 style={{ margin: "0 0 6px 0", color: "#f87171", fontSize: "14px", fontWeight: 700 }}>
-                  Reconstruction Failed
+                  {`Failed: ${artifactsStatus?.mesh?.reason || mission?.processing?.error || mission?.error || "Reconstruction failed"}`}
                 </h4>
                 <p style={{ margin: "0 0 14px 0", fontSize: "12px", maxWidth: "360px", color: "#cbd5e1", lineHeight: 1.5 }}>
-                  {mission?.processing?.error || mission?.processing?.reason || "Pipeline execution failed to generate 3D mesh geometry."}
+                  {artifactsStatus?.mesh?.reason || mission?.processing?.error || mission?.processing?.reason || "Pipeline execution failed to generate 3D mesh geometry."}
                 </p>
                 {onTriggerProcessing && (
                   <button
@@ -1924,14 +1942,14 @@ export default function ReconstructionViewer({
                   </button>
                 )}
               </>
-            ) : mission?.status === "processing" || mission?.processing?.status === "processing" ? (
+            ) : mission?.status === "processing" || mission?.processing?.status === "processing" || artifactsStatus?.mesh?.status === "processing" ? (
               <>
                 <div className="spinner" style={{ width: 28, height: 28, marginBottom: 14, borderTopColor: "#38bdf8" }} />
                 <h4 style={{ margin: "0 0 6px 0", color: "#38bdf8", fontSize: "14px", fontWeight: 700 }}>
                   Reconstruction In Progress
                 </h4>
                 <p style={{ margin: 0, fontSize: "12px", maxWidth: "340px", color: "#cbd5e1" }}>
-                  {mission?.processing?.step || mission?.processing?.message || "Running dense SfM & Depth-Anything photogrammetry..."} ({mission?.progress || 0}%)
+                  {artifactsStatus?.mesh?.reason || mission?.processing?.step || mission?.processing?.message || "Running dense SfM & photogrammetry..."} ({mission?.progress || 0}%)
                 </p>
               </>
             ) : (
@@ -1950,10 +1968,10 @@ export default function ReconstructionViewer({
                   <line x1="12" y1="22.08" x2="12" y2="12" />
                 </svg>
                 <h4 style={{ margin: "0 0 6px 0", color: "#f1f5f9", fontSize: "14px", fontWeight: 600 }}>
-                  No Reconstructed Geometry Available
+                  Reconstruction not ready
                 </h4>
                 <p style={{ margin: "0 0 14px 0", fontSize: "11px", maxWidth: "340px", lineHeight: 1.5, color: "#94a3b8" }}>
-                  This mission does not have an active 3D surface mesh or point cloud generated on disk yet.
+                  No 3D surface mesh or point cloud is ready yet for this mission.
                 </p>
                 {onTriggerProcessing && (
                   <button

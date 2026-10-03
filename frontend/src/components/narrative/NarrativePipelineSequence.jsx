@@ -384,7 +384,7 @@ export default function NarrativePipelineSequence() {
           ctx.fillStyle = '#4ee38a';
           ctx.font = '700 9px JetBrains Mono, monospace';
           ctx.textAlign = 'center';
-          ctx.fillText('METRIC CALIBRATED · 10.0m BASELINE', sfmCenterX, height * 0.8 + 16);
+          ctx.fillText('SAMPLE CALIBRATION · 10.0m BASELINE', sfmCenterX, height * 0.8 + 16);
           ctx.textAlign = 'left';
         }
       }

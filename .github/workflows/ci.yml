@@ -22,10 +22,10 @@ jobs:
       - name: Checkout Source Code
         uses: actions/checkout@v4
 
-      - name: Set up Python 3.12
+      - name: Set up Python 3.11
         uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.11"
           cache: "pip"
 
       - name: Install System Libraries
@@ -95,3 +95,63 @@ jobs:
       - name: Validate Docker Compose Configuration Syntax
         run: |
           docker compose config
+
+  docker-build-and-test:
+    name: Docker Build & 512MB RAM Container Verification
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Source Code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Dockerfile.api
+        run: |
+          docker build -f Dockerfile.api -t aeromesh-api:ci .
+
+      - name: Build Dockerfile.worker
+        run: |
+          docker build -f Dockerfile.worker -t aeromesh-worker:ci .
+
+      - name: Run API container with 512MB RAM constraint (-m 512m)
+        run: |
+          docker run -d \
+            --name test-api \
+            -m 512m \
+            -p 8000:8000 \
+            -e PORT=8000 \
+            -e PIPELINE_ENABLED=false \
+            -e ENVIRONMENT=development \
+            -e SECRET_KEY="ci-secret-key-testing-environment-purposes-only-32bytes" \
+            aeromesh-api:ci
+
+      - name: Verify API container health and docs
+        run: |
+          echo "Waiting for API to boot..."
+          for i in {1..30}; do
+            if curl -s -f http://localhost:8000/api/v1/health; then
+              echo "API is healthy!"
+              break
+            fi
+            echo "Waiting ($i/30)..."
+            sleep 2
+          done
+
+          echo "Checking /api/v1/health:"
+          curl -f http://localhost:8000/api/v1/health
+          echo ""
+
+          echo "Checking /docs:"
+          curl -f http://localhost:8000/docs > /dev/null
+          echo "Docs OK"
+
+          echo "Checking memory footprint:"
+          docker stats --no-stream test-api
+
+      - name: Cleanup API container
+        if: always()
+        run: |
+          docker logs test-api || true
+          docker stop test-api || true
+          docker rm test-api || true

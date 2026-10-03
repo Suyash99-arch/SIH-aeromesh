@@ -262,7 +262,7 @@ export default function HeroCompassReconstruction() {
         </div>
         <div className="hero-compass-badge">
           <span className="pulse-dot-cyan" />
-          <span>3D RECONSTRUCTION LIVE</span>
+          <span>ILLUSTRATIVE 3D SAMPLE</span>
         </div>
       </div>
 
@@ -272,11 +272,11 @@ export default function HeroCompassReconstruction() {
       {/* Bottom Telemetry Dock */}
       <div className="hero-compass-footer">
         <div className="compass-meta-cell">
-          <span className="compass-meta-label">REPROJECTION ERROR</span>
+          <span className="compass-meta-label">REPROJ ERROR (SAMPLE)</span>
           <strong className="compass-meta-val">0.55 px</strong>
         </div>
         <div className="compass-meta-cell">
-          <span className="compass-meta-label">INLIER 3D POINTS</span>
+          <span className="compass-meta-label">INLIER POINTS (SAMPLE)</span>
           <strong className="compass-meta-val">12,916 pts</strong>
         </div>
         <div className="compass-meta-cell">
@@ -286,7 +286,7 @@ export default function HeroCompassReconstruction() {
         <div className="compass-meta-cell">
           <span className="compass-meta-label">SCALE CALIBRATION</span>
           <strong className="compass-meta-val" style={{ color: 'var(--cyan)' }}>
-            METRIC GSD 1.00m
+            RELATIVE (UNSCALED)
           </strong>
         </div>
       </div>

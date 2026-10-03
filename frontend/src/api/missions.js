@@ -4,6 +4,8 @@
  */
 
 import { missions as seededMissions } from "../data/missions";
+import { formatApiError } from "../utils/errorUtils.js";
+export { formatApiError };
 
 export function getApiBase() {
   const envUrl =
@@ -11,8 +13,11 @@ export function getApiBase() {
       (import.meta.env?.VITE_API_BASE_URL || import.meta.env?.VITE_API_URL)) ||
     (typeof window !== "undefined" ? "/api/v1" : "http://localhost:8000/api/v1");
   const clean = String(envUrl).replace(/\/+$/, "");
-  if (clean.endsWith("/api/v1") || clean.endsWith("/api")) {
+  if (clean.endsWith("/api/v1")) {
     return clean;
+  }
+  if (clean.endsWith("/api")) {
+    return `${clean}/v1`;
   }
   return `${clean}/api/v1`;
 }
@@ -40,27 +45,8 @@ const fallbackMission = {
     structures: 0,
     hazards: 0,
   },
-  telemetry: {
-    altitude: "0 m",
-    speed: "0 m/s",
-    heading: "0°",
-    gps: "WAITING",
-    accuracy: "N/A",
-    satellites: "0",
-    battery: "0%",
-    signal: "NONE",
-    position: "N/A",
-  },
-  quality: {
-    sharpness: 0,
-    blur: 0,
-    compression: 0,
-    lighting: 0,
-    gps: 0,
-    sensor: 0,
-    occlusion: 0,
-    affected: "0 frames",
-  },
+  telemetry: null,
+  quality: null,
   reconstruction: {
     kind: "single-pass",
     points: "0",
@@ -142,14 +128,30 @@ function normalizeMission(rawMission = {}) {
     frames,
     duration,
     objects: { ...baseDefaults.objects, ...(rawMission.objects || {}) },
-    telemetry: {
-      ...baseDefaults.telemetry,
-      ...(rawMission.telemetry || {}),
-    },
-    quality: { ...baseDefaults.quality, ...(rawMission.quality || {}) },
+    telemetry: (rawMission.telemetry && Object.keys(rawMission.telemetry).length > 0)
+      ? rawMission.telemetry
+      : null,
+    quality: (rawMission.quality && Object.keys(rawMission.quality).length > 0)
+      ? rawMission.quality
+      : ((rawMission.frameQuality?.summary || rawMission.frameQuality?.average) && Object.keys(rawMission.frameQuality?.summary || rawMission.frameQuality?.average || {}).length > 0)
+      ? {
+          sharpness: Math.round((rawMission.frameQuality.summary || rawMission.frameQuality.average).sharpness || 0),
+          brightness: Math.round((rawMission.frameQuality.summary || rawMission.frameQuality.average).lighting || (rawMission.frameQuality.summary || rawMission.frameQuality.average).brightness || 0),
+          contrast: Math.round((rawMission.frameQuality.summary || rawMission.frameQuality.average).compression || (rawMission.frameQuality.summary || rawMission.frameQuality.average).contrast || 0),
+          overall: Math.round((rawMission.frameQuality.summary || rawMission.frameQuality.average).overall || 0),
+          motion_blur: Math.round((rawMission.frameQuality.summary || rawMission.frameQuality.average).motion_blur || 0),
+          samples: rawMission.frameQuality?.samples || rawMission.frameQuality?.timeseries || [],
+        }
+      : null,
     reconstruction: {
       ...baseDefaults.reconstruction,
       ...(rawMission.reconstruction || {}),
+      camera_poses: rawMission.camera_poses || rawMission.reconstruction?.camera_poses || [],
+      mean_reprojection_error:
+        rawMission.mean_reprojection_error ??
+        rawMission.reconstruction?.mean_reprojection_error ??
+        rawMission.sparse_reconstruction?.mean_reprojection_error_px ??
+        null,
     },
     measurements: {
       ...baseDefaults.measurements,
@@ -164,16 +166,14 @@ function normalizeMission(rawMission = {}) {
     assets: {
       ...(baseDefaults.assets || {}),
       ...(rawMission.assets || {}),
-      video: resolveAssetUrl(videoUrl || rawMission.assets?.video || (mId ? `${API_BASE}/missions/${mId}/video` : "")),
+      video: resolveAssetUrl(videoUrl || rawMission.assets?.video || ""),
       pointCloud: resolveAssetUrl(
         rawMission.reconstruction?.point_cloud_url ||
-          (mId ? `${API_BASE}/missions/${mId}/reconstruction/pointcloud` : "") ||
           rawMission.assets?.pointCloud ||
           "",
       ),
       mesh: resolveAssetUrl(
         rawMission.reconstruction?.mesh_url ||
-          (mId ? `${API_BASE}/missions/${mId}/reconstruction/mesh` : "") ||
           rawMission.assets?.mesh ||
           "",
       ),
@@ -203,11 +203,11 @@ async function parseResponse(response) {
   if (!response.ok) {
     if (contentType.includes("application/json")) {
       const data = await response.json();
-      throw new Error(data.detail || data.message || "Request failed");
+      throw new Error(formatApiError(data));
     }
 
     const text = await response.text();
-    throw new Error(text || "Request failed");
+    throw new Error(formatApiError(text));
   }
 
   if (contentType.includes("application/json")) {
@@ -235,6 +235,7 @@ export async function listMissions() {
       ? Object.values(data.missions || data)
       : [];
 
+    missionCache.clear();
     const normalized = rawItems.map((m) => normalizeMission(m));
     normalized.forEach((m) => {
       if (m && m.id) missionCache.set(m.id, m);
@@ -266,7 +267,7 @@ export async function createMission({ name, missionType, location, operator }) {
       missionCache.set(mission.id, mission);
       return mission;
     }
-    throw new Error(data.message || "Failed to create mission");
+    throw new Error(formatApiError(data) || "Failed to create mission");
   } catch (error) {
     console.error("Create mission error:", error);
     if (error instanceof TypeError) {
@@ -275,7 +276,7 @@ export async function createMission({ name, missionType, location, operator }) {
         { cause: error },
       );
     }
-    throw new Error("Failed to create mission", { cause: error });
+    throw new Error(formatApiError(error) || "Failed to create mission", { cause: error });
   }
 }
 
@@ -397,7 +398,7 @@ export async function uploadVideo(missionId, file) {
       return data;
     }
     console.error(`[Upload] Upload failed for mission ${missionId}:`, data);
-    throw new Error(data.message || data.detail || "Upload failed");
+    throw new Error(formatApiError(data) || "Upload failed");
   } catch (error) {
     console.error(`[Upload] Upload error for mission ${missionId}:`, error);
     throw error;
@@ -433,7 +434,7 @@ export async function uploadVideoChunk(missionId, file, onProgress, signal) {
 
     const data = await response.json();
     if (!response.ok || !data.success) {
-      throw new Error(data.detail || data.message || `Chunk ${i + 1} upload failed`);
+      throw new Error(formatApiError(data) || `Chunk ${i + 1} upload failed`);
     }
 
     const elapsed = (Date.now() - startTime) / 1000;
@@ -465,7 +466,7 @@ export async function deleteMission(missionId) {
   });
   const data = await response.json();
   if (!response.ok || !data.success) {
-    throw new Error(data.detail || data.message || "Failed to delete mission");
+    throw new Error(formatApiError(data) || "Failed to delete mission");
   }
   missionCache.delete(missionId);
   return data;
@@ -477,7 +478,7 @@ export async function compareMissions(baseId, targetId) {
   });
   const data = await response.json();
   if (!response.ok || !data.success) {
-    throw new Error(data.detail || data.message || "Failed to compare missions");
+    throw new Error(formatApiError(data) || "Failed to compare missions");
   }
   return data;
 }
@@ -543,46 +544,80 @@ export async function getProcessingStatus(missionId) {
 
 export async function processVideo(
   missionId,
-  frameSampling = 2,
-  inferenceResolution = 640,
-  detectionConfidence = 0.35,
-  reconstructionQuality = "medium",
-  sceneProfile = "road",
+  optionsOrFrameSampling = 2,
+  ...rest
 ) {
   try {
-    console.log(`[Process] Starting pipeline processing for mission ${missionId}`, {
-      frameSampling,
-      detectionConfidence,
-      sceneProfile,
-    });
+    let options = {};
+    if (typeof optionsOrFrameSampling === "object" && optionsOrFrameSampling !== null) {
+      options = optionsOrFrameSampling;
+    } else {
+      options = {
+        frameSampling: optionsOrFrameSampling,
+        inferenceResolution: rest[0],
+        detectionConfidence: rest[1],
+        reconstructionQuality: rest[2],
+        sceneProfile: rest[3],
+      };
+    }
 
-    const params = new URLSearchParams({
-      frame_sampling: frameSampling,
-      inference_resolution: inferenceResolution,
-      detection_confidence: detectionConfidence,
-      reconstruction_quality: reconstructionQuality,
-      scene_profile: sceneProfile,
-    });
+    const payload = {
+      frame_sampling:
+        typeof options.frameSampling === "number"
+          ? options.frameSampling
+          : (typeof options.frame_sampling === "number" ? options.frame_sampling : 2.0),
+      inference_resolution:
+        Number(options.inferenceResolution || options.inference_resolution) || 640,
+      detection_confidence:
+        typeof options.detectionConfidence === "number"
+          ? options.detectionConfidence
+          : (typeof options.detection_confidence === "number" ? options.detection_confidence : 0.35),
+      reconstruction_quality:
+        String(options.reconstructionQuality || options.reconstruction_quality || "medium").toLowerCase(),
+      scene_profile:
+        String(options.sceneProfile || options.scene_profile || "road").toLowerCase(),
+    };
+
+    console.log(`[Process] Starting pipeline processing for mission ${missionId}`, payload);
 
     const response = await fetch(
-      `${API_BASE}/missions/${missionId}/process?${params}`,
+      `${API_BASE}/missions/${missionId}/process`,
       {
         method: "POST",
-        headers: getAuthHeaders(),
+        headers: {
+          ...getAuthHeaders(),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
       },
     );
 
-    const data = await response.json();
+    let data;
+    const contentType = response.headers.get("content-type") || "";
+    if (contentType.includes("application/json")) {
+      data = await response.json();
+    } else {
+      const text = await response.text();
+      data = { message: text };
+    }
+
+    if (!response.ok) {
+      const errorMsg = formatApiError(data);
+      console.error(
+        `[Process] Processing failed for mission ${missionId} (HTTP ${response.status}):`,
+        errorMsg,
+      );
+      throw new Error(errorMsg);
+    }
 
     // Handle special error states from backend
-    if (data.status === "UNAVAILABLE") {
+    if (data.status === "UNAVAILABLE" || data.status === "FAILED") {
+      const errorMsg = formatApiError(data);
       console.error(
-        `[Process] Video unavailable for mission ${missionId}:`,
-        data.error,
+        `[Process] Video/pipeline unavailable for mission ${missionId}:`,
+        errorMsg,
       );
-      throw new Error(
-        `Video unavailable (${data.error}): ${data.detail || "Unknown reason"}`,
-      );
+      throw new Error(errorMsg);
     }
 
     if (data.success) {
@@ -593,10 +628,10 @@ export async function processVideo(
       try {
         const stored = JSON.parse(localStorage.getItem("aeromesh_active_jobs") || "{}");
         stored[missionId] = {
-          jobId: data.job_id,
+          jobId: data.job_id || data.job?.id,
           missionId,
           startedAt: new Date().toISOString(),
-          status: data.status || "PROCESSING",
+          status: data.status || data.job?.status || "PROCESSING",
         };
         localStorage.setItem("aeromesh_active_jobs", JSON.stringify(stored));
       } catch (storageErr) {
@@ -606,11 +641,12 @@ export async function processVideo(
       return data;
     }
 
+    const finalError = formatApiError(data) || "Processing failed";
     console.error(
       `[Process] Processing failed for mission ${missionId}:`,
-      data,
+      finalError,
     );
-    throw new Error(data.message || data.detail || "Processing failed");
+    throw new Error(finalError);
   } catch (error) {
     console.error(
       `[Process] Processing error for mission ${missionId}:`,
@@ -637,7 +673,7 @@ export async function generateReconstruction(missionId) {
       missionCache.set(missionId, mission);
       return data.reconstruction;
     }
-    throw new Error(data.message || "Reconstruction failed");
+    throw new Error(formatApiError(data) || "Reconstruction failed");
   } catch (error) {
     console.error("Reconstruction error:", error);
     throw error;
@@ -653,7 +689,7 @@ export async function generateReport(missionId) {
     if (data.success) {
       return data.report;
     }
-    throw new Error(data.message || "Report generation failed");
+    throw new Error(formatApiError(data) || "Report generation failed");
   } catch (error) {
     console.error("Report error:", error);
     throw error;
@@ -881,6 +917,7 @@ export async function measureVolume3D(missionId, payload = {}) {
 }
 
 export async function fetchSemanticScene(missionId) {
+  if (!missionId) return { success: false, semantic_scene: null };
   try {
     const response = await fetch(
       `${API_BASE}/missions/${missionId}/semantic-scene?_t=${Date.now()}`,
@@ -889,14 +926,16 @@ export async function fetchSemanticScene(missionId) {
         cache: "no-store",
       },
     );
+    if (!response.ok) return { success: false, semantic_scene: null };
     return await response.json();
   } catch (error) {
-    console.error("fetchSemanticScene error:", error);
+    console.warn("[API] fetchSemanticScene fallback:", error);
     return { success: false, semantic_scene: null };
   }
 }
 
 export async function fetchObjects3D(missionId) {
+  if (!missionId) return { success: false, objects: [] };
   try {
     const response = await fetch(
       `${API_BASE}/missions/${missionId}/objects-3d?_t=${Date.now()}`,
@@ -905,14 +944,16 @@ export async function fetchObjects3D(missionId) {
         cache: "no-store",
       },
     );
+    if (!response.ok) return { success: false, objects: [] };
     return await response.json();
   } catch (error) {
-    console.error("fetchObjects3D error:", error);
+    console.warn("[API] fetchObjects3D fallback:", error);
     return { success: false, objects: [] };
   }
 }
 
 export async function fetchObjectEvidence(missionId, objectId) {
+  if (!missionId || !objectId) return { success: false, error: "Missing missionId or objectId" };
   try {
     const response = await fetch(
       `${API_BASE}/missions/${missionId}/objects/${objectId}/evidence?_t=${Date.now()}`,
@@ -921,14 +962,16 @@ export async function fetchObjectEvidence(missionId, objectId) {
         cache: "no-store",
       },
     );
+    if (!response.ok) return { success: false, error: `HTTP ${response.status}` };
     return await response.json();
   } catch (error) {
-    console.error("fetchObjectEvidence error:", error);
+    console.warn("[API] fetchObjectEvidence fallback:", error);
     return { success: false, error: error.message };
   }
 }
 
 export async function fetchReconstruction(missionId) {
+  if (!missionId) return { success: false, reconstruction: null };
   try {
     const response = await fetch(
       `${API_BASE}/missions/${missionId}/reconstruction?_t=${Date.now()}`,
@@ -937,10 +980,11 @@ export async function fetchReconstruction(missionId) {
         cache: "no-store",
       },
     );
+    if (!response.ok) return { success: false, reconstruction: null };
     const data = await response.json();
     return data;
   } catch (error) {
-    console.error("fetchReconstruction error:", error);
+    console.warn("[API] fetchReconstruction fallback:", error);
     return { success: false, reconstruction: null };
   }
 }
@@ -1201,10 +1245,39 @@ export async function getComputeDevice() {
     device_name: "Intel(R) UHD Graphics",
     vram_mb: 0,
     compute_path: "CPU inference — Intel(R) UHD Graphics detected, no CUDA device",
-    estimated_duration: "~6 – 8 min",
     compute_budget: "Host RAM & CPU (0 MB VRAM)",
     budget_detail: "PyCOLMAP + YOLO11 (CPU multi-threading)",
   };
+}
+
+export async function estimatePipelineEtaApi(params = {}) {
+  try {
+    const response = await fetch(`${API_BASE}/system/estimate-eta`, {
+      method: "POST",
+      headers: {
+        ...getAuthHeaders(),
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        size_bytes: params.sizeBytes || params.size_bytes || 0,
+        duration_seconds: params.durationSeconds || params.duration_seconds || 10,
+        width: params.width || 1920,
+        height: params.height || 1080,
+        fps: params.fps || 30.0,
+        frame_sampling: params.frameSampling || params.frame_sampling || 2.0,
+      }),
+    });
+    if (response.ok) {
+      const data = await response.json();
+      if (data.success && data.eta) {
+        return data.eta;
+      }
+      return data;
+    }
+  } catch (error) {
+    console.warn("[ETA] Error fetching dynamic ETA from backend:", error);
+  }
+  return null;
 }
 
 
@@ -1272,3 +1345,4 @@ export async function fetchMissionKeyframes(missionId) {
   }
   return [];
 }
+

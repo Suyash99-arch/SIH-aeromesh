@@ -9,7 +9,7 @@ export function exportDetectionsToGeoJSON(
     properties: {
       scene_id: sceneId,
       exported_at: new Date().toISOString(),
-      generator: 'AeroMesh Aerial Intelligence v2.0',
+      generator: 'Hexa Spark Aerial Intelligence v2.0',
     },
     features: detections.map((d) => ({
       type: 'Feature',

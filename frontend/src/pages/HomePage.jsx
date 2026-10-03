@@ -648,7 +648,7 @@ function StageVisualCanvas({ stageIndex }) {
             fontSize="10"
             fontFamily="monospace"
           >
-            COLMAP SfM: 20 REGISTERED POSES · 12,916 INLIER POINTS
+            COLMAP SfM: Illustrative Multi-View Geometry (Sample Point Cloud)
           </text>
         </svg>
       );
@@ -736,7 +736,7 @@ function StageVisualCanvas({ stageIndex }) {
             fontSize="10"
             fontFamily="monospace"
           >
-            56,120 Triangles · Solid Watertight Road Plane
+            Watertight Surface Geometry (Illustrative Preview)
           </text>
         </svg>
       );
@@ -807,7 +807,7 @@ function StageVisualCanvas({ stageIndex }) {
             fontWeight="bold"
             fontFamily="monospace"
           >
-            OBJ_T0011 [53.1, 50.5, 7.2]
+            SAMPLE_T01 [Arbitrary Frame]
           </text>
           <text
             x="20"
@@ -817,7 +817,7 @@ function StageVisualCanvas({ stageIndex }) {
             fontWeight="bold"
             fontFamily="monospace"
           >
-            RAY TRIANGULATION · REPROJ ERROR: 1.95px
+            RAY TRIANGULATION · SAMPLE REPROJ: 1.95px
           </text>
         </svg>
       );
@@ -1200,7 +1200,7 @@ export default function HomePage({ onNavigateDashboard, onStartMission, currentU
     };
   }, [isPlaying]);
 
-  // Load real backend health status
+  // Load real backend health status and aggregate missions
   useEffect(() => {
     let active = true;
 
@@ -1221,6 +1221,15 @@ export default function HomePage({ onNavigateDashboard, onStartMission, currentU
             status: "Offline Mode (Local Fallback)",
           });
       });
+
+    fetch(`${BACKEND_URL}/api/v1/missions`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (active && Array.isArray(data)) {
+          setMissionsList(data);
+        }
+      })
+      .catch(() => {});
 
     return () => {
       active = false;
@@ -1430,16 +1439,32 @@ export default function HomePage({ onNavigateDashboard, onStartMission, currentU
             {/* Live Metrics Strip */}
             <div className="hero-metrics-strip">
               <div className="hero-stat-item">
-                <span className="hero-stat-val">20 / 20</span>
-                <span className="hero-stat-label">COLMAP Cameras</span>
+                <span className="hero-stat-val">
+                  {missionsList.length > 0 ? missionsList.length : "0"}
+                </span>
+                <span className="hero-stat-label">
+                  {missionsList.length > 0 ? "Missions Processed" : "Indexed Missions"}
+                </span>
               </div>
               <div className="hero-stat-item">
-                <span className="hero-stat-val">12,916</span>
-                <span className="hero-stat-label">Inlier 3D Points</span>
+                <span className="hero-stat-val">
+                  {missionsList.length > 0
+                    ? missionsList.reduce((acc, m) => acc + (m.reconstruction?.sparse_point_count || 0), 0).toLocaleString()
+                    : "18,802"}
+                </span>
+                <span className="hero-stat-label">
+                  {missionsList.length > 0 ? "SfM Sparse Points" : "Sample Sparse Points"}
+                </span>
               </div>
               <div className="hero-stat-item">
-                <span className="hero-stat-val">56,120</span>
-                <span className="hero-stat-label">Surface Faces</span>
+                <span className="hero-stat-val">
+                  {missionsList.length > 0
+                    ? missionsList.reduce((acc, m) => acc + (m.detections?.total_detections || 0), 0).toLocaleString()
+                    : "YOLOv11"}
+                </span>
+                <span className="hero-stat-label">
+                  {missionsList.length > 0 ? "Neural Detections" : "Multi-Class Detector"}
+                </span>
               </div>
               <div className="hero-stat-item">
                 <span

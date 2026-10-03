@@ -166,6 +166,7 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
   // Fetch fresh real data on mount or mission change
   useEffect(() => {
     let active = true;
+    if (!missionId) return;
 
     fetchSemanticScene(missionId).then((res) => {
       if (!active) return;
@@ -923,24 +924,14 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
               ? resolveAssetUrl(reconstructionMeta.mesh_url)
               : mission?.reconstruction?.mesh_url
                 ? resolveAssetUrl(mission.reconstruction.mesh_url)
-                : mission?.assets?.mesh
-                  ? resolveAssetUrl(mission.assets.mesh)
-                  : missionId
-                    ? resolveAssetUrl(`/api/v1/missions/${missionId}/reconstruction/mesh`)
-                    : mission?.assets?.model
-                      ? resolveAssetUrl(mission.assets.model)
-                      : null
+                : null
           }
           pointCloudUrl={
             reconstructionMeta?.point_cloud_url
               ? resolveAssetUrl(reconstructionMeta.point_cloud_url)
               : mission?.reconstruction?.point_cloud_url
                 ? resolveAssetUrl(mission.reconstruction.point_cloud_url)
-                : mission?.assets?.pointCloud
-                  ? resolveAssetUrl(mission.assets.pointCloud)
-                  : missionId
-                    ? resolveAssetUrl(`/api/v1/missions/${missionId}/reconstruction/pointcloud`)
-                    : null
+                : null
           }
           reconstructionMeta={reconstructionMeta}
           layers={layers}

@@ -70,6 +70,26 @@ export default function App() {
   const [showCreateMission, setShowCreateMission] = useState(false);
   const [mission, setMission] = useState(null);
 
+  // Synchronize missionId and activePage dynamically from URL
+  useEffect(() => {
+    const syncFromUrl = () => {
+      if (typeof window === "undefined") return;
+      const params = new URLSearchParams(window.location.search);
+      const m = params.get("mission");
+      if (m && m !== missionId) {
+        setMissionId(m);
+      }
+      const p = params.get("page");
+      if (p && p !== activePage) {
+        setActivePage(p);
+        setShowHomepage(false);
+      }
+    };
+    syncFromUrl();
+    window.addEventListener("popstate", syncFromUrl);
+    return () => window.removeEventListener("popstate", syncFromUrl);
+  }, []);
+
   // If no mission is selected, load user's first available mission from the API
   useEffect(() => {
     if (!missionId) {
@@ -203,6 +223,7 @@ export default function App() {
   };
 
   const handleNavigateDashboard = (targetPage = "overview") => {
+    setCurrentUser(getStoredUser());
     setShowHomepage(false);
     if (typeof targetPage === "string" && targetPage) {
       setActivePage(targetPage);

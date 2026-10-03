@@ -224,6 +224,28 @@ export default function ProcessingProgressPage({ mission, navigate }) {
               <div style={{ color: "#cbd5e1", fontSize: "13px", marginTop: "4px", lineHeight: "1.4" }}>
                 {statusData?.error_message || mission.error || "The pipeline encountered a terminal error. The system halted execution to preserve state integrity."}
               </div>
+              {(String(statusData?.error_message || mission.error || "").toLowerCase().includes("worker") ||
+                String(statusData?.error_message || mission.error || "").toLowerCase().includes("503")) && (
+                <div
+                  style={{
+                    marginTop: "12px",
+                    background: "rgba(0, 0, 0, 0.4)",
+                    borderRadius: "6px",
+                    padding: "10px 14px",
+                    fontSize: "12px",
+                    fontFamily: "monospace",
+                    color: "#94a3b8",
+                    borderLeft: "3px solid #38bdf8",
+                  }}
+                >
+                  <strong style={{ color: "#38bdf8", display: "block", marginBottom: "4px" }}>
+                    How to connect a local worker via Cloudflare Tunnel:
+                  </strong>
+                  1. Run worker: <code style={{ color: "#f1f5f9" }}>python -m uvicorn backend.main:app --port 8001</code> (with PIPELINE_ENABLED=true)<br />
+                  2. Expose tunnel: <code style={{ color: "#f1f5f9" }}>cloudflared tunnel --url http://localhost:8001</code><br />
+                  3. Set env on API: <code style={{ color: "#f1f5f9" }}>WORKER_URL=https://&lt;tunnel-id&gt;.trycloudflare.com</code>
+                </div>
+              )}
             </div>
           </div>
 

@@ -6,7 +6,9 @@ import {
   uploadVideoChunk,
   processVideo,
   getComputeDevice,
+  estimatePipelineEtaApi,
 } from "../../api/missions";
+import { formatApiError } from "../../utils/errorUtils";
 import "./NewIncidentWorkspace.css";
 
 /**
@@ -46,11 +48,11 @@ export default function NewIncidentWorkspace({ onClose, onMissionCreated, curren
 
   const [formData, setFormData] = useState({
     name: "",
-    location: "Sector 04 — Northern Perimeter (37.7749° N, 122.4194° W)",
-    description: "Rapid single-pass aerial survey over damaged infrastructure for real-time 3D photogrammetry and survivor search.",
+    location: "",
+    description: "",
     dateTime: getLocalDatetimeString(new Date()),
     missionType: "single-pass",
-    operator: currentUser?.full_name || "Tactical Field Operator",
+    operator: currentUser?.full_name || "",
   });
 
   const [videoFile, setVideoFile] = useState(null);
@@ -60,6 +62,8 @@ export default function NewIncidentWorkspace({ onClose, onMissionCreated, curren
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
   const [computeDevice, setComputeDevice] = useState(null);
+  const [createdMissionId, setCreatedMissionId] = useState(null);
+  const [etaDetails, setEtaDetails] = useState(null);
   const fileInputRef = useRef(null);
 
   // Fetch real hardware device info from backend
@@ -93,6 +97,26 @@ export default function NewIncidentWorkspace({ onClose, onMissionCreated, curren
   const [errorMessage, setErrorMessage] = useState("");
   const abortControllerRef = useRef(null);
 
+  const updateEtaEstimate = async (file, width = 1920, height = 1080, duration = 30.0) => {
+    if (!file) return;
+    const sizeBytes = file.size || 0;
+    try {
+      const res = await estimatePipelineEtaApi({
+        width,
+        height,
+        duration_seconds: duration,
+        size_bytes: sizeBytes,
+        frame_sampling: 2.0,
+        fps: 30.0,
+      });
+      if (res) {
+        setEtaDetails(res);
+      }
+    } catch (err) {
+      console.warn("ETA estimation warning:", err);
+    }
+  };
+
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
@@ -110,6 +134,7 @@ export default function NewIncidentWorkspace({ onClose, onMissionCreated, curren
       name: file.name,
       size: (file.size / (1024 * 1024)).toFixed(1) + " MB",
     });
+    updateEtaEstimate(file);
   };
 
   const handleDrop = (e) => {
@@ -132,6 +157,8 @@ export default function NewIncidentWorkspace({ onClose, onMissionCreated, curren
     setVideoFile(null);
     setVideoPreviewUrl(null);
     setVideoMeta(null);
+    setCreatedMissionId(null);
+    setEtaDetails(null);
     setErrorMessage("");
     setUploadProgress(0);
     setUploadSpeed("0.0");
@@ -164,7 +191,7 @@ export default function NewIncidentWorkspace({ onClose, onMissionCreated, curren
       notice?.("Incident saved as draft.", "success");
       onClose?.();
     } catch (err) {
-      setErrorMessage("Failed to save draft: " + err.message);
+      setErrorMessage("Failed to save draft: " + formatApiError(err));
     } finally {
       setIsSubmitting(false);
       setStatusMessage("");
@@ -177,6 +204,30 @@ export default function NewIncidentWorkspace({ onClose, onMissionCreated, curren
     }
     setIsSubmitting(false);
     setStatusMessage("");
+  };
+
+  const handleRetryProcessing = async () => {
+    if (!createdMissionId) return;
+    setIsSubmitting(true);
+    setErrorMessage("");
+    setStatusMessage("Retrying pipeline processing (re-using uploaded footage)...");
+    try {
+      await processVideo(createdMissionId, {
+        frameSampling: 2,
+        inferenceResolution: 640,
+        detectionConfidence: 0.35,
+        reconstructionQuality: "medium",
+        sceneProfile: "road",
+      });
+      notice?.("Pipeline initiated! Streaming progress...", "success");
+      if (onMissionCreated) {
+        onMissionCreated(createdMissionId);
+      }
+    } catch (err) {
+      setErrorMessage(formatApiError(err));
+      setIsSubmitting(false);
+      setStatusMessage("");
+    }
   };
 
   const handleLaunchPipeline = async (e) => {
@@ -207,6 +258,7 @@ export default function NewIncidentWorkspace({ onClose, onMissionCreated, curren
 
       const created = await createMission(missionPayload);
       const missionId = created.id;
+      setCreatedMissionId(missionId);
 
       setStatusMessage("Uploading drone video footage...");
       try {
@@ -242,7 +294,7 @@ export default function NewIncidentWorkspace({ onClose, onMissionCreated, curren
       if (err.name === "AbortError" || err.message?.includes("cancelled")) {
         setErrorMessage("Upload cancelled by operator.");
       } else {
-        setErrorMessage(err.message || "Pipeline launch error.");
+        setErrorMessage(formatApiError(err) || "Pipeline launch error.");
       }
       setIsSubmitting(false);
       setStatusMessage("");
@@ -267,7 +319,7 @@ export default function NewIncidentWorkspace({ onClose, onMissionCreated, curren
             <div>
               <div className="incident-header-badge">
                 <span className="pulse-dot-cyan" />
-                <span>NEW INCIDENT WORKSPACE · DISASTER RESPONSE</span>
+                <span>NEW AERIAL MISSION WORKSPACE · SURVEY & RECONSTRUCTION</span>
               </div>
               <h2 className="incident-header-title">Create Incident & Analyze Footage</h2>
             </div>
@@ -287,6 +339,83 @@ export default function NewIncidentWorkspace({ onClose, onMissionCreated, curren
         <div className="incident-workspace-grid">
           {/* Left Column: Incident Details Form & Upload/Preview */}
           <div className="incident-main-col">
+            {errorMessage && (
+              <div
+                style={{
+                  background: "rgba(239, 68, 68, 0.12)",
+                  border: "1px solid rgba(239, 68, 68, 0.35)",
+                  borderRadius: "10px",
+                  padding: "16px",
+                  marginBottom: "16px",
+                  display: "flex",
+                  gap: "12px",
+                  alignItems: "flex-start",
+                }}
+              >
+                <div style={{ color: "#ef4444", fontSize: "20px", lineHeight: "1" }}>⚠</div>
+                <div style={{ flex: 1 }}>
+                  <div style={{ color: "#f87171", fontWeight: 700, fontSize: "14px", marginBottom: "4px" }}>
+                    {errorMessage.includes("worker not connected") || errorMessage.includes("Worker")
+                      ? "Processing Worker Disconnected"
+                      : "Submission Error"}
+                  </div>
+                  <div style={{ color: "#cbd5e1", fontSize: "13px", lineHeight: "1.5" }}>
+                    {errorMessage}
+                  </div>
+
+                  {createdMissionId && (
+                    <div style={{ marginTop: "12px" }}>
+                      <button
+                        type="button"
+                        onClick={handleRetryProcessing}
+                        disabled={isSubmitting}
+                        id="btn-retry-pipeline-processing"
+                        style={{
+                          background: "#0284c7",
+                          color: "#ffffff",
+                          border: "none",
+                          borderRadius: "6px",
+                          padding: "8px 16px",
+                          fontWeight: 600,
+                          fontSize: "13px",
+                          cursor: "pointer",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "8px",
+                          boxShadow: "0 2px 8px rgba(2, 132, 199, 0.4)",
+                        }}
+                      >
+                        <Icon name="RotateCcw" size={14} />
+                        <span>Retry Pipeline Processing (Keep Uploaded Video)</span>
+                      </button>
+                    </div>
+                  )}
+
+                  {(errorMessage.includes("worker not connected") || errorMessage.includes("Worker")) && (
+                    <div
+                      style={{
+                        marginTop: "10px",
+                        background: "rgba(0, 0, 0, 0.4)",
+                        borderRadius: "6px",
+                        padding: "10px 12px",
+                        fontSize: "12px",
+                        fontFamily: "monospace",
+                        color: "#94a3b8",
+                        borderLeft: "3px solid #38bdf8",
+                      }}
+                    >
+                      <strong style={{ color: "#38bdf8", display: "block", marginBottom: "4px" }}>
+                        How to connect a local worker via Cloudflare Tunnel:
+                      </strong>
+                      1. Start worker: <code style={{ color: "#f1f5f9" }}>python -m uvicorn backend.main:app --port 8001</code> with PIPELINE_ENABLED=true<br />
+                      2. Expose tunnel: <code style={{ color: "#f1f5f9" }}>cloudflared tunnel --url http://localhost:8001</code><br />
+                      3. Configure API: Set <code style={{ color: "#f1f5f9" }}>WORKER_URL=https://&lt;tunnel-id&gt;.trycloudflare.com</code>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+
             {/* 1. Incident Details Section */}
             <div className="incident-section-card glass">
               <div className="section-card-header">
@@ -303,7 +432,7 @@ export default function NewIncidentWorkspace({ onClose, onMissionCreated, curren
                     name="name"
                     value={formData.name}
                     onChange={handleInputChange}
-                    placeholder="e.g., North Ridge — Flash Flood Reconnaissance"
+                    placeholder="e.g., Aerial Reconnaissance — Infrastructure Survey"
                     required
                   />
                 </div>
@@ -335,7 +464,7 @@ export default function NewIncidentWorkspace({ onClose, onMissionCreated, curren
                       name="location"
                       value={formData.location}
                       onChange={handleInputChange}
-                      placeholder="e.g., Sector 04, North Approach (37.7749° N, 122.4194° W)"
+                      placeholder="e.g., Sector 04, North Perimeter (37.7749° N, 122.4194° W)"
                     />
                   </div>
                 </div>
@@ -348,7 +477,7 @@ export default function NewIncidentWorkspace({ onClose, onMissionCreated, curren
                     rows={2}
                     value={formData.description}
                     onChange={handleInputChange}
-                    placeholder="Describe environmental conditions, flight objectives, and tactical hazards..."
+                    placeholder="Describe survey, inspection, 3D mapping, or site response objectives..."
                   />
                 </div>
 
@@ -432,6 +561,7 @@ export default function NewIncidentWorkspace({ onClose, onMissionCreated, curren
                 >
                   <input
                     ref={fileInputRef}
+                    id="inc-video-file-input"
                     type="file"
                     accept="video/mp4,video/quicktime,video/x-matroska,.mp4,.mov,.mkv"
                     style={{ display: "none" }}
@@ -467,6 +597,12 @@ export default function NewIncidentWorkspace({ onClose, onMissionCreated, curren
                         controls
                         className="live-video-preview"
                         preload="metadata"
+                        onLoadedMetadata={(e) => {
+                          const w = e.target.videoWidth || 1920;
+                          const h = e.target.videoHeight || 1080;
+                          const dur = e.target.duration || 30.0;
+                          updateEtaEstimate(videoFile, w, h, dur);
+                        }}
                       />
                       <div className="preview-statusbar">
                         <span className="preview-indicator">
@@ -538,7 +674,7 @@ export default function NewIncidentWorkspace({ onClose, onMissionCreated, curren
                 <div className="hw-content">
                   <div className="hw-spec-row">
                     <span>Hardware:</span>
-                    <strong>{computeDevice?.device_name || "Intel(R) Graphics"}</strong>
+                    <strong>{computeDevice?.device_name || "Host Processor"}</strong>
                   </div>
                   <div className="hw-spec-row">
                     <span>Inference Path:</span>
@@ -546,8 +682,22 @@ export default function NewIncidentWorkspace({ onClose, onMissionCreated, curren
                   </div>
                   <div className="hw-spec-row">
                     <span>Est. Pipeline Time:</span>
-                    <strong className="cyan">{computeDevice?.estimated_duration || "~6 – 8 min"}</strong>
+                    <strong className="cyan">
+                      {etaDetails?.eta_range_human || etaDetails?.eta_human || computeDevice?.estimated_duration || "~6 – 8 min"}
+                    </strong>
                   </div>
+
+                  {etaDetails && (
+                    <div style={{ marginTop: "10px", paddingTop: "8px", borderTop: "1px dashed rgba(255,255,255,0.15)", fontSize: "11px", color: "#94a3b8" }}>
+                      <div style={{ fontWeight: 600, color: "#38bdf8", marginBottom: "4px" }}>ETA Formula Inputs:</div>
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px" }}>
+                        <span>Keyframes: <strong style={{ color: "#f8fafc" }}>{etaDetails.keyframe_count || 120}</strong></span>
+                        <span>Megapixels: <strong style={{ color: "#f8fafc" }}>{etaDetails.input_megapixels || "—"} MP</strong></span>
+                        <span>Throughput: <strong style={{ color: "#f8fafc" }}>{etaDetails.effective_throughput_mpix_s ? `${etaDetails.effective_throughput_mpix_s} MP/s` : "—"}</strong></span>
+                        <span>Confidence: <strong style={{ color: "#4ee38a" }}>{etaDetails.confidence_percent ? `${etaDetails.confidence_percent}%` : "—"}</strong></span>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>

@@ -1,5 +1,5 @@
 import { motion, useReducedMotion } from "framer-motion";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Icon from "../ui/Icon";
 import MissionSelectorPanel from "./MissionSelectorPanel";
 import {
@@ -8,6 +8,44 @@ import {
   outputNavigation,
   systemNavigation,
 } from "../../data/navigation";
+
+/** Checks /api/v1/health; returns { reconstruction, detection, geospatial } readiness */
+function useEngineStatus() {
+  const [status, setStatus] = useState({ reconstruction: null, detection: null, geospatial: null, overall: null });
+
+  useEffect(() => {
+    let cancelled = false;
+    const check = async () => {
+      try {
+        const res = await fetch("/api/v1/health");
+        if (cancelled) return;
+        if (res.ok) {
+          const json = await res.json();
+          const online = json?.status === "healthy";
+          const cvReady = json?.opencv_status === "ready" || json?.opencv_status === true;
+          const ffReady = json?.ffmpeg_status === "ready" || json?.ffmpeg_status === true;
+          setStatus({
+            overall: online ? "ONLINE" : "DEGRADED",
+            reconstruction: online ? "READY" : "UNAVAILABLE",
+            detection: (online && cvReady) ? "READY" : online ? "PARTIAL" : "UNAVAILABLE",
+            geospatial: online ? "READY" : "UNAVAILABLE",
+          });
+        } else {
+          setStatus({ overall: "OFFLINE", reconstruction: "OFFLINE", detection: "OFFLINE", geospatial: "OFFLINE" });
+        }
+      } catch {
+        if (!cancelled)
+          setStatus({ overall: "OFFLINE", reconstruction: "OFFLINE", detection: "OFFLINE", geospatial: "OFFLINE" });
+      }
+    };
+    check();
+    const id = setInterval(check, 30_000);
+    return () => { cancelled = true; clearInterval(id); };
+  }, []);
+
+  return status;
+}
+
 
 function Nav({ title, items, activePage, navigate }) {
   const reduceMotion = useReducedMotion();
@@ -55,6 +93,7 @@ export default function Sidebar({
   onNavigateHome,
 }) {
   const [selectorOpen, setSelectorOpen] = useState(false);
+  const engineStatus = useEngineStatus();
 
   return (
     <>
@@ -90,6 +129,7 @@ export default function Sidebar({
         <button
           className="nav-item create-mission-btn"
           onClick={onCreateMission}
+          id="btn-sidebar-new-mission"
         >
           <Icon name="Plus" />
           <span>New Mission</span>
@@ -117,14 +157,28 @@ export default function Sidebar({
             <span>
               <i /> AI ENGINE
             </span>
-            <b style={{ color: '#38bdf8' }}>ONLINE</b>
+            <b style={{
+              color: engineStatus.overall === "ONLINE" ? '#38bdf8' : engineStatus.overall === null ? '#fbbf24' : '#f87171',
+              fontSize: '10px',
+            }}>
+              {engineStatus.overall || "CHECKING"}
+            </b>
           </header>
-          {["Reconstruction", "Detection", "Geospatial"].map((x) => (
-            <div key={x} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '3px 0' }}>
-              <span>{x}</span>
-              <b style={{ color: '#10b981', fontSize: '10px', background: 'rgba(16, 185, 129, 0.12)', padding: '1px 6px', borderRadius: '4px' }}>READY</b>
-            </div>
-          ))}
+          {[
+            ["Reconstruction", engineStatus.reconstruction],
+            ["Detection", engineStatus.detection],
+            ["Geospatial", engineStatus.geospatial],
+          ].map(([label, st]) => {
+            const color = st === "READY" ? '#10b981' : st === "PARTIAL" ? '#fbbf24' : st === null ? '#64748b' : '#f87171';
+            return (
+              <div key={label} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '3px 0' }}>
+                <span>{label}</span>
+                <b style={{ color, fontSize: '10px', background: `${color}1e`, padding: '1px 6px', borderRadius: '4px' }}>
+                  {st || "…"}
+                </b>
+              </div>
+            );
+          })}
         </div>
 
         <Nav
