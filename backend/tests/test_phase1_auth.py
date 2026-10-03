@@ -40,7 +40,7 @@ def test_government_org_registration():
             "full_name": "Wing Commander Sharma",
             "portal_type": PORTAL_GOV_ORG,
             "organization_name": f"Air Force Reconnaissance {RUN_ID}",
-            "department": "UAV Tactical Operations",
+            "department": "UAV Flight Operations",
             "role": ROLE_ADMIN,
         },
     )
@@ -51,7 +51,7 @@ def test_government_org_registration():
     assert "refresh_token" in data
     assert data["user"]["portal_type"] == PORTAL_GOV_ORG
     assert data["user"]["organization_name"] == f"Air Force Reconnaissance {RUN_ID}"
-    assert data["user"]["department"] == "UAV Tactical Operations"
+    assert data["user"]["department"] == "UAV Flight Operations"
     assert data["user"]["role"] in ("pending_org_admin", "org_admin", ROLE_ADMIN)
     # Verify httpOnly cookies were set
     assert "access_token" in res.cookies

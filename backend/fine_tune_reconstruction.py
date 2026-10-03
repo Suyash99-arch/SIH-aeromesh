@@ -157,17 +157,8 @@ def optimize_mission_3d(m_dir_or_id):
     return True
 
 def main():
-    # 1. First process core named missions
-    core_missions = ["north-ridge", "downtown-grid", "harbor-district", "river-approach"]
-    for m in core_missions:
-        try:
-            optimize_mission_3d(m)
-        except Exception as e:
-            print(f"Error optimizing {m}: {e}")
-
-    # 2. Process all other mission subfolders
     for item in MISSIONS_DIR.iterdir():
-        if item.is_dir() and item.name not in core_missions:
+        if item.is_dir():
             try:
                 optimize_mission_3d(item)
             except Exception as e:

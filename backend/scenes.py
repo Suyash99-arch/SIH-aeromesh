@@ -1,9 +1,6 @@
 """
 Scenes API router for AeroMesh — Aerial Intelligence.
-Serves SceneManifest, Detection[], COLMAP points3D, and live telemetry for:
-- north-ridge-01 (mapped to north-ridge)
-- downtown-perimeter-grid (mapped to downtown-grid)
-- harbor-coastal-approach (mapped to harbor-district)
+Serves SceneManifest, Detection[], COLMAP points3D, and live telemetry.
 """
 
 import json
@@ -32,9 +29,9 @@ SCENE_PROFILES = {
         "coord_system": "LOCAL_ARBITRARY",
         "scale_mode": "RELATIVE_SCALE",
     },
-    "coastal-harbor": {
-        "name": "Coastal Harbor Basin",
-        "sector": "Maritime Dock & Port Line",
+    "maritime-zone": {
+        "name": "Maritime Dock Line",
+        "sector": "Port Infrastructure",
         "coord_system": "LOCAL_ARBITRARY",
         "scale_mode": "RELATIVE_SCALE",
     },
@@ -109,8 +106,8 @@ async def get_scene_manifest(scene_id: str):
     mission_data = _load_mission_json(mission_id)
     semantic_data = _load_semantic_scene(mission_id)
     meta = SCENE_METADATA.get(mission_id, {
-        "name": scene_id.replace("-", " ").title(),
-        "sector": "Tactical Airspace Grid",
+        "name": mission_data.get("name") or scene_id.replace("-", " ").title(),
+        "sector": mission_data.get("location") or "Airspace Grid",
         "coord_system": "LOCAL_ARBITRARY",
         "scale_mode": "RELATIVE_SCALE",
     })
@@ -131,8 +128,8 @@ async def get_scene_manifest(scene_id: str):
     if point_count == 0:
         point_count = recon.get("points_count") or recon.get("sparse_point_count") or 0
 
-    cameras_count = recon.get("cameras_registered") or frames_count or 0
-    faces_count = recon.get("faces_count") or (point_count * 2 if point_count else 0)
+    cameras_count = recon.get("cameras_registered") or recon.get("registered_cameras") or frames_count or 0
+    faces_count = recon.get("faces_count") or (recon.get("mesh", {}).get("face_count", 0))
     reproj_err = recon.get("mean_reprojection_error") or 0.0
 
     stages = recon.get("stages") or {

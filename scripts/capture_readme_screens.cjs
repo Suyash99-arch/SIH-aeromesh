@@ -110,8 +110,8 @@ async function captureReadmeScreens() {
     await page.waitForTimeout(2000);
     await page.screenshot({ path: path.join(screenshotsDir, 'detections.png'), fullPage: false });
 
-    // 8. Geospatial Tactical View
-    console.log('8. Capturing Geospatial Tactical View...');
+    // 8. Geospatial Map View
+    console.log('8. Capturing Geospatial Map View...');
     await page.evaluate(() => {
       const url = new URL(window.location.href);
       url.searchParams.set('page', 'geospatial');

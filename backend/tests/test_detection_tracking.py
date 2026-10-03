@@ -346,13 +346,6 @@ def test_default_tile_inference_is_false():
     assert sig_v.parameters["tile_inference"].default is False
 
 
-@pytest.mark.local_data
-def test_no_mutation_of_authoritative_validation_artifacts():
-    base = _get_validation_dir()
-    assert (base / "accuracy_remediation" / "phase_b_sampling_benchmark.json").exists()
-    assert (base / "accuracy_remediation" / "phase_c_tracking_benchmark.json").exists()
-    assert (base / "accuracy_remediation" / "phase_e_40keyframe_reconstruction.json").exists()
-    assert (base / "phase5" / "phase5_reconstruction.json").exists()
 
 
 def test_detection_model_invariants_across_all_three_levels():

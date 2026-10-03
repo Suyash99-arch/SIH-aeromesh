@@ -66,7 +66,7 @@ def test_video_http_range_streaming(tmp_path, monkeypatch):
     test_mission_id = "test-range-vid"
     mission_dir = main.MISSIONS_DIR / test_mission_id
     mission_dir.mkdir(parents=True, exist_ok=True)
-    video_path = mission_dir / "flight-video.mp4"
+    video_path = mission_dir / "video.mp4"
     video_data = b"0123456789" * 1000  # 10,000 bytes
     video_path.write_bytes(video_data)
 

@@ -175,7 +175,7 @@ export default function VideoPlayer({
       <video
         key={mission.id}
         ref={videoRef}
-        className="flight-video"
+        className="mission-video-element"
         src={videoSrc}
         preload="metadata"
         playsInline

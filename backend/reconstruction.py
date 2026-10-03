@@ -2256,7 +2256,7 @@ def get_reconstruction_metadata(mission_id: str) -> Optional[Dict[str, Any]]:
             except Exception:
                 pass
 
-    # Check top-level mission file (e.g. phase5_drone_validation.json or {mission_id}.json)
+    # Check top-level mission file (e.g. {mission_id}.json)
     mission_files = [
         MISSIONS_DIR / f"{mission_id}.json",
         DATA_DIR / "objects" / "missions" / f"{mission_id}.json",
@@ -2268,7 +2268,7 @@ def get_reconstruction_metadata(mission_id: str) -> Optional[Dict[str, Any]]:
                 # Check nested reconstruction key
                 if isinstance(data.get("reconstruction"), dict) and (data["reconstruction"].get("point_count", 0) > 0 or data["reconstruction"].get("sparse_point_count", 0) > 0):
                     return _enrich_metadata(data["reconstruction"])
-                # Check top-level reconstruction fields (e.g. in phase5_drone_validation.json)
+                # Check top-level reconstruction fields
                 if data.get("sparse_point_count") or data.get("point_cloud_url") or data.get("mesh_url"):
                     sparse_info = data.get("sparse_reconstruction") or {}
                     surface_mesh = data.get("surface_mesh") or {}

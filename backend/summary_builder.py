@@ -65,17 +65,17 @@ def build_canonical_mission_summary(
     video_meta = data.get("video") or {}
     video_path = data.get("video_path")
     if not video_path and mission_dir:
-        for cand_name in ["flight-video.mp4", "video.mp4", video_meta.get("filename")]:
-            if cand_name:
-                cand_path = mission_dir / cand_name
-                if cand_path.is_file():
-                    video_path = str(cand_path)
-                    break
+        if video_meta.get("filename"):
+            cand = mission_dir / video_meta["filename"]
+            if cand.is_file():
+                video_path = str(cand)
         if not video_path:
-            orig_dir = mission_dir / "original"
-            if orig_dir.is_dir():
-                for p in orig_dir.glob("*.mp4"):
-                    video_path = str(p)
+            for ext in [".mp4", ".mov", ".mkv", ".avi", ".webm"]:
+                for p in list(mission_dir.glob(f"*{ext}")) + list((mission_dir / "original").glob(f"*{ext}")):
+                    if p.is_file():
+                        video_path = str(p)
+                        break
+                if video_path:
                     break
 
     # 3. Resolve Reconstruction Data from disk/metadata

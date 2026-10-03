@@ -41,6 +41,7 @@ data/
 backend/data/
 datasets/
 SinglePass3D/
+samples/
 
 # Database files
 *.db

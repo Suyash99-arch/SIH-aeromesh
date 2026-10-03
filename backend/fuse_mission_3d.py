@@ -494,7 +494,10 @@ def run_3d_fusion_for_mission(
 if __name__ == "__main__":
     import sys
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
-    target_mission = sys.argv[1] if len(sys.argv) > 1 else "north-ridge"
+    if len(sys.argv) < 2:
+        print("Usage: python -m backend.fuse_mission_3d <mission_id>")
+        sys.exit(1)
+    target_mission = sys.argv[1]
     res = run_3d_fusion_for_mission(target_mission)
     print("\n" + "=" * 60)
     print(f"3D FUSION RESULTS FOR {target_mission}:")

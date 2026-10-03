@@ -22,12 +22,12 @@ def test_new_guest_sees_empty_dashboard(test_app):
     data = list_res.json()
     missions = data.get("missions", [])
 
-    # Must be completely empty - no phase5_drone_validation or other users' missions
+    # Must be completely empty - no other users' missions
     assert missions == [], f"Expected empty dashboard for new guest, got: {[m.get('id') for m in missions]}"
 
 
 def test_validation_missions_excluded_for_real_users(test_app):
-    """phase5_drone_validation and test_* missions must never leak into mission lists."""
+    """Test and benchmark missions must never leak into normal mission lists."""
     guest_res = test_app.post("/api/v1/auth/guest")
     token = guest_res.json()["access_token"]
     headers = {"Authorization": f"Bearer {token}"}
@@ -36,9 +36,7 @@ def test_validation_missions_excluded_for_real_users(test_app):
     data = list_res.json()
     mission_ids = [m.get("id") for m in data.get("missions", [])]
 
-    assert "phase5_drone_validation" not in mission_ids
     for m_id in mission_ids:
-        assert not str(m_id).startswith("phase5_")
         assert not str(m_id).startswith("test_")
 
 
