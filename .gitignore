@@ -39,12 +39,29 @@ data/users.json
 # Data directory and artifacts
 data/
 backend/data/
+datasets/
+SinglePass3D/
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
 
 # 3D Pointclouds and Meshes
 *.ply
+*.obj
 
-# Large video files
+# Partial and archive files
+*.part
+*.zip
+*.7z
+*.rar
+
+# Video files (all video assets strictly ignored, never bundled)
 *.mp4
+*.mov
+*.avi
+*.mkv
 
 # Logs
 *.log
@@ -66,20 +83,6 @@ output/
 *.ckpt
 *.safetensors
 .hf_cache/
-
-# Large archives
-*.zip
-*.7z
-*.rar
-
-# Large video files
-*.mp4
-*.mov
-*.avi
-*.mkv
-!frontend/public/**/*.mp4
-!frontend/public/**/*.mov
-
 
 # OS
 Thumbs.db
@@ -114,4 +117,3 @@ tools/
 .venv312/
 .venv311/
 .venv310/
-
