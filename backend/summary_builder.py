@@ -192,10 +192,20 @@ def build_canonical_mission_summary(
     mesh_info = recon_meta.get("mesh") or {}
     mesh_verts = int(mesh_info.get("vertex_count") or recon_meta.get("mesh_vertices") or 0)
     mesh_faces = int(mesh_info.get("face_count") or recon_meta.get("mesh_faces") or 0)
-    mesh_status = "AVAILABLE" if mesh_faces > 0 else "UNAVAILABLE"
+    
+    # Truthfulness invariant: if SfM failed (< 3 cameras), no geometry is available
+    if reg_cams < 3 or recon_meta.get("status") == "FAILED" or recon_meta.get("success") is False:
+        reg_cams = max(0, reg_cams)
+        sparse_pts = 0
+        dense_pts = 0
+        mesh_verts = 0
+        mesh_faces = 0
+        mesh_status = "UNAVAILABLE"
+    else:
+        mesh_status = "AVAILABLE" if mesh_faces > 0 else "UNAVAILABLE"
 
     mean_reproj = recon_meta.get("mean_reprojection_error") or recon_meta.get("mean_reprojection_error_px")
-    if mean_reproj is not None and reg_cams > 0:
+    if mean_reproj is not None and reg_cams >= 3:
         mean_reproj = round(float(mean_reproj), 3)
     else:
         mean_reproj = None
@@ -276,23 +286,47 @@ def build_canonical_mission_summary(
         flight_length = f"{telemetry['raw']['total_path_length_units']:.2f} relative units"
         coverage_area = f"Estimated trajectory box: {telemetry['raw']['total_path_length_units'] * 0.4:.1f} relative area"
 
+    # 12. Storage measurements from actual bytes on disk
+    disk_bytes = 0
+    if mission_dir and mission_dir.exists():
+        for p in mission_dir.rglob("*"):
+            if p.is_file():
+                try:
+                    disk_bytes += p.stat().st_size
+                except Exception:
+                    pass
+    elif video_path and Path(video_path).is_file():
+        disk_bytes = Path(video_path).stat().st_size
+
+    vid_size_bytes = video_meta.get("size_bytes")
+    if not vid_size_bytes and video_path and Path(video_path).is_file():
+        vid_size_bytes = Path(video_path).stat().st_size
+    elif not vid_size_bytes:
+        vid_size_bytes = 0
+
     # Assemble Authoritative Canonical Summary
     summary = {
         "mission_id": mission_id,
-        "name": data.get("name", "Mission Analysis"),
+        "name": data.get("name") or "Untitled mission",
         "status": status.value,
         "failed_stage": failed_stage,
         "failure_reason": failure_reason,
         "stage_breakdown": stage_breakdown,
-        "operator": data.get("operator") or "Not available: operator not assigned",
-        "location": ref_loc or "Not available: coordinates unreferenced",
+        "operator": data.get("operator") or "Not set",
+        "location": ref_loc or "Not set",
         "created_at": data.get("createdAt") or data.get("created_at") or datetime.now(timezone.utc).isoformat(),
+        "storage": {
+            "bytes": disk_bytes,
+            "size_mb": round(disk_bytes / (1024 * 1024), 2),
+        },
         "video": {
             "filename": video_meta.get("filename") or (Path(video_path).name if video_path else "mission_video.mp4"),
             "resolution": f"{video_meta.get('width', 4096)}x{video_meta.get('height', 2160)}" if 'width' in video_meta else video_meta.get("resolution", "4096x2160"),
             "fps": fps,
             "duration_seconds": float(video_meta.get("duration_seconds") or 10.68),
             "total_frames": int(video_meta.get("total_frames") or 267),
+            "size_bytes": vid_size_bytes,
+            "size_mb": round(vid_size_bytes / (1024 * 1024), 2),
             "codec": video_meta.get("codec") or "h264",
             "proxy_url": f"/api/v1/missions/{mission_id}/video/proxy",
             "original_url": f"/api/v1/missions/{mission_id}/video",

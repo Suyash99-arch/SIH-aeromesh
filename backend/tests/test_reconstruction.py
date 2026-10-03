@@ -193,3 +193,62 @@ def test_compute_mesh_bounding_box(tmp_path):
     assert bbox["min"] == [1.0, 2.0, 3.0]
     assert bbox["max"] == [4.0, 6.0, 8.0]
     assert bbox["dimensions"] == [3.0, 4.0, 5.0]
+
+
+def test_stale_ply_cleanup_on_failed_reconstruction(tmp_path, monkeypatch):
+    """Seed a fake stale PLY, rerun a failing reconstruction, assert old PLYs are deleted and API returns mesh_url null."""
+    import json
+    import backend.reconstruction as recon_mod
+    from backend.reconstruction import clean_mission_reconstruction_outputs, get_reconstruction_metadata
+    from starlette.testclient import TestClient
+    from backend.main import app
+    import backend.main as main_mod
+
+    monkeypatch.setattr(recon_mod, "MISSIONS_DIR", tmp_path)
+    monkeypatch.setattr(main_mod, "MISSIONS_DIR", tmp_path)
+
+    m_id = "test_stale_mission"
+    recon_dir = tmp_path / m_id / "reconstruction"
+    model_dir = recon_dir / "model"
+    model_dir.mkdir(parents=True)
+
+    # Seed fake stale PLY files
+    stale_mesh = model_dir / "mesh.ply"
+    stale_mesh.write_text("ply fake mesh content")
+    stale_pc = model_dir / "point_cloud.ply"
+    stale_pc.write_text("ply fake pc content")
+
+    # Seed metadata indicating failure (< 3 registered cameras)
+    meta = {
+        "success": False,
+        "status": "FAILED",
+        "registered_cameras": 0,
+        "sparse_point_count": 0,
+        "total_source_frames": 35,
+    }
+    (recon_dir / "reconstruction_metadata.json").write_text(json.dumps(meta))
+
+    # Also write mission.json
+    m_json = {
+        "id": m_id,
+        "status": "PARTIAL",
+        "reconstruction": meta,
+    }
+    (tmp_path / m_id / "mission.json").write_text(json.dumps(m_json))
+
+    # Run cleanup as called at start of pipeline
+    clean_mission_reconstruction_outputs(m_id)
+
+    # Assert files are deleted from disk
+    assert not stale_mesh.exists()
+    assert not stale_pc.exists()
+
+    # Query the FastAPI endpoint and assert mesh_url and point_cloud_url are null
+    client = TestClient(app)
+    resp = client.get(f"/api/v1/missions/{m_id}/reconstruction")
+    assert resp.status_code == 200
+    res_data = resp.json()
+    assert res_data["success"] is False
+    assert res_data["reconstruction"]["mesh_url"] is None
+    assert res_data["reconstruction"]["point_cloud_url"] is None
+    assert res_data["reconstruction"]["registered_cameras"] == 0

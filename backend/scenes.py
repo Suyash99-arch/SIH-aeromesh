@@ -223,28 +223,6 @@ async def get_scene_detections(scene_id: str):
             "tone": tone,
         })
 
-    # If empty or not yet processed, provide consistent synthetic detections matching scene domain
-    if not detections:
-        presets = {
-            "harbor-district": [
-                {"id": "T0001", "cls": "boat", "state": "STATIC", "conf": 88, "pos": [-0.07, -0.15, 11.23], "reproj": 2.15, "tone": "cyan"},
-                {"id": "T0002", "cls": "vessel", "state": "MOVING", "conf": 92, "pos": [3.41, 0.22, 14.80], "reproj": 3.12, "tone": "violet"},
-                {"id": "T0003", "cls": "tugboat", "state": "STATIC", "conf": 64, "pos": [-4.12, -0.40, 8.50], "reproj": 11.45, "tone": "amber"},
-            ],
-            "downtown-grid": [
-                {"id": "T0011", "cls": "car", "state": "MOVING", "conf": 95, "pos": [2.10, 0.12, 7.15], "reproj": 1.85, "tone": "cyan"},
-                {"id": "T0032", "cls": "van", "state": "STATIC", "conf": 62, "pos": [-1.48, -0.28, 14.49], "reproj": 13.20, "tone": "amber"},
-                {"id": "T0044", "cls": "bus", "state": "STATIC", "conf": 89, "pos": [-4.60, -0.05, 9.80], "reproj": 3.40, "tone": "cyan"},
-                {"id": "T0058", "cls": "van", "state": "STATIC", "conf": 73, "pos": [0.95, -0.30, 4.30], "reproj": 7.90, "tone": "violet"},
-            ],
-        }
-        detections = presets.get(mission_id, [
-            {"id": "T0032", "cls": "van", "state": "STATIC", "conf": 63, "pos": [-1.48, -0.28, 14.49], "reproj": 13.36, "tone": "amber"},
-            {"id": "T0011", "cls": "car", "state": "MOVING", "conf": 94, "pos": [2.05, 0.11, 7.16], "reproj": 1.95, "tone": "cyan"},
-            {"id": "T0044", "cls": "bus", "state": "STATIC", "conf": 88, "pos": [-4.62, -0.05, 9.82], "reproj": 3.41, "tone": "cyan"},
-            {"id": "T0058", "cls": "van", "state": "STATIC", "conf": 71, "pos": [0.94, -0.31, 4.28], "reproj": 8.02, "tone": "violet"},
-        ])
-
     return detections
 
 
@@ -283,12 +261,11 @@ async def get_scene_points(scene_id: str):
                     coords.append((pid, x, y, z, r, g, b, err))
 
             if coords:
-                # Normalize / center to origin
+                # Center coordinates around centroid so the Three.js model frames accurately
                 avg_x = sum(c[1] for c in coords) / len(coords)
                 avg_y = sum(c[2] for c in coords) / len(coords)
                 avg_z = sum(c[3] for c in coords) / len(coords)
                 
-                # Scale factor so scene bounds stay around ~15 units
                 max_dev = max(
                     max(abs(c[1] - avg_x), abs(c[2] - avg_y), abs(c[3] - avg_z))
                     for c in coords
@@ -301,38 +278,11 @@ async def get_scene_points(scene_id: str):
                     nz = (z - avg_z) * scale
                     lines.append(f"{pid} {nx:.4f} {ny:.4f} {nz:.4f} {r} {g} {b} {err:.4f}")
 
-            return PlainTextResponse("\n".join(lines), media_type="text/plain")
+                return PlainTextResponse("\n".join(lines), media_type="text/plain")
         except Exception as e:
             logger.error("Error reading points3D.bin for %s: %s", mission_id, e)
 
-    # Fallback to deterministic synthetic point cloud in COLMAP format if bin not parseable
-    lines.append("# Synthetic dense cluster point cloud")
-    import random
-    rng = random.Random(42)
-    pid = 1
-    # Ground scatter
-    for _ in range(650):
-        x = (rng.random() - 0.5) * 15
-        z = (rng.random() - 0.5) * 15
-        y = (rng.random() - 0.5) * 0.5 - 0.4
-        r, g, b = 79, 216, 255
-        lines.append(f"{pid} {x:.4f} {y:.4f} {z:.4f} {r} {g} {b} 1.20")
-        pid += 1
-
-    # 16 object clusters
-    for c in range(16):
-        cx = (rng.random() - 0.5) * 11
-        cz = (rng.random() - 0.5) * 11
-        is_amber = (c % 6 == 0)
-        r, g, b = (255, 180, 84) if is_amber else (79, 216, 255)
-        for _ in range(25):
-            x = cx + (rng.random() - 0.5) * 0.7
-            y = rng.random() * 1.1 - 0.3
-            z = cz + (rng.random() - 0.5) * 0.7
-            lines.append(f"{pid} {x:.4f} {y:.4f} {z:.4f} {r} {g} {b} 1.05")
-            pid += 1
-
-    return PlainTextResponse("\n".join(lines), media_type="text/plain")
+    raise HTTPException(status_code=404, detail="Point cloud geometry unavailable. SfM reconstruction did not produce points3D.")
 
 
 @router.get("/{scene_id}/stats/live")

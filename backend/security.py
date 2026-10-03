@@ -175,37 +175,41 @@ class UserRecord:
         }
 
 
-# Default Demo Users seeded for judges, local evaluations, and automated tests
-DEMO_USERS: Dict[str, UserRecord] = {
-    "admin@aeromesh.internal": UserRecord(
-        id="usr_admin_001",
-        email="admin@aeromesh.internal",
-        full_name="System Administrator",
-        role=ROLE_ADMIN,
-        portal_type=PORTAL_GOV_ORG,
-        organization_name="Ministry of Defence",
-        department="Strategic Aerial Reconnaissance",
-        hashed_password=hash_password(AEROMESH_ADMIN_PASSWORD),
-    ),
-    "analyst@aeromesh.internal": UserRecord(
-        id="usr_analyst_002",
-        email="analyst@aeromesh.internal",
-        full_name="Mission Analyst",
-        role=ROLE_ANALYST,
-        portal_type=PORTAL_GOV_ORG,
-        organization_name="Ministry of Defence",
-        department="Geospatial Intelligence Division",
-        hashed_password=hash_password(AEROMESH_ANALYST_PASSWORD),
-    ),
-    "operator@aeromesh.internal": UserRecord(
-        id="usr_operator_003",
-        email="operator@aeromesh.internal",
-        full_name="Drone Operator",
-        role=ROLE_OPERATOR,
-        portal_type=PORTAL_INDIVIDUAL,
-        hashed_password=hash_password(AEROMESH_OPERATOR_PASSWORD),
-    ),
-}
+DEV_ONLY = os.getenv("DEV_ONLY", "0").lower() in ("1", "true", "yes")
+
+# Demo Users seeded only if explicit DEV_ONLY environment flag is enabled (defaults to False)
+DEMO_USERS: Dict[str, UserRecord] = {}
+if DEV_ONLY:
+    DEMO_USERS = {
+        "admin@aeromesh.internal": UserRecord(
+            id="usr_admin_001",
+            email="admin@aeromesh.internal",
+            full_name="System Administrator",
+            role=ROLE_ADMIN,
+            portal_type=PORTAL_GOV_ORG,
+            organization_name="Ministry of Defence",
+            department="Strategic Aerial Reconnaissance",
+            hashed_password=hash_password(AEROMESH_ADMIN_PASSWORD),
+        ),
+        "analyst@aeromesh.internal": UserRecord(
+            id="usr_analyst_002",
+            email="analyst@aeromesh.internal",
+            full_name="Mission Analyst",
+            role=ROLE_ANALYST,
+            portal_type=PORTAL_GOV_ORG,
+            organization_name="Ministry of Defence",
+            department="Geospatial Intelligence Division",
+            hashed_password=hash_password(AEROMESH_ANALYST_PASSWORD),
+        ),
+        "operator@aeromesh.internal": UserRecord(
+            id="usr_operator_003",
+            email="operator@aeromesh.internal",
+            full_name="Drone Operator",
+            role=ROLE_OPERATOR,
+            portal_type=PORTAL_INDIVIDUAL,
+            hashed_password=hash_password(AEROMESH_OPERATOR_PASSWORD),
+        ),
+    }
 
 USERS_FILE: Path = Path(__file__).resolve().parent.parent / "data" / "users.json"
 _USERS_LOCK = Lock()

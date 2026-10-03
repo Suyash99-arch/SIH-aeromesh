@@ -1746,6 +1746,7 @@ def run_reconstruction_for_mission(
             "scale": evaluate_scale_and_georeference(False),
         }
 
+    clean_mission_reconstruction_outputs(mission_id)
     recon_output_dir = _ensure_dir(MISSIONS_DIR / mission_id / "reconstruction" / "model")
     frames_dir = Path(extraction["frames_dir"])
 
@@ -1846,7 +1847,6 @@ def get_reconstruction_pointcloud_path(mission_id: str) -> Optional[Path]:
     ]
     for recon_dir in recon_dirs:
         candidates = [
-            recon_dir / "hybrid_point_cloud.ply",
             recon_dir / "point_cloud.ply",
             recon_dir / "sparse_points.ply",
             recon_dir / "point-cloud.ply",
@@ -1884,22 +1884,61 @@ def _inspect_ply_header(path: Optional[Path]) -> Tuple[int, int]:
         return 0, 0
 
 
+def clean_mission_reconstruction_outputs(mission_id: str) -> None:
+    """Wipes all reconstruction artifacts and models for a mission so stale files can never be served."""
+    recon_dirs = [
+        MISSIONS_DIR / mission_id / "reconstruction",
+        DATA_DIR / "objects" / "missions" / mission_id / "reconstruction",
+    ]
+    for rdir in recon_dirs:
+        if rdir.exists():
+            for p in list(rdir.glob("*.ply")) + list(rdir.glob("*.obj")) + list(rdir.glob("*.glb")):
+                try:
+                    p.unlink()
+                except Exception:
+                    pass
+            model_dir = rdir / "model"
+            if model_dir.exists():
+                for p in list(model_dir.glob("*.ply")) + list(model_dir.glob("*.obj")) + list(model_dir.glob("*.glb")):
+                    try:
+                        p.unlink()
+                    except Exception:
+                        pass
+            dense_dir = rdir / "dense"
+            if dense_dir.exists():
+                for p in list(dense_dir.glob("*.ply")) + list(dense_dir.glob("*.obj")) + list(dense_dir.glob("*.glb")):
+                    try:
+                        p.unlink()
+                    except Exception:
+                        pass
+
+
 def get_reconstruction_mesh_path(mission_id: str) -> Optional[Path]:
-    """Locate surface mesh file for a mission, preferring native .ply in authorized backend storage."""
+    """Locate surface mesh file for a mission only if COLMAP model registered >= 3 cameras."""
     recon_dirs = [
         MISSIONS_DIR / mission_id,
         MISSIONS_DIR / mission_id / "reconstruction",
         DATA_DIR / "objects" / "missions" / mission_id,
         DATA_DIR / "objects" / "missions" / mission_id / "reconstruction",
     ]
+    
+    # Verify registered cameras count before returning any mesh
+    meta_json = MISSIONS_DIR / mission_id / "reconstruction" / "reconstruction_metadata.json"
+    if not meta_json.exists():
+        meta_json = DATA_DIR / "objects" / "missions" / mission_id / "reconstruction" / "reconstruction_metadata.json"
+    if meta_json.exists():
+        try:
+            with open(meta_json, "r", encoding="utf-8") as f:
+                meta = json.load(f)
+            if int(meta.get("registered_cameras", 0)) < 3 or meta.get("success") is False or meta.get("status") == "FAILED":
+                return None
+        except Exception:
+            return None
+
     for recon_dir in recon_dirs:
         candidates = [
             recon_dir / "mesh.ply",
             recon_dir / "surface_mesh.ply",
-            recon_dir / "reconstruction-model.glb",
-            recon_dir / "model.glb",
-            recon_dir / "hybrid_mesh.glb",
-            recon_dir / "hybrid_mesh.obj",
             recon_dir / "model" / "mesh.ply",
             recon_dir / "dense" / "mesh_poisson.ply",
             recon_dir / "mesh_poisson.ply",
@@ -1910,11 +1949,59 @@ def get_reconstruction_mesh_path(mission_id: str) -> Optional[Path]:
     return None
 
 
+def get_reconstruction_pointcloud_path(mission_id: str) -> Optional[Path]:
+    """Locate sparse or dense point cloud file for a mission only if COLMAP registered >= 3 cameras."""
+    recon_dirs = [
+        MISSIONS_DIR / mission_id,
+        MISSIONS_DIR / mission_id / "reconstruction",
+        DATA_DIR / "objects" / "missions" / mission_id,
+        DATA_DIR / "objects" / "missions" / mission_id / "reconstruction",
+    ]
+    
+    meta_json = MISSIONS_DIR / mission_id / "reconstruction" / "reconstruction_metadata.json"
+    if not meta_json.exists():
+        meta_json = DATA_DIR / "objects" / "missions" / mission_id / "reconstruction" / "reconstruction_metadata.json"
+    if meta_json.exists():
+        try:
+            with open(meta_json, "r", encoding="utf-8") as f:
+                meta = json.load(f)
+            if int(meta.get("registered_cameras", 0)) < 3 or meta.get("success") is False or meta.get("status") == "FAILED":
+                return None
+        except Exception:
+            return None
+
+    for recon_dir in recon_dirs:
+        candidates = [
+            recon_dir / "point_cloud.ply",
+            recon_dir / "sparse_points.ply",
+            recon_dir / "point-cloud.ply",
+            recon_dir / "model" / "point_cloud.ply",
+            recon_dir / "pinhole_model" / "model_0.ply",
+            recon_dir / "dense" / "sparse_with_normals.ply",
+        ]
+        for candidate in candidates:
+            if candidate.exists():
+                return candidate
+    return None
 
 
 def get_reconstruction_metadata(mission_id: str) -> Optional[Dict[str, Any]]:
     """Retrieve saved reconstruction metadata JSON for a mission with verified geometry stats."""
     def _enrich_metadata(data: Dict[str, Any]) -> Dict[str, Any]:
+        reg_cams = int(data.get("registered_cameras", 0))
+        if reg_cams < 3 or data.get("success") is False or data.get("status") == "FAILED":
+            data["success"] = False
+            data["status"] = "FAILED"
+            data["point_cloud_url"] = None
+            data["mesh_url"] = None
+            data["sparse_point_count"] = 0
+            data["dense_point_count"] = 0
+            data["point_count"] = 0
+            data["mesh_status"] = "UNAVAILABLE"
+            data["mesh_vertices"] = 0
+            data["mesh_faces"] = 0
+            return data
+
         mesh_p = get_reconstruction_mesh_path(mission_id)
         pt_p = get_reconstruction_pointcloud_path(mission_id)
         m_verts, m_faces = _inspect_ply_header(mesh_p)
@@ -1934,8 +2021,8 @@ def get_reconstruction_metadata(mission_id: str) -> Optional[Dict[str, Any]]:
                 data["sparse_point_count"] = p_verts
                 data["point_count"] = p_verts
 
-        data.setdefault("point_cloud_url", f"/api/missions/{mission_id}/reconstruction/pointcloud")
-        data.setdefault("mesh_url", f"/api/missions/{mission_id}/reconstruction/mesh")
+        data["point_cloud_url"] = f"/api/missions/{mission_id}/reconstruction/pointcloud" if pt_p else None
+        data["mesh_url"] = f"/api/missions/{mission_id}/reconstruction/mesh" if mesh_p else None
         return data
 
     summary_files = [

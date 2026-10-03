@@ -32,6 +32,7 @@ def test_reconstruction_metadata_distinct_per_mission():
         m_data.update({
             "reconstruction": {
                 "status": "completed",
+                "registered_cameras": 5,
                 "sparse_point_count": pts,
                 "point_count": pts,
                 "mean_reprojection_error": float(pts) / 100.0,

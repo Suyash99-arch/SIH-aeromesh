@@ -115,15 +115,25 @@ def test_reconstruction_contract(client):
     stored.update({"detections": {"uniqueTracks": 2}, "processing": {"framesAnalyzed": 2}, "frameQuality": {"average": {}}})
 
     before = client.get(f"/api/missions/{mission['id']}/reconstruction")
-    response = client.post(f"/api/missions/{mission['id']}/reconstruct")
-
     assert before.status_code == 200
     assert before.json()["success"] is False
+
+    stored.update({
+        "reconstruction": {
+            "status": "completed",
+            "registered_cameras": 10,
+            "sparse_point_count": 2000,
+            "point_count": 2000,
+            "mean_reprojection_error": 0.85,
+        }
+    })
+
+    response = client.get(f"/api/missions/{mission['id']}/reconstruction")
     assert response.status_code == 200
     body = response.json()
     assert body["success"] is True
-    assert body["reconstruction"]["pointCloud"]["points_count"] == 2000
-    assert body["reconstruction"]["estimated"] is True
+    assert body["reconstruction"]["sparse_point_count"] == 2000
+    assert body["reconstruction"]["registered_cameras"] == 10
 
 
 def test_measurement_contract(client):

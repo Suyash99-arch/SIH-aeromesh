@@ -121,134 +121,48 @@ def build_mission_report(mission_id: str, mission_data: Any = None) -> dict[str,
             break
 
     # ----------------------------------------------------
-    # PHASE 4.5 / DETECTION & TRACKING
-    # All data comes from THIS mission's own artifacts only.
-    # No reads from data/validation or any shared path.
+    # PHASE 4.5 / DETECTION, TRACKING & RECONSTRUCTION (Canonical Source)
     # ----------------------------------------------------
+    from backend.summary_builder import build_canonical_mission_summary
+    canonical_summary = build_canonical_mission_summary(mission_id, data)
 
-    detection_info = data.get("detections") or {}
-    tracking_info = data.get("tracking") or {}
-    video_info = data.get("video") or data.get("video_metadata") or {}
+    detection_info = dict(data.get("detections") or {})
+    tracking_info = dict(data.get("tracking") or {})
+    video_info = dict(data.get("video") or data.get("video_metadata") or {})
 
-    if True:  # always use mission-own data only
-        if isinstance(video_info.get("resolution"), dict):
-            res_d = video_info["resolution"]
-            w = res_d.get("width", 1920)
-            h = res_d.get("height", 1080)
-            video_info["resolution"] = f"{w}x{h}"
-            video_info["width"] = w
-            video_info["height"] = h
-        elif not video_info.get("resolution"):
-            video_info["resolution"] = "1920x1080"
-            video_info.setdefault("width", 1920)
-            video_info.setdefault("height", 1080)
+    # Sync with canonical summary
+    can_det = canonical_summary.get("detection", {})
+    can_trk = canonical_summary.get("tracking", {})
+    can_recon = canonical_summary.get("reconstruction", {})
 
-        # Benchmark-specific authoritative fixture binding for phase5_drone_validation ONLY
-        if mission_id == "phase5_drone_validation":
-            p4_file = DATA_DIR / "validation" / "phase4" / "phase4_validation.json"
-            if p4_file.exists():
-                try:
-                    with open(p4_file, "r", encoding="utf-8") as f:
-                        p4_data = json.load(f)
-                        det_m = p4_data.get("detection_metrics", {})
-                        trk_m = p4_data.get("tracking_metrics", {})
-                        detection_info["total_detections"] = det_m.get("total_detections", 399)
-                        detection_info["detections_by_class"] = det_m.get("detections_by_class", {})
-                        detection_info["model"] = "yolo11n"
-                        detection_info["confidence_stats"] = {"mean": 0.72, "min": 0.45, "max": 0.95}
-                        tracking_info["unique_tracks"] = trk_m.get("unique_tracks", 23)
-                        tracking_info["tracks_by_class"] = {"car": 21, "train": 1, "truck": 1}
-                except Exception:
-                    pass
+    detection_info["total_detections"] = can_det.get("total_detections", detection_info.get("total_detections", 0))
+    detection_info["detections_by_class"] = can_det.get("detections_by_class", detection_info.get("detections_by_class", {}))
+    detection_info.setdefault("confidence_stats", can_det.get("confidence_stats", {"min": 0.0, "max": 0.0, "mean": 0.0}))
+    detection_info.setdefault("model", can_det.get("model", "aeromesh_yolo"))
+    detection_info.setdefault("model_version", "aeromesh-visdrone")
 
-        detector_meta = data.get("detector") or {}
-        tracks_list = data.get("tracks") or []
-        obs_list = detection_info.get("observations") or []
+    tracking_info["unique_tracks"] = can_trk.get("unique_tracks", tracking_info.get("unique_tracks", 0))
+    tracking_info["tracks_by_class"] = can_trk.get("tracks_by_class", tracking_info.get("tracks_by_class", {}))
+    tracking_info.setdefault("tracker", can_trk.get("tracker", "Ultralytics persistent ByteTrack"))
+    tracking_info.setdefault("tracker_type", "bytetrack")
 
-        # Determine total_detections authentically from actual observations/tracks
-        tot_det = detection_info.get("total_detections")
-        if tot_det is None or tot_det == 0:
-            if obs_list:
-                tot_det = len(obs_list)
-            elif detection_info.get("count") is not None and int(detection_info["count"]) > 0:
-                tot_det = int(detection_info["count"])
-            elif detection_info.get("uniqueTracks") is not None and int(detection_info["uniqueTracks"]) > 0:
-                tot_det = int(detection_info["uniqueTracks"])
-            elif tracks_list:
-                tot_det = len(tracks_list)
-            else:
-                tot_det = int(data.get("objects", {}).get("total", 0))
-
-        detection_info["total_detections"] = tot_det
-        detection_info.setdefault("count", tot_det)
-        detection_info.setdefault("model", detector_meta.get("model", "aeromesh_yolo"))
-        detection_info.setdefault("model_version", detector_meta.get("model", "aeromesh-visdrone"))
-
-        # Compute detections_by_class
-        if not detection_info.get("detections_by_class"):
-            if obs_list:
-                by_c = {}
-                for o in obs_list:
-                    c = o.get("class", "unknown")
-                    by_c[c] = by_c.get(c, 0) + 1
-                detection_info["detections_by_class"] = by_c
-            elif detection_info.get("byClass"):
-                detection_info["detections_by_class"] = dict(detection_info["byClass"])
-            elif tracks_list:
-                by_c = {}
-                for t in tracks_list:
-                    c = t.get("class", "unknown")
-                    by_c[c] = by_c.get(c, 0) + 1
-                detection_info["detections_by_class"] = by_c
-            else:
-                detection_info["detections_by_class"] = {}
-
-        # Compute confidence_stats
-        conf_values = []
-        if obs_list:
-            conf_values = [float(o["confidence"]) for o in obs_list if isinstance(o, dict) and o.get("confidence") is not None]
-        elif tracks_list:
-            conf_values = [float(t["confidence"]) for t in tracks_list if isinstance(t, dict) and t.get("confidence") is not None]
-
-        if conf_values:
-            detection_info["confidence_stats"] = {
-                "min": round(min(conf_values), 4),
-                "max": round(max(conf_values), 4),
-                "mean": round(sum(conf_values) / len(conf_values), 4),
-            }
-        else:
-            detection_info.setdefault("confidence_stats", {"min": 0.0, "max": 0.0, "mean": 0.0})
-
-        # Tracking info
-        uniq_trks = tracking_info.get("unique_tracks")
-        if not uniq_trks:
-            uniq_trks = detection_info.get("uniqueTracks") or len(tracks_list)
-        tracking_info["unique_tracks"] = uniq_trks
-        tracking_info.setdefault("tracker", "Ultralytics persistent ByteTrack")
-        tracking_info.setdefault("tracker_type", "bytetrack")
-        if not tracking_info.get("tracks_by_class"):
-            if tracks_list:
-                trk_by_c = {}
-                for t in tracks_list:
-                    c = t.get("class", "unknown")
-                    trk_by_c[c] = trk_by_c.get(c, 0) + 1
-                tracking_info["tracks_by_class"] = trk_by_c
-            else:
-                tracking_info["tracks_by_class"] = detection_info.get("detections_by_class", {})
+    if isinstance(video_info.get("resolution"), dict):
+        res_d = video_info["resolution"]
+        w = res_d.get("width", 1920)
+        h = res_d.get("height", 1080)
+        video_info["resolution"] = f"{w}x{h}"
+        video_info["width"] = w
+        video_info["height"] = h
+    elif not video_info.get("resolution"):
+        video_info["resolution"] = "1920x1080"
+        video_info.setdefault("width", 1920)
+        video_info.setdefault("height", 1080)
 
     # ----------------------------------------------------
     # PHASE 5 / 3D RECONSTRUCTION & MESH (per-mission only)
     # ----------------------------------------------------
 
-    rec_info = dict(data.get("reconstruction") or {})
-    # Always merge from disk reconstruction_metadata.json if available
-    try:
-        from backend.reconstruction import get_reconstruction_metadata
-        disk_meta = get_reconstruction_metadata(mission_id)
-        if disk_meta:
-            rec_info = {**disk_meta, **rec_info}
-    except Exception:
-        pass
+    rec_info = dict(can_recon)
 
     # --- Normalise reconstruction fields from single canonical source ---
     reg_cams = int(
@@ -298,28 +212,25 @@ def build_mission_report(mission_id: str, mission_data: Any = None) -> dict[str,
     rec_info["point_count"] = pts_cnt
     rec_info["sparse_points_count"] = pts_cnt
 
-    if total_imgs == 0:
-        rec_info["status"] = "NOT_RUN"
-        rec_info["sparse_points_note"] = "Not available: 3D reconstruction pipeline was not executed for this mission"
-    elif reg_cams == 0 and pts_cnt > 0:
-        _violation = f"sparse_points_gt0_but_cameras_0: {pts_cnt} points, 0 cameras — marking SfM as FAILED"
-        logger.warning("Report consistency violation: %s", _violation)
-        rec_info["sfm_failure"] = _violation
-        rec_info["status"] = "SFM_FAILED"
-        rec_info["sparse_points_note"] = "Not available: SfM registered 0 cameras; points from uncalibrated depth prior fallback"
-    elif reg_cams == 0:
-        rec_info["status"] = "SFM_FAILED"
-        rec_info["sparse_points_note"] = "Not available: 0 cameras registered during incremental SfM"
+    if reg_cams < 3:
+        rec_info["status"] = "FAILED"
+        rec_info["sparse_points_note"] = "Not available: Insufficient camera poses registered during incremental SfM (< 3 cameras)"
+        pts_cnt = 0
+        dense_pts = 0
+        mesh_verts = 0
+        mesh_faces = 0
+        rec_info["sparse_point_count"] = 0
+        rec_info["point_count"] = 0
+        rec_info["dense_point_count"] = 0
+        rec_info["mean_reprojection_error_px"] = None
+        rec_info["mesh_status"] = "UNAVAILABLE"
     elif mesh_faces > 0 or data.get("status") == "complete" or rec_info.get("status") == "MESH_GENERATED":
         rec_info["status"] = "MESH_GENERATED"
-    else:
-        rec_info["status"] = "AVAILABLE"
-
-    # Invariant: mesh AVAILABLE only if faces > 0
-    if mesh_faces > 0:
         rec_info["mesh_status"] = "AVAILABLE"
     else:
-        rec_info["mesh_status"] = "UNAVAILABLE"
+        rec_info["status"] = "AVAILABLE"
+        rec_info["mesh_status"] = "AVAILABLE" if mesh_faces > 0 else "UNAVAILABLE"
+
     rec_info["mesh_vertices"] = mesh_verts
     rec_info["mesh_faces"] = mesh_faces
 

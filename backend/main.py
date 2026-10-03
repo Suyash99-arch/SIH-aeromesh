@@ -537,14 +537,20 @@ class MissionData:
                     return
             except Exception as exc:
                 logger.warning("Database read unavailable; using JSON fallback: %s", exc)
-        mission_file = MISSIONS_DIR / f"{self.mission_id}.json"
-        if mission_file.exists():
-            try:
-                with open(mission_file, "r", encoding="utf-8") as f:
-                    self.data = json.load(f)
-                    return
-            except Exception as exc:
-                logger.warning("Failed reading %s: %s", mission_file, exc)
+        candidate_files = [
+            MISSIONS_DIR / f"{self.mission_id}.json",
+            MISSIONS_DIR / self.mission_id / "mission.json",
+            DATA_DIR / "objects" / "missions" / f"{self.mission_id}.json",
+            DATA_DIR / "objects" / "missions" / self.mission_id / "mission.json",
+        ]
+        for mission_file in candidate_files:
+            if mission_file.exists():
+                try:
+                    with open(mission_file, "r", encoding="utf-8") as f:
+                        self.data = json.load(f)
+                        return
+                except Exception as exc:
+                    logger.warning("Failed reading %s: %s", mission_file, exc)
 
         if self.mission_id == "phase5_drone_validation":
             val_file = DATA_DIR / "validation" / "phase5" / "phase5_reconstruction.json"
@@ -577,8 +583,10 @@ class MissionData:
         try:
             MISSIONS_DIR.mkdir(parents=True, exist_ok=True)
             mission_file = MISSIONS_DIR / f"{self.mission_id}.json"
-            with open(mission_file, "w", encoding="utf-8") as f:
+            temp_file = MISSIONS_DIR / f"{self.mission_id}.json.tmp.{os.getpid()}"
+            with open(temp_file, "w", encoding="utf-8") as f:
                 json.dump(self.data, f, indent=2)
+            os.replace(temp_file, mission_file)
         except Exception as exc:
             logger.warning("Failed writing mission JSON to disk: %s", exc)
     
@@ -1715,12 +1723,13 @@ async def get_current_user_profile(user: UserRecord = Depends(get_current_user))
 @app.get("/api/v1/auth/demo-users")
 @app.get("/api/auth/demo-users", deprecated=True)
 async def get_demo_users():
-    """Expose available demo profiles in development only. Disabled in production. Never returns credentials."""
+    """Expose available demo profiles in development only when DEV_ONLY is enabled. Disabled by default and in production."""
     env = os.getenv("ENVIRONMENT", "development").strip().lower()
-    if env != "development":
+    from backend.security import DEV_ONLY
+    if not DEV_ONLY or env != "development":
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
-            detail="Demo users endpoint is disabled in non-development environments",
+            detail="Demo users endpoint is disabled",
         )
     return {
         "success": True,
@@ -1782,7 +1791,7 @@ async def get_mission_status(mission_id: str):
 @app.post("/api/missions")
 @app.post("/missions")
 async def create_mission(
-    name: str = Query(...),
+    name: str = Query(""),
     mission_type: str = Query("single-pass"),
     location: str = Query(""),
     operator: str = Query(""),
@@ -1796,14 +1805,16 @@ async def create_mission(
     org_name = current_user.organization_name if current_user else None
     dept = current_user.department if current_user else None
     is_guest = (current_user.portal_type == PORTAL_GUEST) if current_user else False
-    effective_operator = operator or (current_user.full_name if current_user else "")
+    effective_name = name.strip() if name and name.strip() else "Untitled mission"
+    effective_location = location.strip() if location and location.strip() else "Not set"
+    effective_operator = operator.strip() if operator and operator.strip() else (current_user.full_name if current_user else "Not set")
 
     mission = MissionData(mission_id)
     mission.update({
         "id": mission_id,
-        "name": name,
-        "type": mission_type,
-        "location": location,
+        "name": effective_name,
+        "type": mission_type or "single-pass",
+        "location": effective_location,
         "operator": effective_operator,
         "owner_id": owner_id,
         "created_by": owner_email or effective_operator or "anonymous",
@@ -1956,6 +1967,11 @@ async def get_mission(mission_id: str):
         mission_dict["geospatial"] = canonical["geospatial"]
         mission_dict["reconstruction"] = canonical["reconstruction"]
         mission_dict["spatial_fusion"] = canonical["spatial_fusion"]
+        mission_dict["detection"] = canonical["detection"]
+        mission_dict["detections"] = canonical["detection"]
+        mission_dict["tracking"] = canonical["tracking"]
+        mission_dict["tracks"] = canonical.get("tracks") or canonical.get("tracking", {}).get("tracks") or mission_dict.get("tracks") or []
+        mission_dict["objects_3d"] = canonical.get("spatial_fusion", {}).get("fused_objects", [])
         mission_dict["canonical_summary"] = canonical
     except Exception as exc:
         logger.warning("Could not assemble canonical summary for mission %s: %s", m_id, exc)
@@ -2200,8 +2216,8 @@ async def list_missions(
 
                 summary_m = {
                     "id": m_id,
-                    "name": m.get("name", m_id),
-                    "sector": m.get("sector", "Tactical Grid"),
+                    "name": m.get("name") or "Untitled mission",
+                    "sector": m.get("sector") or m.get("location") or "Not set",
                     "status": m.get("status", "ready"),
                     "priority": m.get("priority", "medium"),
                     "type": m.get("type", "Single-Pass Aerial Reconstruction"),
@@ -2701,7 +2717,6 @@ def get_mission_artifact_info(mission: MissionData, artifact_name: str) -> dict:
             f"missions/{m_id}/point_cloud.ply",
             f"missions/{m_id}/reconstruction/point_cloud.ply",
             f"missions/{m_id}/reconstruction/sparse_points.ply",
-            f"missions/{m_id}/reconstruction/hybrid_point_cloud.ply",
             f"{m_id}/point_cloud.ply",
         ]:
             if storage.exists(key):
@@ -2711,7 +2726,7 @@ def get_mission_artifact_info(mission: MissionData, artifact_name: str) -> dict:
             pc_path = get_reconstruction_pointcloud_path(m_id)
             if not pc_path or not pc_path.exists():
                 for base in [MISSIONS_DIR / m_id, MISSIONS_DIR / m_id / "reconstruction", DATA_DIR / "objects" / "missions" / m_id, DATA_DIR / "objects" / "missions" / m_id / "reconstruction"]:
-                    for fn in ["point_cloud.ply", "sparse_points.ply", "hybrid_point_cloud.ply"]:
+                    for fn in ["point_cloud.ply", "sparse_points.ply"]:
                         candidate = base / fn
                         if candidate.exists() and candidate.stat().st_size > 0:
                             pc_path = candidate
@@ -4554,8 +4569,14 @@ async def get_mission_reconstruction(mission_id: str):
 
     # Ensure outer success and nested reconstruction success contract is strictly identical
     raw_success = reconstruction.get("success")
-    if raw_success is False or reconstruction.get("status") in ("FAILED", "UNKNOWN"):
+    reg_cams = int(reconstruction.get("registered_cameras", 0))
+    if raw_success is False or reconstruction.get("status") in ("FAILED", "UNKNOWN") or reg_cams < 3:
         is_success = False
+        reconstruction["point_cloud_url"] = None
+        reconstruction["mesh_url"] = None
+        reconstruction["sparse_point_count"] = 0
+        reconstruction["point_count"] = 0
+        reconstruction["dense_point_count"] = 0
     else:
         is_success = bool(reconstruction.get("point_count", 0) > 0 or get_reconstruction_pointcloud_path(m_id) is not None)
     
@@ -4952,89 +4973,16 @@ async def generate_reconstruction(mission_id: str):
             "reconstruction": recon_res,
         }
     
-    detections = mission.get("detections")
-    if not detections:
-        raise HTTPException(status_code=400, detail="No detections available")
-    
-    # Generate point cloud from detections
-    point_cloud = _generate_point_cloud(mission_id, detections)
-    
-    reconstruction = {
-        "status": "complete",
-        "kind": _reconstruction_kind(mission.get("type")),
-        "pointCloud": point_cloud,
-        **_estimate_reconstruction_metrics(
-            mission.get("processing") or {},
-            mission.get("frameQuality") or {},
-            detections,
-        ),
-        "uncertainty": {
-            "overall": 0.13,
-            "byRegion": [
-                {"region": "north", "uncertainty": 0.08},
-                {"region": "east", "uncertainty": 0.12},
-                {"region": "south", "uncertainty": 0.18},
-                {"region": "west", "uncertainty": 0.25}
-            ]
+    return {
+        "success": False,
+        "detail": "Video source required to execute photogrammetric reconstruction.",
+        "reconstruction": {
+            "status": "FAILED",
+            "registered_cameras": 0,
+            "sparse_point_count": 0,
+            "mesh_status": "UNAVAILABLE",
+            "error": "No video source available on disk for reconstruction.",
         }
-    }
-    
-    mission.update({"reconstruction": reconstruction})
-    
-    return {
-        "success": True,
-        "reconstruction": reconstruction
-    }
-
-def _estimate_reconstruction_metrics(
-    processing: dict, frame_quality: dict, detections: dict
-) -> dict:
-    """Estimate coverage from available evidence, without presenting it as measured geometry."""
-    frames_analyzed = max(0, int(processing.get("framesAnalyzed", 0) or 0))
-    average = frame_quality.get("average") or {}
-    sharpness = max(0.0, min(100.0, float(average.get("sharpness", 0) or 0)))
-    unique_tracks = max(0, int(detections.get("uniqueTracks", 0) or 0))
-    frame_factor = min(frames_analyzed / 300.0, 1.0)
-    track_density = min(unique_tracks / max(frames_analyzed, 1) * 100.0, 100.0)
-    observed = round(max(20.0, min(94.0, 24.0 + frame_factor * 38.0 + sharpness * 0.28)))
-    partial = round(max(3.0, min(55.0, (100.0 - observed) * 0.62)))
-    occluded = round(max(2.0, 100.0 - observed - partial))
-    confidence = round(
-        max(20.0, min(96.0, 35.0 + sharpness * 0.38 + frame_factor * 22.0 + track_density * 0.15))
-    )
-    return {
-        "observedSurface": observed,
-        "partialSurface": partial,
-        "occludedSurface": occluded,
-        "confidence": confidence,
-        "estimated": True,
-        "estimateMethod": "Heuristic from analyzed-frame count, average sharpness, and detection density",
-    }
-
-
-def _reconstruction_kind(mission_type: Optional[str]) -> str:
-    """Map the operator-selected mission type to a supported procedural scene."""
-    normalized = (mission_type or "").lower()
-    if "survey" in normalized or "urban" in normalized:
-        return "urban"
-    if "infrastructure" in normalized or "bridge" in normalized:
-        return "bridge"
-    if "emergency" in normalized or "river" in normalized or "water" in normalized:
-        return "river"
-    return "default"
-
-
-def _generate_point_cloud(mission_id: str, detections: dict) -> dict:
-    """Generate basic point cloud from detections"""
-    unique_tracks = detections.get("uniqueTracks", 5)
-    points_count = min(1000 * unique_tracks, 25000)
-    
-    return {
-        "points_count": points_count,
-        "coverage": min(100, max(0, unique_tracks * 4)),
-        "density": "medium",
-        "color_confidence": 0.78,
-        "structure_confidence": 0.82
     }
 
 def _generate_findings(result: dict) -> list:
