@@ -26,12 +26,27 @@ export default function ProcessingProgressPage({ mission, navigate }) {
   const [autoRefresh, setAutoRefresh] = useState(true);
   const missionStatus = (statusData?.status ? (statusData.status === "PROCESSING" ? "processing" : statusData.status === "QUEUED" ? "queued" : statusData.status.toLowerCase()) : null) || mission?.status;
 
-  // Poll for updates every 2 seconds if still processing or queued
+  // Poll for updates with exponential backoff if still processing or queued
   useEffect(() => {
     let mounted = true;
+    let timer = null;
+    let delay = 2000;
+
+    const isTerminal = (st) => {
+      const s = String(st || "").toLowerCase();
+      return (
+        s === "complete" ||
+        s === "completed" ||
+        s === "reconstruction_ready" ||
+        s === "processing_complete" ||
+        s === "failed" ||
+        s === "interrupted" ||
+        s === "unavailable"
+      );
+    };
 
     const fetchStatus = async () => {
-      if (!mission?.id) return;
+      if (!mission?.id || !mounted) return;
       try {
         const [updatedMission, status] = await Promise.all([
           getMission(mission.id, true),
@@ -44,33 +59,38 @@ export default function ProcessingProgressPage({ mission, navigate }) {
           setDetections(updatedMission.detections);
           setFrameQuality(updatedMission.frameQuality);
           setReconstruction(updatedMission.reconstruction);
-
-          if (updatedMission.status !== "processing" && updatedMission.status !== "queued") {
-            setAutoRefresh(false);
-          }
         }
         if (status) {
           setStatusData(status);
         }
+
+        const currentSt = status?.status || updatedMission?.status;
+        if (isTerminal(currentSt)) {
+          setAutoRefresh(false);
+          return; // Stop polling on terminal states
+        }
+
+        delay = Math.min(delay * 1.25, 8000);
+        timer = setTimeout(fetchStatus, delay);
       } catch (err) {
         console.warn("[ProcessingPage] Poll error:", err);
+        setAutoRefresh(false);
       }
     };
 
-    fetchStatus();
+    if (autoRefresh && !isTerminal(missionStatus)) {
+      fetchStatus();
+    }
 
-    if (!autoRefresh && missionStatus !== "processing" && missionStatus !== "queued") return;
-
-    const interval = setInterval(fetchStatus, 2000);
     return () => {
       mounted = false;
-      clearInterval(interval);
+      if (timer) clearTimeout(timer);
     };
-  }, [mission?.id, missionStatus, autoRefresh]);
+  }, [mission?.id, autoRefresh]);
 
   const isComplete = missionStatus === "complete" || missionStatus === "reconstruction_ready" || missionStatus === "processing_complete";
   const isProcessing = missionStatus === "processing";
-  const isFailed = missionStatus === "failed" || statusData?.status === "FAILED" || statusData?.status === "failed";
+  const isFailed = missionStatus === "failed" || missionStatus === "interrupted" || statusData?.status === "FAILED" || statusData?.status === "failed" || statusData?.status === "INTERRUPTED" || statusData?.status === "interrupted";
   const isQueued = missionStatus === "queued" || statusData?.status === "QUEUED" || statusData?.status === "queued";
   const queuePos = statusData?.queue_position || mission?.queue_position || 1;
 

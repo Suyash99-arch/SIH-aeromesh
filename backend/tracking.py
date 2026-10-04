@@ -131,8 +131,13 @@ class ByteTrackAdapter:
     ) -> TrackRecord | None:
         best = None
         best_score = self.iou_threshold
+        dynamic_vehicles = {"car", "van", "truck", "bus", "tricycle", "automobile", "vehicle"}
         for track in tracks:
-            if id(track) in matched or track.class_name != detection.class_name or not track.trajectory:
+            classes_compatible = (
+                track.class_name == detection.class_name or
+                (track.class_name.lower() in dynamic_vehicles and detection.class_name.lower() in dynamic_vehicles)
+            )
+            if id(track) in matched or not classes_compatible or not track.trajectory:
                 continue
             if track.observations:
                 prev_bbox = track.observations[-1]["bbox"]
@@ -602,11 +607,52 @@ class UltralyticsTracker:
             )
             self.last_stitched_count = num_stitched
             self.last_final_tracks = len({r.track_id for r in stitched_records if r.track_id})
-            return stitched_records
+            return apply_track_majority_vote(stitched_records)
 
         self.last_stitched_count = 0
         self.last_final_tracks = raw_tracks
-        return records
+        return apply_track_majority_vote(records)
+
+
+def apply_track_majority_vote(records: list[DetectionRecord], min_track_length: int = 1) -> list[DetectionRecord]:
+    """
+    Apply per-track majority vote for the class label across all frames.
+    Fixes car/van label flickering across frames for the same tracked physical object.
+    """
+    from collections import Counter
+    track_classes: dict[str, list[str]] = {}
+    for r in records:
+        if r.track_id:
+            track_classes.setdefault(r.track_id, []).append(r.class_name)
+
+    majority_class_by_track: dict[str, str] = {}
+    for tid, cl_list in track_classes.items():
+        if len(cl_list) >= min_track_length:
+            most_common = Counter(cl_list).most_common(1)[0][0]
+            majority_class_by_track[tid] = most_common
+        else:
+            majority_class_by_track[tid] = cl_list[0]
+
+    updated = []
+    for r in records:
+        if r.track_id and r.track_id in majority_class_by_track:
+            voted = majority_class_by_track[r.track_id]
+            if voted != r.class_name:
+                updated.append(
+                    DetectionRecord(
+                        frame_id=r.frame_id,
+                        class_name=voted,
+                        confidence=r.confidence,
+                        bbox=r.bbox,
+                        timestamp=r.timestamp,
+                        track_id=r.track_id,
+                    )
+                )
+            else:
+                updated.append(r)
+        else:
+            updated.append(r)
+    return updated
 
 
 def _scalar(value):

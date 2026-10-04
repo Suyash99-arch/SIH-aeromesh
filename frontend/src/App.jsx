@@ -154,6 +154,7 @@ export default function App() {
   useEffect(() => {
     let active = true;
     let pollTimer = null;
+    let backoffMs = 2000;
 
     const fetchMission = async (isPoll = false) => {
       if (!missionId) {
@@ -168,13 +169,18 @@ export default function App() {
           setMission(nextMission);
         } else {
           setMission(null);
+          return; // Stop polling if mission is unavailable / error
         }
 
-        // If the mission is actively processing or queued, poll every 2.5s
-        if (nextMission?.status === "processing" || nextMission?.status === "queued") {
+        // Only poll if the mission is actively processing or queued
+        const isLive = nextMission.status === "processing" || nextMission.status === "queued" || nextMission.status === "running";
+        if (isLive) {
           pollTimer = setTimeout(() => {
-            if (active) fetchMission(true);
-          }, 2500);
+            if (active) {
+              backoffMs = Math.min(backoffMs * 1.25, 8000);
+              fetchMission(true);
+            }
+          }, backoffMs);
         }
       } catch (err) {
         console.warn("[App] Error syncing mission:", err);

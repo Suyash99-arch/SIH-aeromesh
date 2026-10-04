@@ -249,26 +249,33 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
   }, []);
 
   const totalPeople = useMemo(() => {
-    return objects.filter((o) => {
-      const cls = (o.class || o.class_name || "").toLowerCase();
-      return cls === "person" || cls === "pedestrian" || cls === "people" || cls === "human";
-    }).length;
-  }, [objects]);
+    if (objects && objects.length > 0) {
+      return objects.filter((o) => {
+        const cls = (o.class || o.class_name || "").toLowerCase();
+        return cls === "person" || cls === "pedestrian" || cls === "people" || cls === "human";
+      }).length;
+    }
+    return mission?.objects?.people ?? 0;
+  }, [objects, mission?.objects?.people]);
 
   const totalVehicles = useMemo(() => {
-    return objects.filter((o) => {
-      const cls = (o.class || o.class_name || "").toLowerCase();
-      return (
-        cls === "car" ||
-        cls === "truck" ||
-        cls === "bus" ||
-        cls === "van" ||
-        cls === "bicycle" ||
-        cls === "motorcycle" ||
-        cls === "vehicle"
-      );
-    }).length;
-  }, [objects]);
+    if (objects && objects.length > 0) {
+      return objects.filter((o) => {
+        const cls = (o.class || o.class_name || "").toLowerCase();
+        return (
+          cls === "car" ||
+          cls === "truck" ||
+          cls === "bus" ||
+          cls === "van" ||
+          cls === "bicycle" ||
+          cls === "motorcycle" ||
+          cls === "vehicle" ||
+          cls === "tricycle"
+        );
+      }).length;
+    }
+    return mission?.objects?.vehicles ?? 0;
+  }, [objects, mission?.objects?.vehicles]);
 
   const entryExitPointsCount = useMemo(() => {
     return customMarkings.filter((m) => {

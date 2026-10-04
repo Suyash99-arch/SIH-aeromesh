@@ -3,7 +3,7 @@ import Icon from "../ui/Icon";
 import { resolveAssetUrl } from "../../api/missions";
 
 
-function getBoundingBoxStyle(bbox) {
+function getBoundingBoxStyle(bbox, frameWidth = 1920, frameHeight = 1080) {
   if (!bbox || !Array.isArray(bbox) || bbox.length < 4) return null;
   const [b0, b1, b2, b3] = bbox;
   // If normalized 0..1
@@ -15,10 +15,10 @@ function getBoundingBoxStyle(bbox) {
       height: `${b3 * 100}%`,
     };
   }
-  // Pixel coordinates in 1920x1080 standard sortie frame
-  const isMinMax = b2 > b0 && b3 > b1 && b2 > 100;
-  const frameW = 1920;
-  const frameH = 1080;
+  // Pixel coordinates in original image resolution
+  const frameW = frameWidth || 1920;
+  const frameH = frameHeight || 1080;
+  const isMinMax = b2 > b0 && b3 > b1;
   if (isMinMax) {
     return {
       left: `${(b0 / frameW) * 100}%`,
@@ -66,6 +66,11 @@ export default function VideoFramesTab({
   const videoRef = useRef(null);
   const [playbackSpeed, setPlaybackSpeed] = useState(1.0);
   const [filterClass, setFilterClass] = useState("all");
+  const [minConfidence, setMinConfidence] = useState(0.25);
+
+  const parsedRes = (mission?.video?.resolution || "").split("x");
+  const resolvedW = selectedKeyframe?.width || (parsedRes.length === 2 ? Number(parsedRes[0]) : null) || mission?.video?.width || 1920;
+  const resolvedH = selectedKeyframe?.height || (parsedRes.length === 2 ? Number(parsedRes[1]) : null) || mission?.video?.height || 1080;
 
   const filteredKeyframes = keyframes.filter((kf) => {
     if (filterClass === "all") return true;
@@ -334,46 +339,56 @@ export default function VideoFramesTab({
 
               {/* Real 2D Bounding Box Visual Overlays */}
               {selectedKeyframe.detections &&
-                selectedKeyframe.detections.map((det, i) => {
-                  const style = getBoundingBoxStyle(det.bbox);
-                  if (!style) return null;
-                  const color = getDetColor(det.class_name || det.class);
-                  return (
-                    <div
-                      key={i}
-                      style={{
-                        position: "absolute",
-                        ...style,
-                        border: `2px solid ${color}`,
-                        backgroundColor: `${color}18`,
-                        borderRadius: "3px",
-                        pointerEvents: "none",
-                        boxShadow: `0 0 8px ${color}60`,
-                        boxSizing: "border-box",
-                      }}
-                    >
-                      <span
+                selectedKeyframe.detections
+                  .filter((det) => {
+                    const conf = det.confidence != null ? (det.confidence > 1 ? det.confidence / 100 : det.confidence) : 1.0;
+                    if (conf < minConfidence) return false;
+                    if (filterClass !== "all" && filterClass !== "with_detections") {
+                      const cls = (det.class_name || det.class || "").toLowerCase();
+                      if (!cls.includes(filterClass.toLowerCase())) return false;
+                    }
+                    return true;
+                  })
+                  .map((det, i) => {
+                    const style = getBoundingBoxStyle(det.bbox, resolvedW, resolvedH);
+                    if (!style) return null;
+                    const color = getDetColor(det.class_name || det.class);
+                    return (
+                      <div
+                        key={i}
                         style={{
                           position: "absolute",
-                          top: "-17px",
-                          left: "-2px",
-                          background: color,
-                          color: "#061017",
-                          fontSize: "9px",
-                          fontWeight: 700,
-                          padding: "1px 5px",
+                          ...style,
+                          border: `2px solid ${color}`,
+                          backgroundColor: `${color}18`,
                           borderRadius: "3px",
-                          whiteSpace: "nowrap",
+                          pointerEvents: "none",
+                          boxShadow: `0 0 8px ${color}60`,
+                          boxSizing: "border-box",
                         }}
                       >
-                        {det.class_name || det.class || "object"}{" "}
-                        {det.confidence
-                          ? `${Math.round(det.confidence > 1 ? det.confidence : det.confidence * 100)}%`
-                          : ""}
-                      </span>
-                    </div>
-                  );
-                })}
+                        <span
+                          style={{
+                            position: "absolute",
+                            top: "-17px",
+                            left: "-2px",
+                            background: color,
+                            color: "#061017",
+                            fontSize: "9px",
+                            fontWeight: 700,
+                            padding: "1px 5px",
+                            borderRadius: "3px",
+                            whiteSpace: "nowrap",
+                          }}
+                        >
+                          {det.class_name || det.class || "object"}{" "}
+                          {det.confidence
+                            ? `${Math.round(det.confidence > 1 ? det.confidence : det.confidence * 100)}%`
+                            : ""}
+                        </span>
+                      </div>
+                    );
+                  })}
 
               <div className="preview-overlay-info">
                 <span>{selectedKeyframe.filename || selectedKeyframe.frame_id}</span>
@@ -405,6 +420,23 @@ export default function VideoFramesTab({
                       : 0)}
                 </span>
               </div>
+            </div>
+
+            {/* Confidence Slider Control */}
+            <div style={{ margin: "10px 0", padding: "8px 12px", background: "rgba(15, 23, 42, 0.7)", borderRadius: "6px", border: "1px solid rgba(255, 255, 255, 0.08)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11px", marginBottom: "4px", color: "#94a3b8" }}>
+                <span>Confidence Filter:</span>
+                <b style={{ color: "#38bdf8" }}>≥ {Math.round(minConfidence * 100)}%</b>
+              </div>
+              <input
+                type="range"
+                min="5"
+                max="95"
+                step="5"
+                value={Math.round(minConfidence * 100)}
+                onChange={(e) => setMinConfidence(Number(e.target.value) / 100)}
+                style={{ width: "100%", accentColor: "#38bdf8", cursor: "pointer" }}
+              />
             </div>
 
             {/* Detections Breakdown by Class */}

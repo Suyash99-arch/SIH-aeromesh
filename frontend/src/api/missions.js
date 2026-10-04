@@ -122,13 +122,31 @@ function normalizeMission(rawMission = {}) {
     rawMission.video?.totalFrames ||
     0;
 
+  let objectsObj = { ...baseDefaults.objects, ...(rawMission.objects || {}) };
+  const detByClass = rawMission.detection?.detections_by_class || rawMission.det_by_class || rawMission.detections_by_class || {};
+  if ((!objectsObj.total || objectsObj.total === 0) && Object.keys(detByClass).length > 0) {
+    const peopleCount = Object.entries(detByClass).reduce((acc, [k, v]) => ["person", "pedestrian", "people", "human"].includes(k.toLowerCase()) ? acc + Number(v) : acc, 0);
+    const vehicleClasses = ["car", "van", "truck", "bus", "tricycle", "motorcycle", "bicycle", "vehicle", "automobile"];
+    const vehiclesCount = Object.entries(detByClass).reduce((acc, [k, v]) => vehicleClasses.some(vc => k.toLowerCase().includes(vc)) ? acc + Number(v) : acc, 0);
+    const structuresCount = Object.entries(detByClass).reduce((acc, [k, v]) => ["building", "structure", "house", "tower", "bridge", "roof"].some(sc => k.toLowerCase().includes(sc)) ? acc + Number(v) : acc, 0);
+    const hazardsCount = Object.entries(detByClass).reduce((acc, [k, v]) => ["hazard", "fire", "smoke", "debris", "flood"].some(hc => k.toLowerCase().includes(hc)) ? acc + Number(v) : acc, 0);
+    const totalCount = Object.values(detByClass).reduce((acc, v) => acc + Number(v), 0);
+    objectsObj = {
+      total: totalCount,
+      people: peopleCount,
+      vehicles: vehiclesCount,
+      structures: structuresCount,
+      hazards: hazardsCount,
+    };
+  }
+
   const mission = {
     ...baseDefaults,
     ...rawMission,
     id: mId,
     frames,
     duration,
-    objects: { ...baseDefaults.objects, ...(rawMission.objects || {}) },
+    objects: objectsObj,
     telemetry: (rawMission.telemetry && Object.keys(rawMission.telemetry).length > 0)
       ? rawMission.telemetry
       : null,
@@ -192,8 +210,9 @@ function normalizeMission(rawMission = {}) {
   return mission;
 }
 
-// Mission state cache
+// Mission state cache and log throttle
 const missionCache = new Map();
+const loggedMissionStates = new Map();
 
 const getSeededMission = (missionId) =>
   seededMissions.find((mission) => mission.id === missionId);
@@ -285,7 +304,6 @@ export async function getMission(missionId, forceRefresh = true) {
   if (!forceRefresh && missionCache.has(missionId)) {
     const cached = missionCache.get(missionId);
     if (cached && cached.status !== "processing" && cached.canonical_summary) {
-      console.log(`[Mission] Cache hit for mission ${missionId}`);
       return cached;
     }
   }
@@ -296,7 +314,11 @@ export async function getMission(missionId, forceRefresh = true) {
     });
 
     if (response.status === 404) {
-      console.warn(`[Mission] Mission ${missionId} not found on backend`);
+      const lastLogged = loggedMissionStates.get(missionId);
+      if (lastLogged !== "404") {
+        loggedMissionStates.set(missionId, "404");
+        console.warn(`[Mission] Mission ${missionId} not found on backend`);
+      }
       return {
         id: missionId,
         name: `Mission Not Found: ${missionId}`,
@@ -311,13 +333,22 @@ export async function getMission(missionId, forceRefresh = true) {
     if (data.success) {
       const mission = normalizeMission(data.mission);
       missionCache.set(missionId, mission);
+      const lastLogged = loggedMissionStates.get(missionId);
+      if (lastLogged !== mission.status) {
+        loggedMissionStates.set(missionId, mission.status);
+        console.log(`[Mission] Loaded mission ${missionId} from API (status: ${mission.status})`);
+      }
       return mission;
     }
 
     // API returned success: false - treat as error
-    console.error(
-      `[Mission] API returned success: false for mission ${missionId}`,
-    );
+    const lastLogged = loggedMissionStates.get(missionId);
+    if (lastLogged !== "API_ERROR") {
+      loggedMissionStates.set(missionId, "API_ERROR");
+      console.error(
+        `[Mission] API returned success: false for mission ${missionId}`,
+      );
+    }
     return {
       id: missionId,
       name: `Error Loading Mission: ${missionId}`,

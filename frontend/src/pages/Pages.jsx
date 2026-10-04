@@ -360,17 +360,17 @@ export function OverviewPage({ mission, navigate }) {
               <Icon name="Box" size={18} />
             </div>
             <span className="dispatch-domain">3D Photogrammetry</span>
-            <span className={`badge-tag ${isProcessing ? "valid" : (safeMission.reconstruction?.registered_cameras ?? safeMission.reconstruction?.camera_count ?? 0) < 3 ? "low-conf" : "valid"}`}>
-              {isProcessing ? "PROCESSING" : (safeMission.reconstruction?.registered_cameras ?? safeMission.reconstruction?.camera_count ?? 0) < 3 ? "FAILED" : "SURFACE MESH"}
+            <span className={`badge-tag ${isProcessing ? "valid" : (safeMission.reconstruction?.registered_cameras ?? 0) < 3 ? "low-conf" : "valid"}`}>
+              {isProcessing ? "PROCESSING" : (safeMission.reconstruction?.registered_cameras ?? 0) < 3 ? "FAILED" : "SURFACE MESH"}
             </span>
           </div>
           <strong className="dispatch-title">
-            {isProcessing ? "Reconstruction In Progress" : (safeMission.reconstruction?.registered_cameras ?? safeMission.reconstruction?.camera_count ?? 0) < 3 ? "Reconstruction Failed" : "3D Reconstruction Ready"}
+            {isProcessing ? "Reconstruction In Progress" : (safeMission.reconstruction?.registered_cameras ?? 0) < 3 ? "Reconstruction Failed" : "3D Reconstruction Ready"}
           </strong>
           <p className="dispatch-meta">
-            {(safeMission.reconstruction?.registered_cameras ?? safeMission.reconstruction?.camera_count ?? 0) < 3
-              ? (safeMission.reconstruction?.error || `SfM registered ${safeMission.reconstruction?.registered_cameras ?? safeMission.reconstruction?.camera_count ?? 0} cameras`)
-              : `Surface mesh generated from ${safeMission.reconstruction?.registered_cameras ?? safeMission.reconstruction?.camera_count ?? safeMission.reconstruction?.registered_images ?? 0} registered keyframe cameras · ${Number(safeMission.reconstruction?.point_count || safeMission.reconstruction?.sparse_point_count || 0).toLocaleString()} sparse points`}
+            {(safeMission.reconstruction?.registered_cameras ?? 0) < 3
+              ? (safeMission.reconstruction?.error || `SfM registered ${safeMission.reconstruction?.registered_cameras ?? 0} cameras — insufficient parallax/overlap`)
+              : `Surface mesh generated from ${safeMission.reconstruction?.registered_cameras ?? 0} registered keyframe cameras · ${Number(safeMission.reconstruction?.point_count || safeMission.reconstruction?.sparse_point_count || 0).toLocaleString()} sparse points`}
           </p>
           <div className="dispatch-action-link">
             <span>Open 3D Reconstruction</span>
@@ -2562,8 +2562,8 @@ function Reports({ mission, notice }) {
                       <b>Registered Cameras</b>
                     </td>
                     <td>
-                      {repRec.registered_cameras || 20} /{" "}
-                      {repRec.total_images || 20}
+                      {repRec.registered_cameras ?? 0} /{" "}
+                      {repRec.total_images ?? 0}
                     </td>
                   </tr>
                   <tr>
@@ -2571,15 +2571,15 @@ function Reports({ mission, notice }) {
                       <b>Sparse Points</b>
                     </td>
                     <td>
-                      {(repRec.sparse_points_count || 12916).toLocaleString()}
+                      {Number(repRec.sparse_points_count ?? repRec.sparse_point_count ?? 0).toLocaleString()}
                     </td>
                     <td>
                       <b>Mean Reprojection Error</b>
                     </td>
                     <td>
-                      {repRec.mean_reprojection_error_px?.toFixed(4) ||
-                        "0.9785"}{" "}
-                      px
+                      {repRec.mean_reprojection_error_px != null
+                        ? `${repRec.mean_reprojection_error_px.toFixed(4)} px`
+                        : "N/A"}
                     </td>
                   </tr>
                   <tr>
@@ -2587,15 +2587,15 @@ function Reports({ mission, notice }) {
                       <b>Surface Mesh</b>
                     </td>
                     <td>
-                      {repRec.mesh_status || "AVAILABLE"} (
-                      {repRec.mesh_method || "pycolmap_poisson"})
+                      {repRec.mesh_status || "UNAVAILABLE"} (
+                      {repRec.mesh_method || "depth-fused"})
                     </td>
                     <td>
                       <b>Mesh Complexity</b>
                     </td>
                     <td>
-                      {(repRec.mesh_vertices || 28139).toLocaleString()}{" "}
-                      vertices · {(repRec.mesh_faces || 56120).toLocaleString()}{" "}
+                      {Number(repRec.mesh_vertices ?? 0).toLocaleString()}{" "}
+                      vertices · {Number(repRec.mesh_faces ?? 0).toLocaleString()}{" "}
                       faces
                     </td>
                   </tr>
@@ -2919,22 +2919,22 @@ function Reports({ mission, notice }) {
             <div className="detail-data" style={{ marginTop: "14px" }}>
               <Stat
                 label="SfM Cameras"
-                value={repRec.registered_cameras || 20}
+                value={repRec.registered_cameras ?? 0}
               />
               <Stat
                 label="Sparse Points"
-                value={repRec.sparse_points_count || 12916}
+                value={repRec.sparse_points_count ?? repRec.sparse_point_count ?? 0}
               />
               <Stat
                 label="Surface Mesh Faces"
-                value={repRec.mesh_faces || 56120}
+                value={repRec.mesh_faces ?? 0}
               />
-              <Stat label="Unique Tracks" value={repTrk.unique_tracks || 23} />
+              <Stat label="Unique Tracks" value={repTrk.unique_tracks ?? 0} />
               <Stat
                 label="Fused Objects"
-                value={repFusion.fused_objects_count || 3}
+                value={repFusion.fused_objects_count ?? repFusion.total_fused_objects ?? 0}
               />
-              <Stat label="Calibrated Baseline" value="15.00 m" />
+              <Stat label="Scale Status" value={repMission?.is_calibrated ? "15.00 m (Calibrated)" : "Relative Scale (Uncalibrated)"} />
             </div>
 
             <div style={{ marginTop: "16px", display: "flex", gap: "10px" }}>
