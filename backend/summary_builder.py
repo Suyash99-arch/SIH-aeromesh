@@ -177,6 +177,20 @@ def build_canonical_mission_summary(
     else:
         det_list = data.get("findings") or []
 
+    if not det_list and mission_dir:
+        cand_det = mission_dir / "detections.json"
+        if cand_det.is_file():
+            try:
+                with open(cand_det, encoding="utf-8") as f_det:
+                    disk_det = json.load(f_det)
+                if isinstance(disk_det, dict):
+                    raw_detections = {**disk_det, **raw_detections} if isinstance(raw_detections, dict) else disk_det
+                    det_list = disk_det.get("observations") or disk_det.get("items") or []
+                elif isinstance(disk_det, list):
+                    det_list = disk_det
+            except Exception:
+                pass
+
     # Resolve detections_by_class
     det_by_class: Dict[str, int] = {}
     if isinstance(raw_detections, dict) and raw_detections.get("detections_by_class"):
@@ -445,6 +459,8 @@ def build_canonical_mission_summary(
         "detection": {
             "total_detections": total_detections,
             "detections_by_class": det_by_class,
+            "observations": det_list,
+            "uniqueTracks": unique_tracks,
             "mean_confidence": round(float(np.mean(conf_scores)), 2) if conf_scores else None,
             "model_name": data.get("detector", {}).get("name") or "aeromesh_yolo.pt",
             "model_path": os.getenv("YOLO_MODEL_PATH", "backend/models/aeromesh_yolo.pt"),

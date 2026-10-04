@@ -2228,7 +2228,10 @@ async def get_mission(mission_id: str):
         mission_dict["reconstruction"] = canonical["reconstruction"]
         mission_dict["spatial_fusion"] = canonical["spatial_fusion"]
         mission_dict["detection"] = canonical["detection"]
-        mission_dict["detections"] = canonical["detection"]
+        if isinstance(mission_dict.get("detections"), dict):
+            mission_dict["detections"] = {**mission_dict["detections"], **canonical["detection"]}
+        else:
+            mission_dict["detections"] = canonical["detection"]
         mission_dict["tracking"] = canonical["tracking"]
         mission_dict["tracks"] = canonical.get("tracks") or canonical.get("tracking", {}).get("tracks") or mission_dict.get("tracks") or []
         mission_dict["objects_3d"] = canonical.get("spatial_fusion", {}).get("fused_objects", [])
