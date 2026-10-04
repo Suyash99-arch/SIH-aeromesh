@@ -1076,6 +1076,52 @@ async def startup_hardware_detection():
     # 3. Print Clean Startup Summary
     print_startup_summary(dev, env_info)
 
+    # 4. Orphaned Job Recovery: Convert stuck PROCESSING / QUEUED missions to INTERRUPTED
+    try:
+        orphaned_count = 0
+        if MISSIONS_DIR.exists():
+            for m_dir in MISSIONS_DIR.iterdir():
+                if not m_dir.is_dir():
+                    continue
+                m_file = m_dir / "mission.json"
+                if not m_file.is_file():
+                    continue
+                try:
+                    with open(m_file, "r", encoding="utf-8") as f:
+                        m_data = json.load(f)
+                    st = str(m_data.get("status", "")).lower()
+                    if st in ("processing", "queued", "running"):
+                        logger.warning(
+                            "Orphaned job detected for mission %s (status=%s, progress=%s%%). Marking INTERRUPTED.",
+                            m_dir.name,
+                            st,
+                            m_data.get("progress", 0),
+                        )
+                        m_data["status"] = "interrupted"
+                        m_data["failed_stage"] = m_data.get("failed_stage") or "pipeline"
+                        m_data["error"] = "Server restarted while processing was active. Please retry."
+                        m_data["error_message"] = "Server restarted while processing was active. Please retry."
+                        m_data["interrupted_at"] = datetime.now(timezone.utc).isoformat()
+                        with open(m_file, "w", encoding="utf-8") as f:
+                            json.dump(m_data, f, indent=2)
+                        
+                        j_id = m_data.get("processing_job_id") or m_data.get("job_id")
+                        if j_id:
+                            update_job(
+                                str(j_id),
+                                status="INTERRUPTED",
+                                stage="INTERRUPTED",
+                                error_message="Server restarted while processing was active. Please retry.",
+                                message="Processing interrupted by server restart.",
+                            )
+                        orphaned_count += 1
+                except Exception as m_exc:
+                    logger.warning("Error checking mission %s for orphaned state: %s", m_dir.name, m_exc)
+        if orphaned_count > 0:
+            logger.info("Orphaned job recovery completed: %d job(s) marked INTERRUPTED.", orphaned_count)
+    except Exception as exc:
+        logger.warning("Orphaned job recovery scan failed: %s", exc)
+
 
 
 @app.get("/api/v1/ai-engine/status")
@@ -3322,8 +3368,8 @@ async def get_processing_status(mission_id: str):
     job = get_job(str(job_id)) if job_id else None
 
     raw_status = str(mission.get("status", "")).lower()
-    is_mission_complete = raw_status in ("complete", "reconstruction_ready", "ready", "processing_complete")
-    is_mission_failed = raw_status in ("failed", "error")
+    is_mission_complete = raw_status in ("complete", "reconstruction_ready", "processing_complete")
+    is_mission_failed = raw_status in ("failed", "error", "interrupted")
     is_mission_queued = raw_status == "queued" or (job and job.get("status") == "QUEUED")
 
     current_stage_id = None if is_mission_queued else ((job.get("current_stage_id") if job else None) or ("report" if is_mission_complete else "video"))
@@ -3358,7 +3404,7 @@ async def get_processing_status(mission_id: str):
             "progress": st_progress,
         })
 
-    overall_status = "QUEUED" if is_mission_queued else ((job.get("status") if job else None) or ("COMPLETED" if is_mission_complete else ("FAILED" if is_mission_failed else "PENDING")))
+    overall_status = "INTERRUPTED" if raw_status == "interrupted" else ("QUEUED" if is_mission_queued else ((job.get("status") if job else None) or ("COMPLETED" if is_mission_complete else ("FAILED" if is_mission_failed else "PENDING"))))
     progress_percent = 0 if is_mission_queued else (100 if is_mission_complete else (job.get("progress_percent", 0) if job else 0))
     queue_pos = mission.get("queue_position", 1 if is_mission_queued else 0)
 
@@ -3841,6 +3887,15 @@ def run_full_pipeline_task(
             result["video"] = {**video_info, **result.get("video", {}), **real_summary}
             result["processing"]["status"] = "COMPLETE"
             result["processing"]["warning"] = "" if result.get("detections", {}).get("uniqueTracks", 0) else "No confident detections observed."
+
+            # Save authoritative detections.json to mission directory for single source of truth
+            try:
+                mission_dir = MISSIONS_DIR / mission_id
+                mission_dir.mkdir(parents=True, exist_ok=True)
+                with open(mission_dir / "detections.json", "w", encoding="utf-8") as f_det:
+                    json.dump(result.get("detections", {}), f_det, indent=2)
+            except Exception as e_det:
+                logger.warning("Failed writing detections.json to mission dir: %s", e_det)
         except Exception as exc:
             logger.warning("Detection model notice: %s", exc)
             if "processing" not in result or not isinstance(result["processing"], dict):
@@ -4059,8 +4114,8 @@ def run_full_pipeline_task(
                 "output_path": reconstruction_result.get("output_path"),
                 "error": reconstruction_result.get("error"),
                 "mesh": mesh_data,
-                "point_cloud_url": f"/api/missions/{mission_id}/reconstruction/pointcloud",
-                "mesh_url": f"/api/missions/{mission_id}/reconstruction/mesh",
+                "point_cloud_url": f"/api/missions/{mission_id}/reconstruction/pointcloud" if (reg_cams >= 3 and pts_count > 0) else None,
+                "mesh_url": f"/api/missions/{mission_id}/reconstruction/mesh" if (reg_cams >= 3 and has_mesh) else None,
                 "stages": reconstruction_result.get("stages", {}),
                 "scale": reconstruction_result.get("scale", {}),
             },
@@ -4233,7 +4288,12 @@ async def process_video(
     if sync is not None:
         opts_dict["sync"] = sync
 
-    req = payload if payload is not None else ProcessMissionRequest(**opts_dict)
+    if payload is not None:
+        p_dict = payload.model_dump()
+        p_dict.update(opts_dict)
+        req = ProcessMissionRequest(**p_dict)
+    else:
+        req = ProcessMissionRequest(**opts_dict)
 
     mission = MissionData(mission_id)
     if not mission.data:
@@ -4631,6 +4691,9 @@ def _run_yolo_detection(
             continue
         class_name = _remap_visdrone_class(record.class_name) if is_aeromesh else record.class_name
         filtered.append(DetectionRecord(record.frame_id, class_name, record.confidence, record.bbox, record.timestamp, record.track_id))
+
+    from backend.tracking import apply_track_majority_vote
+    filtered = apply_track_majority_vote(filtered)
 
     logger.info("[_run_yolo_detection] Filtering summary: %d kept, %d dropped by aeromesh per-class threshold, %d dropped by class whitelist",
                 len(filtered), dropped_aeromesh_conf, dropped_class_filter)

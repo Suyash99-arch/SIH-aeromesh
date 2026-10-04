@@ -11,6 +11,10 @@
 #  7. Opens browser at frontend URL (proxied to backend on 127.0.0.1:8000)
 # ==============================================================================
 
+param(
+    [switch]$Reload
+)
+
 $ErrorActionPreference = "Stop"
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -68,9 +72,29 @@ if (-not (Test-Path $EnvFile)) {
     Write-Host "[OK] Local configuration .env present." -ForegroundColor Green
 }
 
+# Pre-flight check: Refuse to start if port 8000 is already in use
+try {
+    $existingConns = Get-NetTCPConnection -LocalPort 8000 -State Listen -ErrorAction SilentlyContinue
+    if ($existingConns) {
+        $busyPid = $existingConns[0].OwningProcess
+        Write-Host "[ERROR] Port 8000 is already in use by process PID $busyPid. Refusing to start duplicate backend instance." -ForegroundColor Red
+        Write-Host "Please terminate the existing backend instance before launching a new one: Stop-Process -Id $busyPid -Force" -ForegroundColor Yellow
+        exit 1
+    }
+} catch {
+    # If Get-NetTCPConnection is unavailable, continue
+}
+
 # 5. Launch Backend in Separate Terminal Window
-Write-Host "`n[Backend] Launching FastAPI backend server on http://127.0.0.1:8000..." -ForegroundColor Cyan
-$BackendCmd = "cd '$RepoRoot'; Write-Host 'Starting Hexa Spark Backend...' -ForegroundColor Cyan; & '$PythonExe' -m uvicorn backend.main:app --reload --host 127.0.0.1 --port 8000"
+$ReloadArgs = ""
+if ($Reload) {
+    Write-Host "`n[Backend] Opt-in live reload ENABLED for backend/ directory only." -ForegroundColor Yellow
+    $ReloadArgs = "--reload --reload-dir backend"
+} else {
+    Write-Host "`n[Backend] Running in STABLE mode (no --reload, immune to data/ file writes)." -ForegroundColor Green
+}
+Write-Host "[Backend] Launching FastAPI backend server on http://127.0.0.1:8000..." -ForegroundColor Cyan
+$BackendCmd = "cd '$RepoRoot'; Write-Host 'Starting Hexa Spark Backend...' -ForegroundColor Cyan; & '$PythonExe' -m uvicorn backend.main:app $ReloadArgs --host 127.0.0.1 --port 8000"
 Start-Process powershell -ArgumentList "-NoExit", "-Command", $BackendCmd -WorkingDirectory $RepoRoot
 
 # 6. Wait for Backend Health Check

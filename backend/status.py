@@ -21,6 +21,7 @@ class MissionStatus(str, Enum):
     QUEUED = "QUEUED"
     PROCESSING = "PROCESSING"
     FAILED = "FAILED"
+    INTERRUPTED = "INTERRUPTED"
     PARTIAL = "PARTIAL"
     COMPLETE = "COMPLETE"
 
@@ -65,6 +66,9 @@ def resolve_mission_status(
             return MissionStatus.QUEUED, None, None, stage_breakdown
         if job_status in ("PROCESSING", "RUNNING", "EXTRACTING_FRAMES", "DETECTING_OBJECTS", "TRACKING", "RECONSTRUCTING", "GENERATING_MESH", "FUSING_3D"):
             return MissionStatus.PROCESSING, None, None, stage_breakdown
+        if job_status == "INTERRUPTED":
+            err_msg = job_data.get("error_message") or "Processing was interrupted by a server restart. Please retry."
+            return MissionStatus.INTERRUPTED, "pipeline", err_msg, stage_breakdown
         if job_status == "FAILED" or job_stage == "FAILED":
             failed_stage = job_data.get("failed_stage") or job_stage or "PIPELINE"
             err_msg = job_data.get("error_message") or job_data.get("message") or "Unknown processing error"
@@ -73,11 +77,14 @@ def resolve_mission_status(
     raw_status = (mission_data.get("status") or "").lower()
     processing = mission_data.get("processing") or {}
 
-    # Check if currently processing or queued
+    # Check if currently processing, queued, or interrupted
     if raw_status in ("processing", "running"):
         return MissionStatus.PROCESSING, None, None, stage_breakdown
     if raw_status == "queued":
         return MissionStatus.QUEUED, None, None, stage_breakdown
+    if raw_status in ("interrupted",):
+        err_msg = mission_data.get("error") or mission_data.get("error_message") or "Processing was interrupted by a server restart. Please retry."
+        return MissionStatus.INTERRUPTED, "pipeline", err_msg, stage_breakdown
 
     # 2. Check if processing has ever run
     has_detections = bool(mission_data.get("detections")) or bool(mission_data.get("findings"))
