@@ -128,17 +128,17 @@ async def get_scene_manifest(scene_id: str):
     if point_count == 0:
         point_count = recon.get("points_count") or recon.get("sparse_point_count") or 0
 
-    cameras_count = recon.get("cameras_registered") or recon.get("registered_cameras") or frames_count or 0
-    faces_count = recon.get("faces_count") or (recon.get("mesh", {}).get("face_count", 0))
+    cameras_count = recon.get("registered_cameras", recon.get("cameras_registered", 0))
+    faces_count = recon.get("mesh_faces") or (recon.get("mesh", {}).get("face_count", 0)) if cameras_count >= 3 else 0
     reproj_err = recon.get("mean_reprojection_error") or 0.0
 
     stages = recon.get("stages") or {
         "sparse_sfm": {
-            "status": "COMPLETED",
+            "status": "COMPLETED" if cameras_count >= 3 else "FAILED",
             "engine": "COLMAP SfM (CPU)",
-            "points": point_count,
+            "points": point_count if cameras_count >= 3 else 0,
             "cameras": cameras_count,
-            "mean_reprojection_error": round(float(reproj_err), 2),
+            "mean_reprojection_error": round(float(reproj_err), 2) if cameras_count >= 3 else 0.0,
         },
         "dense_mvs": {
             "status": "SKIPPED_NO_GPU",
@@ -147,13 +147,13 @@ async def get_scene_manifest(scene_id: str):
             "reason": "N/A: NVIDIA CUDA GPU required for PatchMatch stereo (running on CPU).",
         },
         "surface_mesh": {
-            "status": "COMPLETED",
+            "status": "COMPLETED" if (cameras_count >= 3 and faces_count > 0) else "UNAVAILABLE",
             "engine": "Open3D Poisson (Depth 9)",
             "method": "camera_poisson_trimmed_cpu",
             "face_count": faces_count,
         },
         "texturing": {
-            "status": "COMPLETED",
+            "status": "COMPLETED" if (cameras_count >= 3 and faces_count > 0) else "UNAVAILABLE",
             "method": "multi_view_camera_projection",
             "engine": "Photogrammetric Keyframe Ray Projector",
         },
@@ -169,13 +169,13 @@ async def get_scene_manifest(scene_id: str):
         "name": meta["name"],
         "sector": meta["sector"],
         "cameraCount": cameras_count,
-        "sparsePointCount": point_count,
-        "surfaceFaceCount": faces_count,
-        "meanReprojError": round(float(reproj_err), 2),
+        "sparsePointCount": point_count if cameras_count >= 3 else 0,
+        "surfaceFaceCount": faces_count if cameras_count >= 3 else 0,
+        "meanReprojError": round(float(reproj_err), 2) if cameras_count >= 3 else 0.0,
         "scaleMode": semantic_data.get("scale_status") or meta["scale_mode"],
         "coordSystem": semantic_data.get("coordinate_system") or meta["coord_system"],
-        "pointCloudUrl": f"/api/scenes/{scene_id}/points",
-        "meshUrl": f"/api/missions/{mission_id}/reconstruction/mesh",
+        "pointCloudUrl": f"/api/scenes/{scene_id}/points" if (cameras_count >= 3 and point_count > 0) else None,
+        "meshUrl": f"/api/missions/{mission_id}/reconstruction/mesh" if (cameras_count >= 3 and faces_count > 0) else None,
         "stages": stages,
         "updatedAt": mission_data.get("updated_at") or mission_data.get("created_at"),
     }

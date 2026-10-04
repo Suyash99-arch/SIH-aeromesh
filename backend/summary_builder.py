@@ -245,6 +245,20 @@ def build_canonical_mission_summary(
     if track_by_class:
         unique_tracks = sum(track_by_class.values())
 
+    # Compute high-level semantic object categories from actual detections
+    people_count = sum(v for k, v in det_by_class.items() if k in ("person", "pedestrian", "people", "human"))
+    vehicle_classes = ("car", "van", "truck", "bus", "tricycle", "motorcycle", "bicycle", "vehicle", "automobile")
+    vehicles_count = sum(v for k, v in det_by_class.items() if any(vc in k for vc in vehicle_classes))
+    structures_count = sum(v for k, v in det_by_class.items() if k in ("building", "structure", "house", "tower", "bridge", "roof"))
+    hazards_count = sum(v for k, v in det_by_class.items() if k in ("hazard", "fire", "smoke", "debris", "flood"))
+    objects_summary = {
+        "total": total_detections,
+        "people": people_count,
+        "vehicles": vehicles_count,
+        "structures": structures_count,
+        "hazards": hazards_count,
+    }
+
     # 6. Reconstruction Canonicalization
     stages_info = recon_meta.get("stages") or {}
     sparse_sfm_info = stages_info.get("sparse_sfm") or {}
@@ -427,6 +441,7 @@ def build_canonical_mission_summary(
             "samples": (quality_data or {}).get("samples") or [],
         },
         "telemetry": telemetry,
+        "objects": objects_summary,
         "detection": {
             "total_detections": total_detections,
             "detections_by_class": det_by_class,
@@ -443,19 +458,20 @@ def build_canonical_mission_summary(
             "active_tracks": unique_tracks,
         },
         "reconstruction": {
-            "status": "AVAILABLE" if reg_cams > 0 else ("FAILED" if total_imgs > 0 else "NOT_RUN"),
+            "status": "COMPLETED" if (total_imgs > 0 and reg_cams >= max(3, int(total_imgs * 0.7))) else ("PARTIAL" if reg_cams >= 3 else ("FAILED" if total_imgs > 0 else "NOT_RUN")),
+            "method": "depth-fused: monocular depth aligned to SfM scale; relative scale; not MVS",
             "registered_cameras": reg_cams,
             "total_images": total_imgs,
             "registration_ratio_pct": round((reg_cams / total_imgs) * 100.0, 1) if total_imgs > 0 else 0.0,
             "sparse_point_count": sparse_pts,
             "dense_point_count": dense_pts,
             "mean_reprojection_error_px": mean_reproj,
-            "mesh_status": mesh_status,
-            "mesh_vertices": mesh_verts,
-            "mesh_faces": mesh_faces,
-            "camera_poses": camera_poses,
-            "point_cloud_url": f"/api/v1/missions/{mission_id}/reconstruction/pointcloud" if sparse_pts > 0 else None,
-            "mesh_url": f"/api/v1/missions/{mission_id}/reconstruction/mesh" if mesh_status == "AVAILABLE" else None,
+            "mesh_status": mesh_status if reg_cams >= 3 else "UNAVAILABLE",
+            "mesh_vertices": mesh_verts if reg_cams >= 3 else 0,
+            "mesh_faces": mesh_faces if reg_cams >= 3 else 0,
+            "camera_poses": camera_poses if reg_cams >= 3 else [],
+            "point_cloud_url": f"/api/v1/missions/{mission_id}/reconstruction/pointcloud" if (reg_cams >= 3 and sparse_pts > 0) else None,
+            "mesh_url": f"/api/v1/missions/{mission_id}/reconstruction/mesh" if (reg_cams >= 3 and mesh_status == "AVAILABLE") else None,
         },
         "geospatial": {
             "is_georeferenced": is_georeferenced,
