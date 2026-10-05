@@ -8,7 +8,7 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://REPLACE_WITH_HF_USERNAME-REPLACE_WITH_SPACE_NAME.hf.space/api/:path*"
+      "destination": "https://closable-ducky-unsuited.ngrok-free.dev/api/:path*"
     },
     {
       "source": "/(.*)",
