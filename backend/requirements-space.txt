@@ -1,0 +1,29 @@
+# ==============================================================================
+# AeroMesh Hugging Face Space Runtime Requirements
+# CPU-Optimized, Minimal Footprint (<500MB without CUDA dependencies)
+# Note: torch and torchvision CPU wheels are pre-installed in Dockerfile
+# ==============================================================================
+
+fastapi>=0.111.0,<=0.115.6
+starlette>=0.37.2
+uvicorn[standard]==0.24.0
+python-multipart==0.0.6
+python-dotenv>=1.0.0
+opencv-python-headless==4.11.0.86
+numpy>=1.26.0,<2.0.0
+scipy>=1.11.0
+pydantic>=2.5.0,<3.0.0
+ultralytics>=8.3.0
+pycolmap>=0.6.0
+SQLAlchemy>=2.0,<3.0
+alembic>=1.13,<2.0
+PyJWT>=2.8.0
+passlib[argon2]>=1.7.4
+argon2-cffi>=23.1.0
+httpx>=0.27.0
+pyyaml>=6.0
+Pillow>=10.0.0
+reportlab>=4.0.0
+plyfile>=1.0.0
+transformers>=4.35.0
+pyotp>=2.9.0

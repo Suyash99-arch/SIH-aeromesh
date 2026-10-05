@@ -34,6 +34,17 @@ def test_health(client):
     assert response.json()["status"] == "healthy"
 
 
+def test_ai_engine_status(client):
+    response = client.get("/api/v1/ai-engine/status")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["success"] is True
+    assert "detector" in body
+    assert "reconstruction" in body
+    assert body["detector"]["status"] in ("LOADED", "NOT_LOADED", "READY")
+    assert body["reconstruction"]["status"] in ("AVAILABLE", "UNAVAILABLE", "READY")
+
+
 def test_mission_creation_retrieval_and_listing(client):
     created = create_mission(client)
 

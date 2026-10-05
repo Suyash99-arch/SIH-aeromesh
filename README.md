@@ -1,3 +1,13 @@
+---
+title: AeroMesh Backend
+emoji: 🛰️
+colorFrom: blue
+colorTo: indigo
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
 # Hexa Spark (AeroMesh) — Tactical Aerial Intelligence & 3D Photogrammetry Platform
 
 Hexa Spark is an end-to-end aerial intelligence system that transforms raw monocular drone video into interactive 3D spatial reconstructions, object tracking trajectories, and certified mission intelligence reports. Built with high-throughput computer vision, incremental Structure-from-Motion (SfM), Poisson surface reconstruction, multi-object ByteTrack tracking, and 2D-to-3D multi-view spatial ray intersection.

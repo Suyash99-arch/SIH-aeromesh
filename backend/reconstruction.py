@@ -57,7 +57,7 @@ def _ensure_dir(path: Path) -> Path:
 # ============================================================
 # CONFIGURABLE RECONSTRUCTION PARAMETERS (ENV-BACKED)
 # ============================================================
-RECONSTRUCTION_MAX_IMAGE_DIM = int(os.getenv("RECONSTRUCTION_MAX_IMAGE_DIM", "1600"))
+RECONSTRUCTION_MAX_IMAGE_DIM = int(os.getenv("RECONSTRUCTION_MAX_IMAGE_DIM", os.getenv("RECONSTRUCTION_IMAGE_MAX_SIZE", "1280")))
 RECONSTRUCTION_OPTICAL_FLOW_THRESHOLD = float(os.getenv("RECONSTRUCTION_OPTICAL_FLOW_THRESHOLD", "0.5"))
 FRAME_QUALITY_MIN_LUMA = float(os.getenv("FRAME_QUALITY_MIN_LUMA", "15.0"))
 FRAME_QUALITY_MAX_LUMA = float(os.getenv("FRAME_QUALITY_MAX_LUMA", "245.0"))
@@ -67,7 +67,7 @@ FRAME_QUALITY_MIN_FEATURES = int(os.getenv("FRAME_QUALITY_MIN_FEATURES", "15"))
 FRAME_QUALITY_DIFF_THRESHOLD = float(os.getenv("FRAME_QUALITY_DIFF_THRESHOLD", "2.0"))
 KEYFRAME_MIN_FRAMES = int(os.getenv("KEYFRAME_MIN_FRAMES", "12"))
 KEYFRAME_TARGET_FRAMES = int(os.getenv("KEYFRAME_TARGET_FRAMES", "35"))
-KEYFRAME_MAX_FRAMES = int(os.getenv("KEYFRAME_MAX_FRAMES", "50"))
+KEYFRAME_MAX_FRAMES = int(os.getenv("RECONSTRUCTION_MAX_FRAMES", os.getenv("KEYFRAME_MAX_FRAMES", "40")))
 
 
 # ============================================================
@@ -649,13 +649,15 @@ def _run_pycolmap_sfm(
 
     try:
         is_mock_seq = hasattr(pycolmap.match_sequential, "mock_calls") or type(pycolmap.match_sequential).__name__ == "MagicMock"
+        matcher_type = os.getenv("COLMAP_MATCHER", "sequential").strip().lower()
+        overlap_val = int(os.getenv("COLMAP_OVERLAP", "10"))
         if is_mock_seq:
             pycolmap.match_sequential(
                 database_path=str(database_path),
                 matching_options=matching_options,
                 device=pycolmap.Device.cpu,
             )
-        elif total_input_frames <= 40:
+        elif matcher_type == "exhaustive":
             ex_pairing = pycolmap.ExhaustivePairingOptions()
             pycolmap.match_exhaustive(
                 database_path=str(database_path),
@@ -665,7 +667,7 @@ def _run_pycolmap_sfm(
             )
         else:
             seq_opts = pycolmap.SequentialPairingOptions()
-            seq_opts.overlap = 20
+            seq_opts.overlap = overlap_val
             seq_opts.loop_detection = False
             pycolmap.match_sequential(
                 database_path=str(database_path),

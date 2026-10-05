@@ -181,7 +181,9 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 MISSIONS_DIR.mkdir(parents=True, exist_ok=True)
 
 def is_production_mode() -> bool:
-    return os.getenv("ENVIRONMENT", "").strip().lower() in ("production", "prod") or os.getenv("ENV", "").strip().lower() in ("production", "prod")
+    if os.getenv("SPACE_ID") or os.getenv("SPACE_HOST") or os.getenv("ALLOW_SQLITE", "0").lower() in ("1", "true"):
+        return False
+    return os.getenv("ENVIRONMENT", "").strip().lower() in ("production", "prod") or os.getenv("ENV", "").strip().lower() in ("production", "prod") or os.getenv("RENDER", "").strip().lower() in ("true", "1")
 
 is_production = is_production_mode()
 
@@ -198,22 +200,22 @@ if configured_engine is not None:
         from backend.database import run_database_migrations
         run_database_migrations()
         if not check_database(configured_engine):
-            raise RuntimeError("PostgreSQL database connection check query failed.")
+            raise RuntimeError("Database connection check query failed.")
         logger.info("Database storage and migrations successfully initialized")
     except Exception as exc:
         masked_url = mask_database_url(get_database_url())
         clean_exc = mask_database_url(str(exc))
         if is_production:
-            logger.critical("PRODUCTION STARTUP HALTED: PostgreSQL database at %s is unreachable (%s)", masked_url, clean_exc)
+            logger.critical("PRODUCTION STARTUP HALTED: Database at %s is unreachable (%s)", masked_url, clean_exc)
             raise RuntimeError(
-                f"PRODUCTION STARTUP HALTED: PostgreSQL database at {masked_url} is unreachable ({clean_exc}). "
-                "Please verify host reachability, credentials, and firewall settings. JSON storage fallback is strictly forbidden in production."
+                f"PRODUCTION STARTUP HALTED: Database at {masked_url} is unreachable ({clean_exc}). "
+                "Please verify host reachability, credentials, and firewall settings."
             )
         logger.warning("Database unavailable; JSON storage fallback remains active: %s", clean_exc)
 else:
     if is_production:
-        logger.critical("PRODUCTION STARTUP HALTED: DATABASE_URL is missing. Production requires a PostgreSQL database (e.g. Render Postgres). JSON storage fallback is strictly forbidden.")
-        raise RuntimeError("PRODUCTION STARTUP HALTED: DATABASE_URL is missing. Production requires a PostgreSQL database (e.g. Render Postgres). JSON storage fallback is strictly forbidden.")
+        logger.critical("PRODUCTION STARTUP HALTED: DATABASE_URL is missing. Production requires a PostgreSQL database (e.g. Render Postgres).")
+        raise RuntimeError("PRODUCTION STARTUP HALTED: DATABASE_URL is missing. Production requires a PostgreSQL database (e.g. Render Postgres).")
 
 # ============================================================
 # FASTAPI APP
@@ -225,7 +227,7 @@ app = FastAPI(
     version="1.0.0",
 )
 
-# 1. CORS Middleware (Dev Origins + Env Configurable + Localhost Regex)
+# 1. CORS Middleware (Dev Origins + Vercel Production + Env Configurable + Localhost Regex)
 dev_origins = [
     "http://localhost:5174",
     "http://localhost:3000",
@@ -235,12 +237,19 @@ dev_origins = [
     "http://127.0.0.1:5173",
     "http://localhost:4173",
     "http://127.0.0.1:4173",
+    "https://sih-aeromesh-blond.vercel.app",
+    "https://sih-aeromesh.vercel.app",
 ]
 is_prod_cors = (os.getenv("ENVIRONMENT", "").lower() == "production" or
                 os.getenv("APP_ENV", "").lower() == "production" or
-                os.getenv("RENDER", "").lower() in ("true", "1"))
+                os.getenv("RENDER", "").lower() in ("true", "1") or
+                bool(os.getenv("SPACE_ID")))
 cors_origins_env = os.getenv("CORS_ALLOWED_ORIGINS", "").strip()
 allowed_origins_list = list(dev_origins)
+if os.getenv("SPACE_HOST"):
+    space_orig = f"https://{os.getenv('SPACE_HOST').strip()}"
+    if space_orig not in allowed_origins_list:
+        allowed_origins_list.append(space_orig)
 if cors_origins_env:
     for origin in cors_origins_env.split(","):
         o = origin.strip()
@@ -1065,7 +1074,13 @@ async def startup_hardware_detection():
             logger.critical("PRODUCTION STARTUP HALTED: Active PostgreSQL connection required at %s.", masked)
             raise RuntimeError(f"PRODUCTION STARTUP HALTED: Active PostgreSQL connection required at {masked}.")
 
-    # 2. Environment Verification (OpenCV, FFmpeg, and split worker state if active)
+    # 2. Environment & Model Weights Verification
+    try:
+        from backend.model_downloader import ensure_model_weights
+        ensure_model_weights()
+    except Exception as mw_exc:
+        logger.warning("Model weights check/download encountered an error: %s", mw_exc)
+
     if is_pipeline_enabled():
         env_info = verify_environment(strict=True)
         dev = detect_compute_device()
@@ -1155,17 +1170,18 @@ async def get_ai_engine_status():
     tile_iou = float(os.getenv("DETECTION_TILE_IOU", "0.5"))
     tile_overlap = float(os.getenv("DETECTION_TILE_OVERLAP", "0.15"))
 
-    detector_label = "YOLO Object Detection" if (weights_present and detector_loadable) else "Detector: not loaded"
-    detector_status = "READY" if (weights_present and detector_loadable) else "NOT_LOADED"
+    detector_label = "YOLO Object Detection (Loaded)" if (weights_present and detector_loadable) else "Detector: not loaded"
+    detector_status = "LOADED" if (weights_present and detector_loadable) else "NOT_LOADED"
     
     colmap_label = f"pycolmap {colmap_ver}" if has_colmap else "pycolmap not importable"
-    colmap_status = "READY" if has_colmap else "UNAVAILABLE"
+    colmap_status = "AVAILABLE" if has_colmap else "UNAVAILABLE"
 
     return {
         "success": True,
         "detector": {
             "status": detector_status,
             "label": detector_label,
+            "ready": bool(weights_present and detector_loadable),
             "weights_present": weights_present,
             "loadable": detector_loadable,
             "model_path": str(model_path),
@@ -1173,6 +1189,7 @@ async def get_ai_engine_status():
         "reconstruction": {
             "status": colmap_status,
             "label": colmap_label,
+            "ready": bool(has_colmap),
             "importable": has_colmap,
             "version": colmap_ver,
         },

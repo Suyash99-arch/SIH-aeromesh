@@ -7,7 +7,7 @@ function generateVercelConfig() {
     console.error('================================================================');
     console.error('BUILD ERROR: BACKEND_URL environment variable is not defined.');
     console.error('Vercel deployments require BACKEND_URL to configure proxy rewrites.');
-    console.error('Example: BACKEND_URL=https://sih-aeromesh.onrender.com');
+    console.error('Example: BACKEND_URL=https://your-username-aeromesh-space.hf.space');
     console.error('================================================================');
     process.exit(1);
   }
