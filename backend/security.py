@@ -45,7 +45,7 @@ JWT_EXPIRATION_MINUTES = int(os.getenv("JWT_EXPIRATION_MINUTES", "720"))  # 12 h
 MAX_UPLOAD_SIZE_BYTES = int(os.getenv("MAX_UPLOAD_SIZE_BYTES", str(1024 * 1024 * 1024)))  # 1 GB
 
 RATE_LIMIT_PER_MINUTE = int(os.getenv("RATE_LIMIT_PER_MINUTE", "120"))
-AUTH_OPTIONAL_MODE = os.getenv("AEROMESH_AUTH_OPTIONAL", "1").lower() in ("1", "true", "yes")
+AUTH_OPTIONAL_MODE = os.getenv("AEROMESH_AUTH_OPTIONAL", "0").lower() in ("1", "true", "yes")
 
 # Supported Seed User Passwords (configurable via environment variables)
 AEROMESH_ADMIN_PASSWORD = os.getenv("AEROMESH_DEMO_ADMIN_PASSWORD", "Admin123!")
@@ -83,6 +83,99 @@ ROLE_HIERARCHY: Dict[str, Set[str]] = {
     ROLE_OPERATOR: {ROLE_OPERATOR, ROLE_VIEWER},
     ROLE_VIEWER: {ROLE_VIEWER},
 }
+
+
+# ============================================================================
+# Invite Code Management (Single-use, Expiring, Hashed for Government Signup)
+# ============================================================================
+
+INVITE_CODES_FILE: Path = Path(__file__).resolve().parent.parent / "data" / "invite_codes.json"
+_INVITES_LOCK = Lock()
+
+
+def load_invite_codes() -> Dict[str, Dict[str, Any]]:
+    invites: Dict[str, Dict[str, Any]] = {}
+    if INVITE_CODES_FILE.exists():
+        try:
+            import json
+            with open(INVITE_CODES_FILE, "r", encoding="utf-8") as f:
+                invites = json.load(f)
+        except Exception:
+            pass
+    # Seed default active invite code if empty
+    default_code = os.getenv("ORG_INVITE_TOKEN", "GOV-SECRET-2026")
+    default_hash = hashlib.sha256(default_code.strip().encode()).hexdigest()
+    if default_hash not in invites:
+        invites[default_hash] = {
+            "code_hash": default_hash,
+            "created_by": "admin@aeromesh.internal",
+            "department": "Strategic Aerial Reconnaissance",
+            "org_name": "Ministry of Defence",
+            "created_at": "2026-01-01T00:00:00Z",
+            "expires_at": "2030-01-01T00:00:00Z",
+            "is_used": False,
+            "used_by": None,
+            "used_at": None,
+        }
+    return invites
+
+
+def save_invite_code(code: str, created_by: str, department: Optional[str] = None, org_name: Optional[str] = None, expires_hours: int = 72) -> str:
+    with _INVITES_LOCK:
+        invites = load_invite_codes()
+        code_hash = hashlib.sha256(code.strip().encode()).hexdigest()
+        expires_at = (datetime.now(timezone.utc) + timedelta(hours=expires_hours)).isoformat()
+        invites[code_hash] = {
+            "code_hash": code_hash,
+            "created_by": created_by,
+            "department": department,
+            "org_name": org_name,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+            "expires_at": expires_at,
+            "is_used": False,
+            "used_by": None,
+            "used_at": None,
+        }
+        INVITE_CODES_FILE.parent.mkdir(parents=True, exist_ok=True)
+        import json
+        with open(INVITE_CODES_FILE, "w", encoding="utf-8") as f:
+            json.dump(invites, f, indent=2)
+        return code
+
+
+def verify_and_consume_invite_code(code: str, redeeming_email: str) -> Tuple[bool, Optional[str], Optional[Dict[str, Any]]]:
+    if not code or not code.strip():
+        return False, "Government account registration requires a valid admin-issued invite code.", None
+    
+    code_hash = hashlib.sha256(code.strip().encode()).hexdigest()
+    invites = load_invite_codes()
+    if code_hash not in invites:
+        return False, "Invalid or unrecognized government invite code.", None
+    
+    item = invites[code_hash]
+    if item.get("is_used"):
+        return False, "This government invite code has already been redeemed.", None
+    
+    if item.get("expires_at"):
+        try:
+            exp_str = item["expires_at"].replace("Z", "+00:00")
+            exp = datetime.fromisoformat(exp_str)
+            if datetime.now(timezone.utc) > exp:
+                return False, "This government invite code has expired.", None
+        except Exception:
+            pass
+    
+    # Mark as used
+    with _INVITES_LOCK:
+        item["is_used"] = True
+        item["used_by"] = redeeming_email
+        item["used_at"] = datetime.now(timezone.utc).isoformat()
+        INVITE_CODES_FILE.parent.mkdir(parents=True, exist_ok=True)
+        import json
+        with open(INVITE_CODES_FILE, "w", encoding="utf-8") as f:
+            json.dump(invites, f, indent=2)
+            
+    return True, None, item
 
 
 # ============================================================================
@@ -153,6 +246,7 @@ class UserRecord:
     portal_type: str = PORTAL_INDIVIDUAL
     organization_name: Optional[str] = None
     department: Optional[str] = None
+    employee_id: Optional[str] = None
     mfa_enabled: bool = False
     mfa_secret: Optional[str] = None
     guest_expires_at: Optional[str] = None
@@ -169,6 +263,7 @@ class UserRecord:
             "portal_type": self.portal_type,
             "organization_name": self.organization_name,
             "department": self.department,
+            "employee_id": self.employee_id,
             "mfa_enabled": self.mfa_enabled,
             "guest_expires_at": self.guest_expires_at,
             "password_login_disabled": self.password_login_disabled,
@@ -439,7 +534,7 @@ def get_current_user(
     if user is not None:
         return user
 
-    if AUTH_OPTIONAL_MODE:
+    if AUTH_OPTIONAL_MODE and "admin@aeromesh.internal" in DEMO_USERS:
         return DEMO_USERS["admin@aeromesh.internal"]
 
     raise HTTPException(
@@ -489,8 +584,15 @@ def check_mission_access(
             return True
 
     # Direct owner match
-    if mission_owner and mission_owner in (user.id, user.email):
-        return True
+    if mission_owner:
+        owner_str = str(mission_owner).strip().lower()
+        user_identifiers = [
+            str(user.id).strip().lower() if user.id else "",
+            str(user.email).strip().lower() if user.email else "",
+            str(user.full_name).strip().lower() if user.full_name else "",
+        ]
+        if owner_str in user_identifiers or any(uid and uid in owner_str for uid in user_identifiers):
+            return True
 
     # Auth optional fallback for demo missions
     if not mission_owner and AUTH_OPTIONAL_MODE:
