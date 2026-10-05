@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { getMission, getProcessingStatus, processVideo } from "../api/missions";
+import { useUI } from "../context/UIContext";
 import "./ProcessingProgress.css";
 
 const defaultStages = [
@@ -18,6 +19,7 @@ const defaultStages = [
  * Shows real-time updates during mission processing
  */
 export default function ProcessingProgressPage({ mission, navigate }) {
+  const { t } = useUI();
   const [processing, setProcessing] = useState(mission?.processing);
   const [detections, setDetections] = useState(mission?.detections);
   const [frameQuality, setFrameQuality] = useState(mission?.frameQuality);
@@ -54,11 +56,14 @@ export default function ProcessingProgressPage({ mission, navigate }) {
         ]);
         if (!mounted) return;
 
-        if (updatedMission) {
+        if (updatedMission && !updatedMission.hasError) {
           setProcessing(updatedMission.processing);
           setDetections(updatedMission.detections);
           setFrameQuality(updatedMission.frameQuality);
           setReconstruction(updatedMission.reconstruction);
+        } else if (updatedMission?.hasError) {
+          setAutoRefresh(false);
+          return;
         }
         if (status) {
           setStatusData(status);
@@ -120,9 +125,9 @@ export default function ProcessingProgressPage({ mission, navigate }) {
       <div className="processing-page">
         <div className="page-header">
           <div>
-            <span className="eyebrow">MISSION PROCESSING</span>
-            <h1>No Mission Selected</h1>
-            <p>Select a mission from the mission list or create a new mission to view pipeline status.</p>
+            <span className="eyebrow">{t("nav.processing")}</span>
+            <h1>{t("nav.noMissionSelected")}</h1>
+            <p>{t("dashboard.uploadPrompt")}</p>
           </div>
         </div>
       </div>
@@ -133,9 +138,9 @@ export default function ProcessingProgressPage({ mission, navigate }) {
     <div className="processing-page">
       <div className="page-header">
         <div>
-          <span className="eyebrow">MISSION PROCESSING</span>
-          <h1>{mission.name || mission.id || "Active Mission"}</h1>
-          <p>Real-Time Drone Video → 3D Reconstruction Pipeline</p>
+          <span className="eyebrow">{t("nav.processing")}</span>
+          <h1>{mission.name || mission.id || t("nav.activeMission")}</h1>
+          <p>{t("processing.subtitle")}</p>
         </div>
         <div
           className="status-badge"
@@ -319,7 +324,7 @@ export default function ProcessingProgressPage({ mission, navigate }) {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
           <div>
             <h3 style={{ margin: 0, fontSize: "16px", color: "var(--text, #f8fafc)", display: "flex", alignItems: "center", gap: "8px" }}>
-              <span>Autonomous 8-Stage Pipeline Status</span>
+              <span>{t("processing.title")}</span>
               {isProcessing && (
                 <span style={{ fontSize: "11px", padding: "2px 8px", background: "rgba(14, 165, 233, 0.2)", color: "#38bdf8", borderRadius: "12px", border: "1px solid rgba(14, 165, 233, 0.4)" }}>
                   LIVE EXECUTION
@@ -334,7 +339,7 @@ export default function ProcessingProgressPage({ mission, navigate }) {
             <span style={{ fontSize: "24px", fontWeight: 800, color: "#38bdf8" }}>
               {progressPercent}%
             </span>
-            <div style={{ fontSize: "11px", color: "var(--text2, #64748b)" }}>COMPLETED</div>
+            <div style={{ fontSize: "11px", color: "var(--text2, #64748b)" }}>{t("stages.COMPLETE").toUpperCase()}</div>
           </div>
         </div>
 
@@ -416,19 +421,19 @@ export default function ProcessingProgressPage({ mission, navigate }) {
       <div className="processing-grid">
         {/* Video Info */}
         <section className="section">
-          <h3>Input Video Metadata</h3>
+          <h3>{t("missionCommand.inputVideo")}</h3>
           {mission.video ? (
             <div className="info-grid">
               <div className="info-item">
-                <label>Filename</label>
+                <label>{t("newMission.targetFileLabel")}</label>
                 <span className="value">{mission.video.filename}</span>
               </div>
               <div className="info-item">
-                <label>Duration</label>
+                <label>{t("dashboard.duration")}</label>
                 <span className="value">{mission.video.duration_seconds}s</span>
               </div>
               <div className="info-item">
-                <label>Frames</label>
+                <label>{t("dashboard.frames")}</label>
                 <span className="value">{mission.video.total_frames || mission.frames}</span>
               </div>
               <div className="info-item">
@@ -444,33 +449,33 @@ export default function ProcessingProgressPage({ mission, navigate }) {
                 </span>
               </div>
               <div className="info-item">
-                <label>File Size</label>
+                <label>{t("newMission.fileSizeLabel")}</label>
                 <span className="value">{mission.video.size_mb || "24.5"} MB</span>
               </div>
             </div>
           ) : (
-            <p className="empty">No video uploaded</p>
+            <p className="empty">{t("newMission.awaitingFootage")}</p>
           )}
         </section>
 
         {/* Processing Performance */}
         <section className="section">
-          <h3>Processing Status</h3>
+          <h3>{t("missionCommand.pipelineStage")}</h3>
           <div className="info-grid">
             <div className="info-item">
-              <label>Status</label>
+              <label>{t("common.status")}</label>
               <span className="value">{(statusData?.status || mission.status || "READY").toUpperCase()}</span>
             </div>
             <div className="info-item">
-              <label>Frames Analyzed</label>
+              <label>{t("dashboard.frames")}</label>
               <span className="value">{mission.frames || processing?.framesAnalyzed || 0}</span>
             </div>
             <div className="info-item">
-              <label>Inference Speed</label>
+              <label>{t("sidebar.inference")}</label>
               <span className="value">{processing?.inferenceFps || 24} fps</span>
             </div>
             <div className="info-item">
-              <label>Reconstruction Stage</label>
+              <label>{t("processing.stage")}</label>
               <span className="value">{statusData?.stage || (isComplete ? "COMPLETE" : "WAITING")}</span>
             </div>
           </div>
@@ -478,10 +483,10 @@ export default function ProcessingProgressPage({ mission, navigate }) {
 
         {/* Object Detection Summary */}
         <section className="section">
-          <h3>Spatial Intelligence & Objects</h3>
+          <h3>{t("sceneIntelligence.title")}</h3>
           <div className="detections-summary">
             <div className="detection-stat">
-              <span className="label">Unique Tracks</span>
+              <span className="label">{t("missionCommand.uniqueTracks")}</span>
               <span className="value">{detections?.uniqueTracks || mission.objects?.total || 0}</span>
             </div>
             {Object.entries(detections?.byGroup || mission.objects || {}).filter(([k]) => k !== "total" && k !== "valid" && k !== "low_confidence").map(
@@ -497,22 +502,22 @@ export default function ProcessingProgressPage({ mission, navigate }) {
 
         {/* 3D Reconstruction Summary */}
         <section className="section">
-          <h3>3D COLMAP Photogrammetry</h3>
+          <h3>{t("reconstruction.title")}</h3>
           <div className="info-grid">
             <div className="info-item">
-              <label>Sparse Point Cloud</label>
+              <label>{t("reconstruction.modePointcloud")}</label>
               <span className="value">{Number(mission.reconstruction?.point_count || mission.reconstruction?.sparse_point_count || 0).toLocaleString()} points</span>
             </div>
             <div className="info-item">
-              <label>Camera Keyframes</label>
+              <label>{t("reconstruction.registeredCamerasCount")}</label>
               <span className="value">{mission.reconstruction?.camera_count ?? mission.reconstruction?.registered_images ?? 0} cameras</span>
             </div>
             <div className="info-item">
-              <label>Poisson Surface Mesh</label>
+              <label>{t("stages.MESHING")}</label>
               <span className="value">{isComplete ? "Mesh Generated" : isProcessing ? "In Progress" : "Pending"}</span>
             </div>
             <div className="info-item">
-              <label>Overall Confidence</label>
+              <label>{t("missionCommand.meanConfidence")}</label>
               <span className="value">{mission.confidence != null ? `${mission.confidence}%` : "—"}</span>
             </div>
           </div>
@@ -534,16 +539,16 @@ export default function ProcessingProgressPage({ mission, navigate }) {
 
         <div className="action-buttons" style={{ display: "flex", gap: "12px", marginLeft: "auto" }}>
           <button className="btn secondary" onClick={() => navigate("drone")}>
-            View Drone Video
+            {t("nav.processing")}
           </button>
           <button className="btn secondary" onClick={() => navigate("reconstruction")}>
-            View 3D Model
+            {t("missionCommand.openViewer")}
           </button>
           <button className="btn secondary" onClick={() => navigate("analytics")}>
-            View Intelligence
+            {t("missionCommand.openScene")}
           </button>
           <button className="btn primary" onClick={() => navigate("reports")}>
-            Mission Reports & Deliverables
+            {t("reports.title")}
           </button>
         </div>
       </div>

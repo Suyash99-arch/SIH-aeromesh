@@ -329,6 +329,22 @@ export async function getMission(missionId, forceRefresh = true) {
       };
     }
 
+    if (response.status === 403) {
+      const lastLogged = loggedMissionStates.get(missionId);
+      if (lastLogged !== "403") {
+        loggedMissionStates.set(missionId, "403");
+        console.warn(`[Mission] Access denied for mission ${missionId} (account/organization isolation)`);
+      }
+      return {
+        id: missionId,
+        name: `Access Restricted: ${missionId}`,
+        status: "unavailable",
+        error: "ACCESS_DENIED",
+        backendUnavailable: false,
+        hasError: true,
+      };
+    }
+
     const data = await parseResponse(response);
     if (data.success) {
       const mission = normalizeMission(data.mission);
@@ -684,6 +700,35 @@ export async function processVideo(
     throw error;
   }
 }
+
+export async function rerunDetection(missionId, options = {}) {
+  try {
+    const payload = {
+      frame_sampling: options.frameSampling ?? options.frame_sampling ?? 2.0,
+      inference_resolution: options.inferenceResolution ?? options.inference_resolution ?? 640,
+      detection_confidence: options.detectionConfidence ?? options.detection_confidence ?? 0.35,
+      scene_profile: options.sceneProfile ?? options.scene_profile,
+      tile_inference: options.tileInference ?? options.tile_inference ?? true,
+    };
+    const response = await fetch(`${API_BASE}/missions/${missionId}/rerun-detection`, {
+      method: "POST",
+      headers: {
+        ...getAuthHeaders(),
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(formatApiError(data) || `HTTP ${response.status}`);
+    }
+    return data;
+  } catch (error) {
+    console.error(`[rerunDetection] Error for mission ${missionId}:`, error);
+    throw error;
+  }
+}
+
 
 export async function generateReconstruction(missionId) {
   try {

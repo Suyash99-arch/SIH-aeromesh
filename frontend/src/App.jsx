@@ -29,6 +29,7 @@ import {
 } from "./pages/Pages";
 import ProcessingProgressPage from "./pages/ProcessingProgressPage";
 import ErrorBoundary from "./components/common/ErrorBoundary";
+import { useUI } from "./context/UIContext";
 
 import AmbientCursorGlow from "./components/layout/AmbientCursorGlow";
 
@@ -69,6 +70,28 @@ export default function App() {
   );
   const [showCreateMission, setShowCreateMission] = useState(false);
   const [mission, setMission] = useState(null);
+  const { t } = useUI();
+
+  const getPageTitle = (pageKey) => {
+    const keyMap = {
+      overview: "nav.overview",
+      missions: "nav.missions",
+      pipeline: "nav.processing",
+      processing: "nav.processing",
+      drone: "nav.processing",
+      reconstruction: "nav.reconstruction",
+      analytics: "nav.sceneIntelligence",
+      map: "nav.geospatial",
+      reports: "nav.reports",
+      profile: "nav.profile",
+      settings: "nav.settings",
+      auth: "auth.login",
+      challenge: "challenge.title",
+    };
+    const key = keyMap[pageKey] || `nav.${pageKey}`;
+    const translated = t(key);
+    return (translated && translated !== key) ? translated : (pageTitles[pageKey] || "Mission Command");
+  };
 
   // Synchronize missionId and activePage dynamically from URL
   useEffect(() => {
@@ -169,6 +192,15 @@ export default function App() {
           setMission(nextMission);
         } else {
           setMission(null);
+          // If the mission was not found or forbidden, clear the stale URL param and mission ID
+          if (nextMission?.hasError) {
+            setMissionId("");
+            if (typeof window !== "undefined") {
+              const url = new URL(window.location.href);
+              url.searchParams.delete("mission");
+              window.history.replaceState({}, "", url.toString());
+            }
+          }
           return; // Stop polling if mission is unavailable / error
         }
 
@@ -361,7 +393,7 @@ export default function App() {
 
             <main className="main">
               <Topbar
-                title={pageTitles[activePage] || "Mission Command"}
+                title={getPageTitle(activePage)}
                 theme={theme}
                 setTheme={setTheme}
                 notice={notice}
