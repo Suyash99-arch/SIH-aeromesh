@@ -42,7 +42,7 @@ Write-Host "[OK] Python 3.11 Environment Verified: $PyVer ($PythonExe)" -Foregro
 
 # 2. Check FFmpeg / FFprobe
 try {
-    $FfmpegCheck = & $PythonExe -c "from backend.env_check import check_ffmpeg_environment; res = check_ffmpeg_environment(strict=True); print(res['ffmpeg_path'])"
+    $FfmpegCheck = & $PythonExe -c "from backend.env_check import check_ffmpeg_environment; res = check_ffmpeg_environment(strict=True); print(res.get('ffmpeg_path', ''))"
     Write-Host "[OK] FFmpeg / FFprobe Verified: $FfmpegCheck" -ForegroundColor Green
 } catch {
     Write-Host "[ERROR] FFmpeg environment check failed: $_" -ForegroundColor Red
@@ -51,7 +51,7 @@ try {
 
 # 3. Check OpenCV Environment (Single Package Check)
 try {
-    $CvCheck = & $PythonExe -c 'from backend.env_check import check_opencv_environment; res = check_opencv_environment(strict=True); pkg = res["packages"][0]; ver = res["version"]; print(f"{pkg} v{ver}")'
+    $CvCheck = & $PythonExe -c "from backend.env_check import check_opencv_environment; res = check_opencv_environment(strict=True); pkg = res['packages'][0] if res.get('packages') else 'opencv'; ver = res.get('version', ''); print(f'{pkg} v{ver}')"
     Write-Host "[OK] OpenCV Environment Verified: $CvCheck (Conflict-Free)" -ForegroundColor Green
 } catch {
     Write-Host "[ERROR] OpenCV environment check failed: $_" -ForegroundColor Red
