@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { useUI } from "../context/UIContext";
 import {
   loginUser,
   registerUser,
@@ -8,6 +9,7 @@ import {
 } from "../api/missions";
 
 export default function AuthPage({ onAuthenticated, onCancel, notice, initialPortal = "gov" }) {
+  const { t } = useUI();
   // Portals: "gov" (Government/Organization) | "indiv" (Individual)
   const [portal, setPortal] = useState(initialPortal);
   const [mode, setMode] = useState("login"); // "login" | "register"
@@ -22,6 +24,7 @@ export default function AuthPage({ onAuthenticated, onCancel, notice, initialPor
   // Government / Org registration fields
   const [orgName, setOrgName] = useState("");
   const [department, setDepartment] = useState("");
+  const [inviteCode, setInviteCode] = useState("");
   const [orgRole, setOrgRole] = useState("ADMIN");
   const [enableMfa, setEnableMfa] = useState(false);
 
@@ -94,6 +97,11 @@ export default function AuthPage({ onAuthenticated, onCancel, notice, initialPor
       return;
     }
 
+    if (portal === "gov" && !inviteCode.trim()) {
+      setError("An admin-issued Invite Code is required for Government / Organization registration.");
+      return;
+    }
+
     setLoading(true);
     setError(null);
 
@@ -104,6 +112,7 @@ export default function AuthPage({ onAuthenticated, onCancel, notice, initialPor
       portal_type: portal === "gov" ? "GOVERNMENT_ORG" : "INDIVIDUAL",
       organization_name: portal === "gov" ? orgName.trim() : null,
       department: portal === "gov" ? department.trim() : null,
+      invite_code: portal === "gov" ? inviteCode.trim() : undefined,
     };
 
     const res = await registerUser(payload);
@@ -309,7 +318,7 @@ export default function AuthPage({ onAuthenticated, onCancel, notice, initialPor
             }}
           >
             <span>🏛️</span>
-            <span>Government / Org</span>
+            <span>{t("auth.govTab")}</span>
           </button>
           <button
             type="button"
@@ -333,7 +342,7 @@ export default function AuthPage({ onAuthenticated, onCancel, notice, initialPor
             }}
           >
             <span>👤</span>
-            <span>Individual Portal</span>
+            <span>{t("auth.indivTab")}</span>
           </button>
         </div>
 
@@ -352,7 +361,7 @@ export default function AuthPage({ onAuthenticated, onCancel, notice, initialPor
               borderBottom: mode === "login" ? `2px solid ${portal === "gov" ? "#38bdf8" : "#c084fc"}` : "2px solid transparent",
             }}
           >
-            Sign In
+            {t("auth.signInTab")}
           </button>
           <button
             type="button"
@@ -367,7 +376,7 @@ export default function AuthPage({ onAuthenticated, onCancel, notice, initialPor
               borderBottom: mode === "register" ? `2px solid ${portal === "gov" ? "#38bdf8" : "#c084fc"}` : "2px solid transparent",
             }}
           >
-            {portal === "gov" ? "Register Organization" : "Create Account"}
+            {portal === "gov" ? t("auth.registerOrgTab") : t("auth.registerTab")}
           </button>
         </div>
 
@@ -402,7 +411,7 @@ export default function AuthPage({ onAuthenticated, onCancel, notice, initialPor
           <form onSubmit={handleLoginSubmit} style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
             <div>
               <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 600, color: "#cbd5e1", marginBottom: "6px" }}>
-                Official Email
+                {portal === "gov" ? t("auth.officialEmail") : t("auth.personalEmail")}
               </label>
               <input
                 type="email"
@@ -426,7 +435,7 @@ export default function AuthPage({ onAuthenticated, onCancel, notice, initialPor
 
             <div>
               <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 600, color: "#cbd5e1", marginBottom: "6px" }}>
-                Password
+                {t("auth.password")}
               </label>
               <div style={{ position: "relative" }}>
                 <input
@@ -463,7 +472,7 @@ export default function AuthPage({ onAuthenticated, onCancel, notice, initialPor
                     fontSize: "0.8rem",
                   }}
                 >
-                  {showPassword ? "Hide" : "Show"}
+                  {showPassword ? (t("common.close") || "Hide") : (t("common.open") || "Show")}
                 </button>
               </div>
             </div>
@@ -472,15 +481,15 @@ export default function AuthPage({ onAuthenticated, onCancel, notice, initialPor
             {(mfaRequired || portal === "gov") && (
               <div>
                 <label style={{ display: "flex", justifyContent: "space-between", fontSize: "0.8rem", fontWeight: 600, color: "#cbd5e1", marginBottom: "6px" }}>
-                  <span>Two-Factor Code (MFA / OTP)</span>
-                  <span style={{ fontSize: "0.75rem", color: "#38bdf8" }}>{mfaRequired ? "Required" : "Optional"}</span>
+                  <span>{t("auth.mfaCode")}</span>
+                  <span style={{ fontSize: "0.75rem", color: "#38bdf8" }}>{mfaRequired ? t("auth.mfaRequired") : t("auth.mfaOptional")}</span>
                 </label>
                 <input
                   type="text"
                   maxLength={6}
                   value={mfaCode}
                   onChange={(e) => setMfaCode(e.target.value)}
-                  placeholder="6-digit security code (e.g. 123456)"
+                  placeholder="123456"
                   style={{
                     width: "100%",
                     padding: "10px 14px",
@@ -519,7 +528,7 @@ export default function AuthPage({ onAuthenticated, onCancel, notice, initialPor
                 opacity: loading ? 0.75 : 1,
               }}
             >
-              {loading ? "Authenticating..." : portal === "gov" ? "Authorize & Enter Command" : "Enter Personal Workspace"}
+              {loading ? t("auth.loggingIn") : portal === "gov" ? t("auth.authGovBtn") : t("auth.authIndivBtn")}
             </button>
 
             {portal === "indiv" && Boolean(googleClientId) && (
@@ -550,7 +559,7 @@ export default function AuthPage({ onAuthenticated, onCancel, notice, initialPor
                 }}
               >
                 <span>🌐</span>
-                <span>Continue with Google</span>
+                <span>{t("auth.continueWithGoogle")}</span>
               </button>
             )}
           </form>
@@ -562,7 +571,7 @@ export default function AuthPage({ onAuthenticated, onCancel, notice, initialPor
                 <div style={{ display: "grid", gridTemplateColumns: "1.2fr 1fr", gap: "10px" }}>
                   <div>
                     <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 600, color: "#cbd5e1", marginBottom: "4px" }}>
-                      Organization Name *
+                      {t("auth.orgName")}
                     </label>
                     <input
                       type="text"
@@ -584,7 +593,7 @@ export default function AuthPage({ onAuthenticated, onCancel, notice, initialPor
                   </div>
                   <div>
                     <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 600, color: "#cbd5e1", marginBottom: "4px" }}>
-                      Department
+                      {t("auth.department")}
                     </label>
                     <input
                       type="text"
@@ -605,9 +614,38 @@ export default function AuthPage({ onAuthenticated, onCancel, notice, initialPor
                   </div>
                 </div>
 
+                {/* Admin-issued Invite Code (required for government registration) */}
+                <div>
+                  <label style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.8rem", fontWeight: 600, color: "#cbd5e1", marginBottom: "4px" }}>
+                    <span style={{ fontSize: "0.9rem" }}>🔑</span>
+                    <span>Admin Invite Code *</span>
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    value={inviteCode}
+                    onChange={(e) => setInviteCode(e.target.value)}
+                    placeholder="GOV-XXXX-XXXX"
+                    style={{
+                      width: "100%",
+                      padding: "9px 12px",
+                      background: "rgba(10, 15, 29, 0.6)",
+                      border: "1px solid rgba(56, 189, 248, 0.35)",
+                      borderRadius: "8px",
+                      color: "#ffffff",
+                      fontSize: "0.85rem",
+                      letterSpacing: "0.05em",
+                      boxSizing: "border-box",
+                    }}
+                  />
+                  <p style={{ fontSize: "0.72rem", color: "#64748b", marginTop: "4px", marginBottom: 0 }}>
+                    Contact your organization admin to obtain an invite code.
+                  </p>
+                </div>
+
                 <div>
                   <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 600, color: "#cbd5e1", marginBottom: "4px" }}>
-                    Your Role within Organization
+                    {t("auth.orgRole")}
                   </label>
                   <select
                     value={orgRole}
@@ -622,9 +660,9 @@ export default function AuthPage({ onAuthenticated, onCancel, notice, initialPor
                       fontSize: "0.85rem",
                     }}
                   >
-                    <option value="ADMIN">Organization Administrator (Full Access + Invites)</option>
-                    <option value="ANALYST">Mission Analyst (Reconstruction + Measurements + Reports)</option>
-                    <option value="VIEWER">Mission Viewer (Read-only Inspection)</option>
+                    <option value="ADMIN">{t("auth.roleAdmin")}</option>
+                    <option value="ANALYST">{t("auth.roleAnalyst")}</option>
+                    <option value="VIEWER">{t("auth.roleViewer")}</option>
                   </select>
                 </div>
               </>
@@ -632,7 +670,7 @@ export default function AuthPage({ onAuthenticated, onCancel, notice, initialPor
 
             <div>
               <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 600, color: "#cbd5e1", marginBottom: "4px" }}>
-                Full Name
+                {t("auth.fullName")}
               </label>
               <input
                 type="text"
@@ -654,14 +692,14 @@ export default function AuthPage({ onAuthenticated, onCancel, notice, initialPor
 
             <div>
               <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 600, color: "#cbd5e1", marginBottom: "4px" }}>
-                Official Email *
+                {t("auth.officialEmail")} *
               </label>
               <input
                 type="email"
                 required
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                placeholder="rajesh.kumar@agency.gov"
+                placeholder="officer@agency.gov"
                 style={{
                   width: "100%",
                   padding: "9px 12px",
@@ -678,14 +716,14 @@ export default function AuthPage({ onAuthenticated, onCancel, notice, initialPor
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px" }}>
               <div>
                 <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 600, color: "#cbd5e1", marginBottom: "4px" }}>
-                  Password *
+                  {t("auth.password")} *
                 </label>
                 <input
                   type="password"
                   required
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  placeholder="Min 6 chars"
+                  placeholder="••••••••••••"
                   style={{
                     width: "100%",
                     padding: "9px 12px",
@@ -700,14 +738,14 @@ export default function AuthPage({ onAuthenticated, onCancel, notice, initialPor
               </div>
               <div>
                 <label style={{ display: "block", fontSize: "0.8rem", fontWeight: 600, color: "#cbd5e1", marginBottom: "4px" }}>
-                  Confirm *
+                  {t("auth.confirmPassword")} *
                 </label>
                 <input
                   type="password"
                   required
                   value={confirmPassword}
                   onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="Re-enter password"
+                  placeholder="••••••••••••"
                   style={{
                     width: "100%",
                     padding: "9px 12px",
@@ -729,7 +767,7 @@ export default function AuthPage({ onAuthenticated, onCancel, notice, initialPor
                   checked={enableMfa}
                   onChange={(e) => setEnableMfa(e.target.checked)}
                 />
-                <span>Enforce mandatory Two-Factor OTP verification for this account</span>
+                <span>{t("auth.enforceMfa")}</span>
               </label>
             )}
 
@@ -751,7 +789,7 @@ export default function AuthPage({ onAuthenticated, onCancel, notice, initialPor
                 boxShadow: "0 4px 14px rgba(0, 0, 0, 0.4)",
               }}
             >
-              {loading ? "Registering Account..." : portal === "gov" ? "Register Organization Workspace" : "Create Personal Account"}
+              {loading ? t("auth.loggingIn") : portal === "gov" ? t("auth.registerGovBtn") : t("auth.registerIndivBtn")}
             </button>
           </form>
         )}
@@ -779,10 +817,10 @@ export default function AuthPage({ onAuthenticated, onCancel, notice, initialPor
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: "6px", fontSize: "0.85rem", fontWeight: 700, color: "#10b981" }}>
               <span>⚡</span>
-              <span>Instant Guest Evaluation Mode</span>
+              <span>{t("auth.guestModeTitle")}</span>
             </div>
             <div style={{ fontSize: "0.75rem", color: "#94a3b8", marginTop: "2px" }}>
-              Session-scoped temporary workspace · 2-hour TTL · No signup needed
+              {t("auth.guestModeSubtitle")}
             </div>
           </div>
           <button
@@ -801,7 +839,7 @@ export default function AuthPage({ onAuthenticated, onCancel, notice, initialPor
               whiteSpace: "nowrap",
             }}
           >
-            {guestLoading ? "Starting..." : "Try It Now →"}
+            {guestLoading ? t("common.loading") : t("auth.tryGuestBtn")}
           </button>
         </div>
 
@@ -850,7 +888,7 @@ export default function AuthPage({ onAuthenticated, onCancel, notice, initialPor
                 textDecoration: "underline",
               }}
             >
-              ← Back to Home
+              {t("auth.backHome")}
             </button>
           </div>
         )}
