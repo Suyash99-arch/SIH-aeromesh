@@ -1,5 +1,6 @@
 import React, { useRef, useEffect, useState, useCallback } from 'react';
 import Icon from '../ui/Icon';
+import { useUI } from '../../context/UIContext';
 
 const REAL_PIPELINE_STAGES = [
   { id: 1, tag: 'INGEST', name: '1. Video Ingestion & Container Validation' },
@@ -13,6 +14,7 @@ const REAL_PIPELINE_STAGES = [
 ];
 
 export default function NarrativePipelineSequence() {
+  const { t } = useUI();
   const containerRef = useRef(null);
   const canvasRef = useRef(null);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -459,9 +461,9 @@ export default function NarrativePipelineSequence() {
           <div>
             <div className="narrative-badge">
               <span className="pulse-dot-cyan" />
-              <span>REAL-TIME 8-STAGE PHOTOGRAMMETRIC ENGINE</span>
+              <span>{t("processing.narrativeBadge")}</span>
             </div>
-            <h3 className="narrative-heading">Autonomous Pipeline in Motion</h3>
+            <h3 className="narrative-heading">{t("processing.narrativeTitle")}</h3>
           </div>
         </div>
 
@@ -471,34 +473,34 @@ export default function NarrativePipelineSequence() {
             type="button"
             className="narrative-ctrl-btn"
             onClick={togglePause}
-            aria-label={isPaused ? 'Resume pipeline sequence' : 'Pause pipeline sequence'}
-            title={isPaused ? 'Resume sequence' : 'Pause sequence'}
+            aria-label={isPaused ? t("videoFrames.play") : t("videoFrames.pause")}
+            title={isPaused ? t("videoFrames.play") : t("videoFrames.pause")}
           >
             <Icon name={isPaused ? 'Play' : 'Pause'} size={14} />
-            <span>{isPaused ? 'Resume' : 'Pause'}</span>
+            <span>{isPaused ? t("videoFrames.play") : t("videoFrames.pause")}</span>
           </button>
 
           <button
             type="button"
             className="narrative-ctrl-btn"
             onClick={skipForward}
-            aria-label="Skip to next pipeline stage"
-            title="Step forward to next stage"
+            aria-label={t("processing.forward")}
+            title={t("processing.forward")}
             disabled={activeStageIdx >= 7 && progress >= 1}
           >
             <Icon name="ChevronRight" size={14} />
-            <span>Forward</span>
+            <span>{t("processing.forward")}</span>
           </button>
 
           <button
             type="button"
             className="narrative-replay-btn"
             onClick={replay}
-            aria-label="Replay pipeline sequence"
-            title="Restart pipeline from stage 1"
+            aria-label={t("processing.replay")}
+            title={t("processing.replay")}
           >
             <Icon name="RotateCcw" size={14} />
-            <span>Replay</span>
+            <span>{t("processing.replay")}</span>
           </button>
         </div>
       </div>
@@ -513,8 +515,8 @@ export default function NarrativePipelineSequence() {
             <div className="narrative-completion-badge">
               <div className="completion-badge-icon">✓</div>
               <div className="completion-badge-body">
-                <span className="completion-badge-title">8/8 PIPELINE STAGES VERIFIED</span>
-                <span className="completion-badge-sub">3D Model · GeoJSON · PDF Engineering Handoff Ready</span>
+                <span className="completion-badge-title">{t("processing.pipelineVerified")}</span>
+                <span className="completion-badge-sub">{t("processing.pipelineVerifiedSub")}</span>
               </div>
             </div>
           </div>

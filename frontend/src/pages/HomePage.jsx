@@ -5,6 +5,8 @@ import HeroCompassReconstruction from "../components/hero/HeroCompassReconstruct
 import FloatingWord from "../components/hero/FloatingWord";
 import NarrativePipelineSequence from "../components/narrative/NarrativePipelineSequence";
 import { BACKEND_URL, loginGuest } from "../api/missions";
+import { useUI } from "../context/UIContext";
+import UIControlsToolbar from "../components/layout/UIControlsToolbar";
 import "../styles/homepage.css";
 
 // 11 Operational Workflow Stages with Rigorous Technical Architecture
@@ -1158,6 +1160,7 @@ function StageVisualCanvas({ stageIndex }) {
 }
 
 export default function HomePage({ onNavigateDashboard, onStartMission, currentUser, onOpenAuth }) {
+  const { t, language } = useUI();
   const [activeStep, setActiveStep] = useState(0);
   const [isPlaying, setIsPlaying] = useState(true);
   const [workflowVisible, setWorkflowVisible] = useState(false);
@@ -1263,19 +1266,20 @@ export default function HomePage({ onNavigateDashboard, onStartMission, currentU
           </div>
           <div className="logo-text">
             <strong>HEXA SPARK</strong>
-            <small>AERIAL 3D INTELLIGENCE</small>
+            <small>{language === "hi" ? "एरियल 3D इंटेलिजेंस" : "AERIAL 3D INTELLIGENCE"}</small>
           </div>
         </div>
 
         <div className="nav-menu">
-          <a href="#hero">Overview</a>
-          <a href="#pipeline-narrative">Pipeline Motion</a>
-          <a href="#workflow">11-Step Workflow</a>
-          <a href="#capabilities">Capabilities</a>
-          <a href="#security">Sovereign Security</a>
+          <a href="#hero">{language === "hi" ? "अवलोकन" : "Overview"}</a>
+          <a href="#pipeline-narrative">{language === "hi" ? "पाइपलाइन गति" : "Pipeline Motion"}</a>
+          <a href="#workflow">{language === "hi" ? "11-चरणीय कार्यप्रवाह" : "11-Step Workflow"}</a>
+          <a href="#capabilities">{language === "hi" ? "क्षमताएं" : "Capabilities"}</a>
+          <a href="#security">{language === "hi" ? "संप्रभु सुरक्षा" : "Sovereign Security"}</a>
         </div>
 
         <div className="nav-actions">
+          <UIControlsToolbar />
           {currentUser ? (
             <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
               <button
@@ -1302,7 +1306,7 @@ export default function HomePage({ onNavigateDashboard, onStartMission, currentU
                 id="btn-nav-dashboard"
               >
                 <Icon name="Box" size={13} />
-                Open Dashboard
+                {t("nav.dashboard", "Open Dashboard")}
               </button>
             </div>
           ) : (
@@ -1325,7 +1329,7 @@ export default function HomePage({ onNavigateDashboard, onStartMission, currentU
                 }}
               >
                 <span>🏛️</span>
-                <span>Gov / Org</span>
+                <span>{t("app.govPortal", "Gov / Org")}</span>
               </button>
               <button
                 onClick={() => onOpenAuth("indiv")}
@@ -1345,7 +1349,7 @@ export default function HomePage({ onNavigateDashboard, onStartMission, currentU
                 }}
               >
                 <span>👤</span>
-                <span>Individual</span>
+                <span>{t("app.indivPortal", "Individual")}</span>
               </button>
               <button
                 onClick={async () => {
@@ -1368,7 +1372,7 @@ export default function HomePage({ onNavigateDashboard, onStartMission, currentU
                 }}
               >
                 <span>⚡</span>
-                <span>Guest Mode</span>
+                <span>{t("app.guestMode", "Guest Mode")}</span>
               </button>
             </div>
           )}
@@ -1381,7 +1385,7 @@ export default function HomePage({ onNavigateDashboard, onStartMission, currentU
           <div className="hero-text">
             <span className="hero-badge">
               <span className="pulse-dot-cyan" />
-              COMMERCIAL & DEFENCE AERIAL RECONSTRUCTION
+              {t("hero.badge")}
             </span>
 
             {/* Glowing AEROMESH Wordmark with Shimmer Sweep */}
@@ -1390,13 +1394,12 @@ export default function HomePage({ onNavigateDashboard, onStartMission, currentU
                 <FloatingWord sparkColor="cyan">HEXA SPARK</FloatingWord>
               </h1>
               <div className="hero-wordmark-tagline">
-                From Drone Video <FloatingWord sparkColor="violet"><span>to 3D Geospatial Intelligence</span></FloatingWord>
+                {t("hero.taglinePrefix")} <FloatingWord sparkColor="violet"><span>{t("hero.taglineSuffix")}</span></FloatingWord>
               </div>
             </div>
 
             <p className="hero-subtitle">
-              Transform uncalibrated single-pass UAV video footage into millimeter-calibrated 3D point clouds,
-              Poisson surface meshes, neural object tracking, and certified GIS engineering reports.
+              {t("hero.subtitle")}
             </p>
 
             {/* Reference-Style Glowing Pill Buttons */}
@@ -1407,7 +1410,7 @@ export default function HomePage({ onNavigateDashboard, onStartMission, currentU
                 id="btn-hero-gov-portal"
               >
                 <span>🏛️</span>
-                <span>Government & Org Portal</span>
+                <span>{t("hero.govPortalBtn")}</span>
               </button>
 
               <button
@@ -1416,7 +1419,7 @@ export default function HomePage({ onNavigateDashboard, onStartMission, currentU
                 id="btn-hero-indiv-portal"
               >
                 <span>👤</span>
-                <span>Individual Portal</span>
+                <span>{t("hero.indivPortalBtn")}</span>
               </button>
 
               <button
@@ -1432,7 +1435,7 @@ export default function HomePage({ onNavigateDashboard, onStartMission, currentU
                 }}
               >
                 <span>⚡</span>
-                <span>Try It Now (Guest Sandbox)</span>
+                <span>{t("hero.tryGuestBtn")}</span>
               </button>
             </div>
 
@@ -1443,7 +1446,7 @@ export default function HomePage({ onNavigateDashboard, onStartMission, currentU
                   {missionsList.length > 0 ? missionsList.length : "0"}
                 </span>
                 <span className="hero-stat-label">
-                  {missionsList.length > 0 ? "Missions Processed" : "Indexed Missions"}
+                  {missionsList.length > 0 ? t("hero.statMissionsProcessed") : t("hero.statMissionsIndexed")}
                 </span>
               </div>
               <div className="hero-stat-item">
@@ -1453,7 +1456,7 @@ export default function HomePage({ onNavigateDashboard, onStartMission, currentU
                     : "18,802"}
                 </span>
                 <span className="hero-stat-label">
-                  {missionsList.length > 0 ? "SfM Sparse Points" : "Sample Sparse Points"}
+                  {missionsList.length > 0 ? t("hero.statSparsePoints") : t("hero.statSamplePoints")}
                 </span>
               </div>
               <div className="hero-stat-item">
@@ -1463,7 +1466,7 @@ export default function HomePage({ onNavigateDashboard, onStartMission, currentU
                     : "YOLOv11"}
                 </span>
                 <span className="hero-stat-label">
-                  {missionsList.length > 0 ? "Neural Detections" : "Multi-Class Detector"}
+                  {missionsList.length > 0 ? t("hero.statNeuralDetections") : t("hero.statDetector")}
                 </span>
               </div>
               <div className="hero-stat-item">
@@ -1473,7 +1476,7 @@ export default function HomePage({ onNavigateDashboard, onStartMission, currentU
                 >
                   {systemHealth.online ? "ONLINE" : "OFFLINE"}
                 </span>
-                <span className="hero-stat-label">Hardware Engine</span>
+                <span className="hero-stat-label">{t("hero.statEngine")}</span>
               </div>
             </div>
           </div>

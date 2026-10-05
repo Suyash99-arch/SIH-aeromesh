@@ -22,8 +22,10 @@ import {
   deleteMissionMarking,
   fetchMissionKeyframes,
 } from "../../api/missions";
+import { useUI } from "../../context/UIContext";
 
 export default function MissionAnalysisWorkspace({ mission, notice }) {
+  const { t, language } = useUI();
   const missionId = mission?.id || "";
 
   const workspaceRef = useRef(null);
@@ -630,11 +632,11 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
           </span>
 
           <span className="top-bar-sector-tag">
-            {mission?.sector || mission?.location || "Zone 1"}
+            {mission?.sector || mission?.location || (language === "hi" ? "जोन 1" : "Zone 1")}
           </span>
 
           <span className="top-bar-status-pill">
-            <i /> {mission?.status || "MESH_GENERATED"}
+            <i /> {t("stages." + (mission?.status || "MESH_GENERATED"), mission?.status || "MESH_GENERATED")}
           </span>
 
           <span
@@ -642,12 +644,12 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
           >
             {isMetricCalibrated ? (
               <>
-                ● METRIC (
+                ● {t("sceneIntelligence.metric", "METRIC")} (
                 {activeCalibration?.scale_factor?.toFixed(4) || "1.0000"}{" "}
                 m/unit)
               </>
             ) : (
-              <>▲ RELATIVE SCALE</>
+              <>▲ {t("sceneIntelligence.relativeScale", "RELATIVE SCALE")}</>
             )}
           </span>
 
@@ -668,7 +670,7 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
               }}
               title="Per-frame GPS/IMU telemetry was not provided for this mission. Trajectory rendering is disabled."
             >
-              ● Camera trajectory not available (no telemetry for this flight)
+              ● {t("sceneIntelligence.noTrajectoryAvailable", "Camera trajectory not available (no telemetry for this flight)")}
             </span>
           )}
         </div>
@@ -681,7 +683,7 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
             onClick={() => setPrimaryTab("3d_model")}
           >
             <Icon name="Box" size={14} />
-            3D Model View
+            {t("sceneIntelligence.modelView3D", "3D Model View")}
           </button>
           <button
             type="button"
@@ -689,7 +691,7 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
             onClick={() => setPrimaryTab("video_frames")}
           >
             <Icon name="Film" size={14} />
-            Video Frames
+            {t("sceneIntelligence.videoFramesTab", "Video Frames")}
           </button>
         </div>
 
@@ -716,7 +718,7 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
           <button
             className="top-bar-btn primary"
             onClick={toggleFullscreen}
-            title={isFullscreen ? "Exit Fullscreen" : "Enter Fullscreen"}
+            title={isFullscreen ? t("sceneIntelligence.exitFullscreen", "Exit Fullscreen") : t("sceneIntelligence.fullscreen", "Fullscreen")}
           >
             <svg
               width="13"
@@ -728,7 +730,7 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
             >
               <path d="M8 3H5a2 2 0 0 0-2 2v3M21 8V5a2 2 0 0 0-2-2h-3M3 16v3a2 2 0 0 0 2 2h3M16 21h3a2 2 0 0 0 2-2v-3" />
             </svg>
-            {isFullscreen ? "Exit Fullscreen" : "Fullscreen"}
+            {isFullscreen ? t("sceneIntelligence.exitFullscreen", "Exit Fullscreen") : t("sceneIntelligence.fullscreen", "Fullscreen")}
           </button>
         </div>
       </header>
@@ -790,7 +792,7 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
                 >
                   <polygon points="12 2 2 7 12 12 22 7 12 2" />
                 </svg>
-                Layer Visibility
+                {t("sceneIntelligence.layerVisibility", "Layer Visibility")}
               </span>
               <button
                 className="layers-popover-close"
@@ -803,15 +805,15 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
 
             <div className="layers-popover-list">
               {[
-                ["mesh", "Surface Mesh"],
-                ["pointCloud", "Point Cloud"],
-                ["semanticObjects", "3D Objects"],
-                ["cameraTrajectory", "Flight Cameras"],
-                ["vehicles", "Vehicles"],
-                ["people", "People"],
-                ["grid", "Reference Grid"],
-                ["labels", "Object Labels"],
-                ["lowConfidence", "Low-Confidence (<2 views)"],
+                ["mesh", t("sceneIntelligence.mesh", "Surface Mesh")],
+                ["pointCloud", t("sceneIntelligence.pointCloud", "Point Cloud")],
+                ["semanticObjects", t("sceneIntelligence.semanticObjects", "3D Objects")],
+                ["cameraTrajectory", t("sceneIntelligence.cameraTrajectory", "Flight Cameras")],
+                ["vehicles", t("sceneIntelligence.vehicles", "Vehicles")],
+                ["people", t("sceneIntelligence.filterPeople", "People")],
+                ["grid", t("sceneIntelligence.referenceGrid", "Reference Grid")],
+                ["labels", t("sceneIntelligence.objectLabels", "Object Labels")],
+                ["lowConfidence", t("sceneIntelligence.lowConfidenceViews", "Low-Confidence (<2 views)")],
               ].map(([key, label]) => (
                 <label className="layers-popover-item" key={key}>
                   <span>{label}</span>
@@ -886,7 +888,7 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
                 onClick={() => setActiveTab("objects")}
                 title="Inspect in right panel"
               >
-                Inspect
+                {t("sceneIntelligence.inspect", "Inspect")}
               </button>
               <button
                 className="object-hud-btn clear"
@@ -911,19 +913,19 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
             className={`inspector-tab-btn ${activeTab === "overview" ? "active" : ""}`}
             onClick={() => setActiveTab("overview")}
           >
-            Overview
+            {t("sceneIntelligence.tabOverview", "Overview")}
           </button>
           <button
             className={`inspector-tab-btn ${activeTab === "objects" ? "active" : ""}`}
             onClick={() => setActiveTab("objects")}
           >
-            Objects {analytics.valid > 0 ? `(${analytics.valid})` : (objects.length > 0 ? `(${objects.length})` : "")}
+            {t("sceneIntelligence.tabObjects", "Objects")} {analytics.valid > 0 ? `(${analytics.valid})` : (objects.length > 0 ? `(${objects.length})` : "")}
           </button>
           <button
             className={`inspector-tab-btn ${activeTab === "analytics" ? "active" : ""}`}
             onClick={() => setActiveTab("analytics")}
           >
-            Analytics
+            {t("sceneIntelligence.tabAnalytics", "Analytics")}
           </button>
         </div>
 
@@ -946,7 +948,7 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
                       {detectedSceneType.tag}
                     </span>
                     <span className="scene-confidence">
-                      {detectedSceneType.confidence}% confidence
+                      {detectedSceneType.confidence}% {t("sceneIntelligence.confidence", "confidence")}
                     </span>
                   </div>
                   <div className="scene-card-heading">
@@ -972,45 +974,45 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
               )}
 
               <div className="inspector-section-title">
-                <span>Model Architecture</span>
-                <span className="badge-tag valid">SURFACE MESH</span>
+                <span>{t("sceneIntelligence.modelArchitecture", "Model Architecture")}</span>
+                <span className="badge-tag valid">{t("sceneIntelligence.surfaceMeshBadge", "SURFACE MESH")}</span>
               </div>
 
               <div className="inspector-stat-grid">
                 <div className="inspector-stat-cell">
                   <span className="inspector-stat-label">
-                    Registered Cameras
+                    {t("sceneIntelligence.registeredCameras", "Registered Cameras")}
                   </span>
                   <span className="inspector-stat-val highlight">
                     {reconstructionMeta?.registered_cameras != null
                       ? `${reconstructionMeta.registered_cameras} / ${reconstructionMeta.total_images ?? reconstructionMeta.registered_cameras}`
-                      : "unavailable"}
+                      : t("sceneIntelligence.unavailable", "unavailable")}
                   </span>
                 </div>
                 <div className="inspector-stat-cell">
-                  <span className="inspector-stat-label">Sparse Points</span>
+                  <span className="inspector-stat-label">{t("sceneIntelligence.sparsePoints", "Sparse Points")}</span>
                   <span className="inspector-stat-val highlight">
                     {reconstructionMeta?.sparse_point_count != null
                       ? reconstructionMeta.sparse_point_count.toLocaleString()
-                      : "unavailable"}
+                      : t("sceneIntelligence.unavailable", "unavailable")}
                   </span>
                 </div>
                 <div className="inspector-stat-cell">
-                  <span className="inspector-stat-label">Mesh Faces</span>
+                  <span className="inspector-stat-label">{t("sceneIntelligence.meshFaces", "Mesh Faces")}</span>
                   <span className="inspector-stat-val">
                     {reconstructionMeta?.mesh?.face_count != null
                       ? reconstructionMeta.mesh.face_count.toLocaleString()
-                      : "unavailable"}
+                      : t("sceneIntelligence.unavailable", "unavailable")}
                   </span>
                 </div>
                 <div className="inspector-stat-cell">
                   <span className="inspector-stat-label">
-                    Mean Reproj Error
+                    {t("sceneIntelligence.meanReprojError", "Mean Reproj Error")}
                   </span>
                   <span className="inspector-stat-val">
                     {reconstructionMeta?.mean_reprojection_error != null
                       ? `${Number(reconstructionMeta.mean_reprojection_error).toFixed(3)} px`
-                      : "unavailable"}
+                      : t("sceneIntelligence.unavailable", "unavailable")}
                   </span>
                 </div>
               </div>
@@ -1019,35 +1021,35 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
                 className="inspector-section-title"
                 style={{ marginTop: "6px" }}
               >
-                <span>Coordinate Reference</span>
+                <span>{t("sceneIntelligence.coordinateReference", "Coordinate Reference")}</span>
               </div>
 
               <table className="prop-table">
                 <tbody>
                   <tr>
-                    <td>Coordinate System</td>
+                    <td>{t("sceneIntelligence.coordinateSystem", "Coordinate System")}</td>
                     <td>LOCAL_ARBITRARY</td>
                   </tr>
                   <tr>
-                    <td>Scale Status</td>
+                    <td>{t("sceneIntelligence.scaleStatus", "Scale Status")}</td>
                     <td
                       style={{
                         color: isMetricCalibrated ? "#10b981" : "#f59e0b",
                       }}
                     >
                       {isMetricCalibrated
-                        ? "METRIC CALIBRATED"
-                        : "UNREFERENCED"}
+                        ? t("sceneIntelligence.metricCalibrated", "METRIC CALIBRATED")
+                        : t("sceneIntelligence.unreferenced", "UNREFERENCED")}
                     </td>
                   </tr>
                   <tr>
-                    <td>Dense Stereo (MVS)</td>
-                    <td style={{ color: "#94a3b8" }}>CUDA/GPU Required</td>
+                    <td>{t("sceneIntelligence.denseStereo", "Dense Stereo (MVS)")}</td>
+                    <td style={{ color: "#94a3b8" }}>{t("sceneIntelligence.cudaGpuRequired", "CUDA/GPU Required")}</td>
                   </tr>
                   <tr>
-                    <td>Georeferencing</td>
+                    <td>{t("sceneIntelligence.georeferencing", "Georeferencing")}</td>
                     <td style={{ color: "#94a3b8" }}>
-                      UNREFERENCED (EPSG:4326 N/A)
+                      {t("sceneIntelligence.unreferencedEpsg", "UNREFERENCED (EPSG:4326 N/A)")}
                     </td>
                   </tr>
                 </tbody>
@@ -1084,7 +1086,7 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
                     <circle cx="11" cy="11" r="8" />
                     <line x1="21" y1="21" x2="16.65" y2="16.65" />
                   </svg>
-                  Explore {analytics.valid > 0 ? analytics.valid : objects.length} 3D Detections
+                  {t("sceneIntelligence.exploreDetections", `Explore ${analytics.valid > 0 ? analytics.valid : objects.length} 3D Detections`, { count: analytics.valid > 0 ? analytics.valid : objects.length })}
                 </button>
               </div>
             </>
@@ -1117,7 +1119,7 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
                           textTransform: "uppercase",
                         }}
                       >
-                        Selected 3D Object
+                        {t("sceneIntelligence.selected3DObject", "Selected 3D Object")}
                       </span>
                       <h4
                         style={{
@@ -1135,14 +1137,14 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
                       onClick={handleClearSelection}
                       title="Back to object list"
                     >
-                      ← List
+                      {t("sceneIntelligence.backToList", "← List")}
                     </button>
                   </div>
 
                   {/* 3D Coordinates */}
                   <div className="object-coord-box">
                     <div className="coord-cell">
-                      <label>X (Local)</label>
+                      <label>{t("sceneIntelligence.xLocal", "X (Local)")}</label>
                       <span>
                         {selectedObject.position_3d
                           ? selectedObject.position_3d[0].toFixed(2)
@@ -1150,7 +1152,7 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
                       </span>
                     </div>
                     <div className="coord-cell">
-                      <label>Y (Height)</label>
+                      <label>{t("sceneIntelligence.yHeight", "Y (Height)")}</label>
                       <span>
                         {selectedObject.position_3d
                           ? selectedObject.position_3d[1].toFixed(2)
@@ -1158,7 +1160,7 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
                       </span>
                     </div>
                     <div className="coord-cell">
-                      <label>Z (Depth)</label>
+                      <label>{t("sceneIntelligence.zDepth", "Z (Depth)")}</label>
                       <span>
                         {selectedObject.position_3d
                           ? selectedObject.position_3d[2].toFixed(2)
@@ -1171,13 +1173,13 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
                   <table className="prop-table">
                     <tbody>
                       <tr>
-                        <td>Semantic Class</td>
+                        <td>{t("sceneIntelligence.semanticClass", "Semantic Class")}</td>
                         <td style={{ color: "#38bdf8", fontWeight: 700 }}>
                           {selectedObject.class || selectedObject.class_name}
                         </td>
                       </tr>
                       <tr>
-                        <td>Motion Dynamics</td>
+                        <td>{t("sceneIntelligence.motionDynamics", "Motion Dynamics")}</td>
                         <td>
                           <span
                             className={`badge-tag ${(selectedObject.motion_state || "STATIC").toLowerCase()}`}
@@ -1187,7 +1189,7 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
                         </td>
                       </tr>
                       <tr>
-                        <td>SfM Association Status</td>
+                        <td>{t("sceneIntelligence.sfmAssociationStatus", "SfM Association Status")}</td>
                         <td>
                           <span
                             className={`badge-tag ${(
@@ -1201,21 +1203,21 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
                         </td>
                       </tr>
                       <tr>
-                        <td>Evidence Keyframes</td>
+                        <td>{t("sceneIntelligence.evidenceKeyframes", "Evidence Keyframes")}</td>
                         <td>
                           {selectedObject.evidence_count || 1}{" "}
                           {(selectedObject.evidence_count || 1) === 1
-                            ? "frame"
-                            : "frames"}{" "}
+                            ? t("sceneIntelligence.frame", "frame")
+                            : t("sceneIntelligence.frames", "frames")}{" "}
                           (
                           {selectedObject.keyframes?.length ||
                             selectedObject.evidence_count ||
                             1}{" "}
-                          triangulated)
+                          {t("sceneIntelligence.triangulated", "triangulated")})
                         </td>
                       </tr>
                       <tr>
-                        <td>Spatial Confidence</td>
+                        <td>{t("sceneIntelligence.spatialConfidence", "Spatial Confidence")}</td>
                         <td style={{ color: "#10b981", fontWeight: 700 }}>
                           {selectedObject.association_confidence
                             ? `${Math.round(selectedObject.association_confidence * 100)}%`
@@ -1262,13 +1264,13 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
                         <line x1="17" y1="2" x2="17" y2="22" />
                         <line x1="2" y1="12" x2="22" y2="12" />
                       </svg>
-                      Inspect Video Frames & Evidence
+                      {t("sceneIntelligence.inspectEvidence", "Inspect Video Frames & Evidence")}
                     </button>
                     <button
                       className="action-btn-secondary"
                       onClick={() => setSelectedObject(selectedObject)}
                     >
-                      Focus Camera on Object
+                      {t("sceneIntelligence.focusCamera", "Focus Camera on Object")}
                     </button>
                   </div>
                 </div>
@@ -1295,7 +1297,7 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
                     </svg>
                     <input
                       type="text"
-                      placeholder="Search objects, tags, motion..."
+                      placeholder={t("sceneIntelligence.searchPlaceholder", "Search objects, tags, motion...")}
                       value={searchQuery}
                       onChange={(e) => setSearchQuery(e.target.value)}
                     />
@@ -1317,14 +1319,14 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
 
                   <div className="filter-pill-row">
                     {[
-                      ["valid", `Valid (${analytics.valid})`],
-                      ["all", `All (${analytics.total})`],
-                      ...(analytics.maritime > 0 ? [["maritime", `Maritime (${analytics.maritime})`]] : []),
-                      ["vehicles", `Vehicles (${analytics.vehicles})`],
-                      ["people", `People (${analytics.people})`],
-                      ["low_conf", `Low Conf (${analytics.lowConf})`],
-                      ["moving", "Moving"],
-                      ["static", "Static"],
+                      ["valid", `${t("sceneIntelligence.filterValid", "Valid")} (${analytics.valid})`],
+                      ["all", `${t("sceneIntelligence.filterAll", "All")} (${analytics.total})`],
+                      ...(analytics.maritime > 0 ? [["maritime", `${t("sceneIntelligence.filterMaritime", "Maritime")} (${analytics.maritime})`]] : []),
+                      ["vehicles", `${t("sceneIntelligence.filterVehicles", "Vehicles")} (${analytics.vehicles})`],
+                      ["people", `${t("sceneIntelligence.filterPeople", "People")} (${analytics.people})`],
+                      ["low_conf", `${t("sceneIntelligence.filterLowConf", "Low Conf")} (${analytics.lowConf})`],
+                      ["moving", t("sceneIntelligence.filterMoving", "Moving")],
+                      ["static", t("sceneIntelligence.filterStatic", "Static")],
                     ].map(([fKey, fLabel]) => (
                       <button
                         key={fKey}
@@ -1346,7 +1348,7 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
                           fontSize: "11px",
                         }}
                       >
-                        No matching 3D objects found
+                        {t("sceneIntelligence.noMatchingObjects", "No matching 3D objects found")}
                       </div>
                     ) : (
                       filteredObjects.map((obj) => (
@@ -1407,33 +1409,33 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
               style={{ display: "flex", flexDirection: "column", gap: "12px" }}
             >
               <div className="inspector-section-title">
-                <span>Spatial Intelligence</span>
+                <span>{t("sceneIntelligence.spatialIntelligence", "Spatial Intelligence")}</span>
                 <span className="badge-tag valid">YOLOv11 + SfM</span>
               </div>
 
               <div className="inspector-stat-grid">
                 <div className="inspector-stat-cell">
-                  <span className="inspector-stat-label">Valid (≥2 Views)</span>
+                  <span className="inspector-stat-label">{t("sceneIntelligence.validViews", "Valid (≥2 Views)")}</span>
                   <span className="inspector-stat-val highlight">
                     {analytics.valid}
                   </span>
                 </div>
                 <div className="inspector-stat-cell">
-                  <span className="inspector-stat-label">Low Confidence</span>
+                  <span className="inspector-stat-label">{t("sceneIntelligence.lowConfidence", "Low Confidence")}</span>
                   <span className="inspector-stat-val" style={{ color: "#f59e0b" }}>
                     {analytics.lowConf}
                   </span>
                 </div>
                 <div className="inspector-stat-cell">
                   <span className="inspector-stat-label">
-                    Vehicles / People
+                    {t("sceneIntelligence.vehiclesPeople", "Vehicles / People")}
                   </span>
                   <span className="inspector-stat-val">
                     {analytics.vehicles} / {analytics.people}
                   </span>
                 </div>
                 <div className="inspector-stat-cell">
-                  <span className="inspector-stat-label">Static / Moving</span>
+                  <span className="inspector-stat-label">{t("sceneIntelligence.staticMoving", "Static / Moving")}</span>
                   <span className="inspector-stat-val">
                     {analytics.staticCount} / {analytics.moving}
                   </span>
@@ -1444,30 +1446,30 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
                 className="inspector-section-title"
                 style={{ marginTop: "6px" }}
               >
-                <span>Photogrammetric Quality</span>
+                <span>{t("sceneIntelligence.photogrammetricQuality", "Photogrammetric Quality")}</span>
               </div>
 
               <table className="prop-table">
                 <tbody>
                   <tr>
-                    <td>Keyframe Cameras</td>
+                    <td>{t("sceneIntelligence.keyframeCameras", "Keyframe Cameras")}</td>
                     <td>
                       {reconstructionMeta?.registered_cameras != null
-                        ? `${reconstructionMeta.registered_cameras} registered (${reconstructionMeta.total_images ? Math.round((reconstructionMeta.registered_cameras / reconstructionMeta.total_images) * 100) : 100}%)`
+                        ? `${reconstructionMeta.registered_cameras} ${t("sceneIntelligence.registered", "registered")} (${reconstructionMeta.total_images ? Math.round((reconstructionMeta.registered_cameras / reconstructionMeta.total_images) * 100) : 100}%)`
                         : "—"}
                     </td>
                   </tr>
                   <tr>
-                    <td>Sparse Inliers</td>
+                    <td>{t("sceneIntelligence.sparseInliers", "Sparse Inliers")}</td>
                     <td>
                       {reconstructionMeta?.sparse_point_count != null ||
                       reconstructionMeta?.point_count != null
-                        ? `${(reconstructionMeta.sparse_point_count || reconstructionMeta.point_count).toLocaleString()} triangulated`
+                        ? `${(reconstructionMeta.sparse_point_count || reconstructionMeta.point_count).toLocaleString()} ${t("sceneIntelligence.triangulated", "triangulated")}`
                         : "—"}
                     </td>
                   </tr>
                   <tr>
-                    <td>Mean Error (COLMAP)</td>
+                    <td>{t("sceneIntelligence.meanErrorColmap", "Mean Error (COLMAP)")}</td>
                     <td>
                       {reconstructionMeta?.mean_reprojection_error != null
                         ? `${Number(reconstructionMeta.mean_reprojection_error).toFixed(2)} px`
@@ -1475,17 +1477,17 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
                     </td>
                   </tr>
                   <tr>
-                    <td>Surface Mesh</td>
+                    <td>{t("sceneIntelligence.surfaceMesh", "Surface Mesh")}</td>
                     <td>
                       {reconstructionMeta?.mesh?.vertices != null
-                        ? `${reconstructionMeta.mesh.vertices.toLocaleString()} vertices · ${reconstructionMeta.mesh.faces?.toLocaleString() || 0} faces`
+                        ? `${reconstructionMeta.mesh.vertices.toLocaleString()} ${t("sceneIntelligence.vertices", "vertices")} · ${reconstructionMeta.mesh.faces?.toLocaleString() || 0} ${t("sceneIntelligence.faces", "faces")}`
                         : reconstructionMeta?.mesh_url
-                          ? "Available (PLY)"
-                          : "Unavailable"}
+                          ? t("sceneIntelligence.availablePly", "Available (PLY)")
+                          : t("sceneIntelligence.unavailable", "Unavailable")}
                     </td>
                   </tr>
                   <tr>
-                    <td>Coordinate System</td>
+                    <td>{t("sceneIntelligence.coordinateSystem", "Coordinate System")}</td>
                     <td>
                       {reconstructionMeta?.scale?.coordinate_system ||
                         "LOCAL_ARBITRARY"}
@@ -1535,7 +1537,7 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
                   <polygon points="23 7 16 12 23 17 23 7" />
                   <rect x="1" y="5" width="15" height="14" rx="2" ry="2" />
                 </svg>
-                Video ↔ 3D Evidence Verification · {selectedObject.object_id}
+                {t("sceneIntelligence.videoEvidenceVerification", "Video ↔ 3D Evidence Verification")} · {selectedObject.object_id}
               </h3>
               <button
                 className="analysis-modal-close"
@@ -1676,7 +1678,7 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
                                 fontSize: "12px",
                               }}
                             >
-                              Loading frame observation for {selectedObject.object_id}...
+                              {t("sceneIntelligence.loadingFrameObservation", `Loading frame observation for ${selectedObject.object_id}...`, { id: selectedObject.object_id })}
                             </div>
                           )}
                         </div>
@@ -1690,13 +1692,13 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
                           }}
                         >
                           <span>
-                            Keyframe:{" "}
+                            {t("sceneIntelligence.keyframe", "Keyframe")}:{" "}
                             <b style={{ color: "#38bdf8", fontFamily: "monospace" }}>
                               {activeObs?.frame_id || "frame_00000.jpg"}
                             </b>
                           </span>
                           <span>
-                            Timestamp:{" "}
+                            {t("sceneIntelligence.timestamp", "Timestamp")}:{" "}
                             <b>
                               {activeObs?.timestamp?.toFixed(2) ?? "0.00"}s
                             </b>
@@ -1722,7 +1724,7 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
                       textTransform: "uppercase",
                     }}
                   >
-                    Spatial Reprojection Telemetry
+                    {t("sceneIntelligence.spatialTelemetry", "Spatial Reprojection Telemetry")}
                   </span>
 
                   {(() => {
@@ -1734,19 +1736,19 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
                       <table className="prop-table">
                         <tbody>
                           <tr>
-                            <td>Object ID</td>
+                            <td>{t("sceneIntelligence.objectId", "Object ID")}</td>
                             <td style={{ fontFamily: "monospace", fontWeight: 700 }}>
                               {selectedObject.object_id} ({selectedObject.track_id})
                             </td>
                           </tr>
                           <tr>
-                            <td>Class</td>
+                            <td>{t("sceneIntelligence.class", "Class")}</td>
                             <td style={{ color: "#38bdf8", fontWeight: 700 }}>
                               {activeObs?.class || selectedObject.class || selectedObject.class_name}
                             </td>
                           </tr>
                           <tr>
-                            <td>2D Projected / YOLO BBox</td>
+                            <td>{t("sceneIntelligence.projectedBbox", "2D Projected / YOLO BBox")}</td>
                             <td style={{ fontFamily: "monospace", fontSize: "11px" }}>
                               {activeObs?.bbox_2d
                                 ? `[${activeObs.bbox_2d.map((v) => Math.round(v)).join(", ")}]`
@@ -1754,7 +1756,7 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
                             </td>
                           </tr>
                           <tr>
-                            <td>Reprojection Error</td>
+                            <td>{t("sceneIntelligence.reprojError", "Reprojection Error")}</td>
                             <td style={{ color: activeObs?.reprojection_error_px != null ? "#10b981" : "#94a3b8", fontWeight: 700 }}>
                               {activeObs?.reprojection_error_px != null
                                 ? `${activeObs.reprojection_error_px.toFixed(2)} px`
@@ -1762,7 +1764,7 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
                             </td>
                           </tr>
                           <tr>
-                            <td>3D World Position</td>
+                            <td>{t("sceneIntelligence.worldPosition", "3D World Position")}</td>
                             <td style={{ fontFamily: "monospace", fontSize: "11px" }}>
                               {selectedObject.position_3d
                                 ? `[${selectedObject.position_3d.map((v) => v.toFixed(2)).join(", ")}]`
@@ -1770,7 +1772,7 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
                             </td>
                           </tr>
                           <tr>
-                            <td>Camera Distance (Zc)</td>
+                            <td>{t("sceneIntelligence.cameraDistance", "Camera Distance (Zc)")}</td>
                             <td>
                               {activeObs?.depth_zc != null
                                 ? `${activeObs.depth_zc.toFixed(1)} m`
@@ -1778,9 +1780,9 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
                             </td>
                           </tr>
                           <tr>
-                            <td>Triangulated Keyframes</td>
+                            <td>{t("sceneIntelligence.triangulatedKeyframes", "Triangulated Keyframes")}</td>
                             <td style={{ color: "#38bdf8", fontWeight: 700 }}>
-                              {objectEvidence?.observations?.length || objectEvidence?.observations_count || 0} views
+                              {objectEvidence?.observations?.length || objectEvidence?.observations_count || 0} {t("sceneIntelligence.views", "views")}
                             </td>
                           </tr>
                         </tbody>
@@ -1797,7 +1799,7 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
                         handleSelectObject(selectedObject);
                       }}
                     >
-                      Locate in 3D Scene
+                      {t("sceneIntelligence.locateIn3D", "Locate in 3D Scene")}
                     </button>
                     <button
                       className="action-btn-secondary"
@@ -1811,7 +1813,7 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
                         }
                       }}
                     >
-                      Open Full Res
+                      {t("sceneIntelligence.openFullRes", "Open Full Res")}
                     </button>
                   </div>
                 </div>

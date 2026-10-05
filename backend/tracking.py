@@ -468,6 +468,9 @@ class UltralyticsTracker:
         self.last_raw_tracks: int = 0
         self.last_final_tracks: int = 0
         self.last_tile_duplicates_suppressed: int = 0
+        self.last_dropped_box_size: int = 0
+        self.last_dropped_aspect_ratio: int = 0
+        self.last_dropped_short_tracks: int = 0
 
     def track_video(
         self,
@@ -486,6 +489,8 @@ class UltralyticsTracker:
         tile_cols: int = 2,
         tile_overlap: float = 0.15,
         tile_iou: float = 0.5,
+        min_box_size: tuple[float, float] | None = None,
+        min_track_hits: int | None = None,
         raw_frame_callback: Any = None,
     ) -> list[DetectionRecord]:
         import cv2
@@ -508,16 +513,24 @@ class UltralyticsTracker:
             iou_threshold=0.25,
         ) if tile_inference else None
         total_tile_duplicates = 0
+        dropped_box_size_count = 0
+        dropped_aspect_ratio_count = 0
 
         records = []
         frame_number = 0
         sampled_frame_seq = 0
+        target_min_hits = min_track_hits if min_track_hits is not None else max(2, int(round(sample_fps * 1.0)))
+
         while True:
             ok, frame = capture.read()
             if not ok:
                 break
             if frame_number % interval == 0:
                 sampled_frame_seq += 1
+                h, w = frame.shape[:2]
+                rel_min_w = min_box_size[0] if min_box_size else max(24.0, float(w) * 0.006)
+                rel_min_h = min_box_size[1] if min_box_size else max(24.0, float(h) * 0.006)
+
                 motion = None
                 if motion_estimator is not None:
                     motion = motion_estimator.estimate(frame)
@@ -526,7 +539,6 @@ class UltralyticsTracker:
                         motion_failures += 1
 
                 if tile_inference:
-                    h, w = frame.shape[:2]
                     tiles = generate_tiles(w, h, rows=tile_rows, cols=tile_cols, overlap=tile_overlap)
                     raw_frame_records = []
                     for tx1, ty1, tx2, ty2 in tiles:
@@ -554,6 +566,18 @@ class UltralyticsTracker:
                                 round(max(0.0, min(float(w), float(raw_box[2]) + tx1)), 4),
                                 round(max(0.0, min(float(h), float(raw_box[3]) + ty1)), 4),
                             ]
+                            bw = remapped_bbox[2] - remapped_bbox[0]
+                            bh = remapped_bbox[3] - remapped_bbox[1]
+                            if bw < rel_min_w or bh < rel_min_h:
+                                dropped_box_size_count += 1
+                                continue
+                            # Aspect ratio sanity check for vehicles
+                            if any(v in class_name.lower() for v in ("car", "van", "truck", "bus", "vehicle")):
+                                ar = bw / max(1.0, bh)
+                                if ar > 4.5 or ar < 0.22:
+                                    dropped_aspect_ratio_count += 1
+                                    continue
+
                             raw_frame_records.append(
                                 DetectionRecord(
                                     frame_id=str(frame_number),
@@ -587,16 +611,38 @@ class UltralyticsTracker:
                             continue
                         confidence_value = float(_scalar(box.conf[0]))
                         bbox = box.xyxy[0].tolist() if hasattr(box.xyxy[0], "tolist") else box.xyxy[0]
+                        bw = float(bbox[2]) - float(bbox[0])
+                        bh = float(bbox[3]) - float(bbox[1])
+                        if bw < rel_min_w or bh < rel_min_h:
+                            dropped_box_size_count += 1
+                            continue
+                        if any(v in class_name.lower() for v in ("car", "van", "truck", "bus", "vehicle")):
+                            ar = bw / max(1.0, bh)
+                            if ar > 4.5 or ar < 0.22:
+                                dropped_aspect_ratio_count += 1
+                                continue
                         ids = getattr(box, "id", None)
                         track_id = str(int(_scalar(ids[0]))) if ids is not None else None
                         records.append(DetectionRecord(str(frame_number), class_name, confidence_value, [float(value) for value in bbox], frame_number / fps, track_id))
             frame_number += 1
         capture.release()
 
-        raw_tracks = len({r.track_id for r in records if r.track_id})
+        # Track persistence filtering: eliminate transient single-frame noise
+        from collections import Counter
+        track_hit_counts = Counter(r.track_id for r in records if r.track_id)
+        valid_track_ids = {tid for tid, count in track_hit_counts.items() if count >= target_min_hits}
+        dropped_short_tracks = len(track_hit_counts) - len(valid_track_ids)
+
+        if valid_track_ids:
+            records = [r for r in records if r.track_id in valid_track_ids]
+
+        raw_tracks = len(valid_track_ids)
         self.last_motion_failures = motion_failures
         self.last_raw_tracks = raw_tracks
         self.last_tile_duplicates_suppressed = total_tile_duplicates
+        self.last_dropped_box_size = dropped_box_size_count
+        self.last_dropped_aspect_ratio = dropped_aspect_ratio_count
+        self.last_dropped_short_tracks = dropped_short_tracks
 
         if enable_stitching and records:
             stitched_records, num_stitched = stitch_tracklets(

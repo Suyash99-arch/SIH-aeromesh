@@ -2,10 +2,11 @@ import { useState, useEffect } from "react";
 import AuthModal from "../auth/AuthModal";
 import { getStoredUser, fetchCurrentUser } from "../../api/missions";
 import UIControlsToolbar from "./UIControlsToolbar";
+import { useUI } from "../../context/UIContext";
 
 /** Poll /api/v1/health every 30s; returns { ok, label } */
-function useHealthStatus() {
-  const [health, setHealth] = useState({ ok: null, label: "CHECKING…" });
+function useHealthStatus(language) {
+  const [health, setHealth] = useState({ ok: null, label: "…" });
 
   useEffect(() => {
     let cancelled = false;
@@ -15,19 +16,22 @@ function useHealthStatus() {
         if (cancelled) return;
         if (res.ok) {
           const json = await res.json();
-          const st = json?.status === "healthy" ? "OPERATIONAL" : json?.status?.toUpperCase() || "DEGRADED";
-          setHealth({ ok: json?.status === "healthy", label: `SYSTEMS ${st}` });
+          const isHealthy = json?.status === "healthy";
+          const label = language === "hi"
+            ? (isHealthy ? "सिस्टम सक्रिय" : "सिस्टम बाधित")
+            : (isHealthy ? "SYSTEMS OPERATIONAL" : `SYSTEMS ${json?.status?.toUpperCase() || "DEGRADED"}`);
+          setHealth({ ok: isHealthy, label });
         } else {
-          setHealth({ ok: false, label: `BACKEND ${res.status}` });
+          setHealth({ ok: false, label: language === "hi" ? `बैकएंड त्रुटि ${res.status}` : `BACKEND ${res.status}` });
         }
       } catch {
-        if (!cancelled) setHealth({ ok: false, label: "BACKEND UNREACHABLE" });
+        if (!cancelled) setHealth({ ok: false, label: language === "hi" ? "बैकएंड अनुपलब्ध" : "BACKEND UNREACHABLE" });
       }
     };
     check();
     const id = setInterval(check, 30_000);
     return () => { cancelled = true; clearInterval(id); };
-  }, []);
+  }, [language]);
 
   return health;
 }
@@ -41,7 +45,8 @@ export default function Topbar({
   onOpenProfile,
   onOpenAuth,
 }) {
-  const health = useHealthStatus();
+  const { t, language } = useUI();
+  const health = useHealthStatus(language);
 
   const isGuest = Boolean(currentUser?.is_guest || currentUser?.portal_type === "GUEST" || currentUser?.role === "GUEST");
 
@@ -70,7 +75,7 @@ export default function Topbar({
 
   const displayName = isGuest
     ? "Guest"
-    : (currentUser?.full_name || currentUser?.email || "Sign In");
+    : (currentUser?.full_name || currentUser?.email || t("auth.login"));
   const displayRole = isGuest ? "GUEST" : (currentUser?.role || "");
 
   const handleOperatorClick = () => {
@@ -86,28 +91,28 @@ export default function Topbar({
   return (
     <header className="topbar">
       <div className="crumbs">
-        <span style={{ cursor: "pointer" }} onClick={onOpenMissions} title="View all missions">
-          Mission Control
+        <span style={{ cursor: "pointer" }} onClick={onOpenMissions} title={t("dashboard.allMissions")}>
+          {t("nav.dashboard")}
         </span>
         <i>/</i>
         <button
           type="button"
           onClick={onOpenMissions}
-          title="Click to switch active mission"
+          title={t("selector.title")}
           style={{
             background: "transparent", border: "none", color: "var(--color-primary-400, #38bdf8)",
             cursor: "pointer", fontWeight: 600, padding: 0, font: "inherit",
             display: "inline-flex", alignItems: "center", gap: "6px",
           }}
         >
-          <span>{mission?.name || "Active Mission"}</span>
+          <span>{mission?.name || t("nav.activeMission")}</span>
           {mission?.status === "processing" && (
             <span style={{
               fontSize: "0.65rem", padding: "1px 5px",
               background: "rgba(14, 165, 233, 0.25)", border: "1px solid rgba(14, 165, 233, 0.5)",
               color: "#38bdf8", borderRadius: "3px",
             }}>
-              PROCESSING {mission.progress ? `${mission.progress}%` : ""}
+              {t("stages.PROCESSING")} {mission.progress ? `${mission.progress}%` : ""}
             </span>
           )}
         </button>
@@ -160,7 +165,7 @@ export default function Topbar({
               fontSize: "0.68rem", fontWeight: 700, padding: "2px 6px",
               borderRadius: "4px", marginLeft: "4px",
             }}>
-              LOG IN
+              {t("auth.login")}
             </span>
           )}
         </button>

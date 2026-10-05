@@ -12,18 +12,36 @@ console.log("==================================================");
 console.log("     HEXA SPARK i18n CONSISTENCY & KEY AUDIT      ");
 console.log("==================================================");
 
-// 1. Dynamic import of i18n dictionary
-const i18nModule = await import(`file://${i18nFile.replace(/\\/g, "/")}`);
-const { TRANSLATIONS, LANGUAGES } = i18nModule;
+const enFile = path.join(frontendSrc, "locales", "en.json");
+const hiFile = path.join(frontendSrc, "locales", "hi.json");
 
-const enKeys = Object.keys(TRANSLATIONS.en || {});
-const hiKeys = Object.keys(TRANSLATIONS.hi || {});
+const enJson = JSON.parse(fs.readFileSync(enFile, "utf-8"));
+const hiJson = JSON.parse(fs.readFileSync(hiFile, "utf-8"));
+
+function flattenDict(obj, prefix = "") {
+  const result = {};
+  for (const [key, value] of Object.entries(obj)) {
+    const fullKey = prefix ? `${prefix}.${key}` : key;
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      Object.assign(result, flattenDict(value, fullKey));
+    } else {
+      result[fullKey] = value;
+    }
+  }
+  return result;
+}
+
+const flatEn = flattenDict(enJson);
+const flatHi = flattenDict(hiJson);
+
+const enKeys = Object.keys(flatEn);
+const hiKeys = Object.keys(flatHi);
 
 console.log(`[Dictionary] English keys: ${enKeys.length}`);
 console.log(`[Dictionary] Hindi keys:   ${hiKeys.length}`);
 
-const missingInHindi = enKeys.filter((k) => !(k in TRANSLATIONS.hi));
-const missingInEnglish = hiKeys.filter((k) => !(k in TRANSLATIONS.en));
+const missingInHindi = enKeys.filter((k) => !(k in flatHi));
+const missingInEnglish = hiKeys.filter((k) => !(k in flatEn));
 
 let hasErrors = false;
 

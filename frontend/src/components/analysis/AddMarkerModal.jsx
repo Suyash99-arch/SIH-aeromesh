@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import Icon from "../ui/Icon";
+import { useUI } from "../../context/UIContext";
 
 const PRESET_COLORS = [
   { label: "Cyan", value: "#38bdf8" },
@@ -19,6 +20,7 @@ const PRESET_TYPES = [
 ];
 
 export default function AddMarkerModal({ isOpen, onClose, onSave, initialCoords }) {
+  const { t } = useUI();
   const [name, setName] = useState("");
   const [type, setType] = useState("Entry Point");
   const [color, setColor] = useState("#38bdf8");
@@ -58,7 +60,7 @@ export default function AddMarkerModal({ isOpen, onClose, onSave, initialCoords 
         <div className="analysis-modal-header">
           <div className="flex items-center gap-2">
             <Icon name="MapPin" size={16} className="cyan" />
-            <h3>Drop Custom 3D Marker</h3>
+            <h3>{t("sceneIntelligence.dropMarkerModalTitle", "Drop Custom 3D Marker")}</h3>
           </div>
           <button type="button" className="modal-close-btn" onClick={onClose}>
             ×
@@ -67,7 +69,7 @@ export default function AddMarkerModal({ isOpen, onClose, onSave, initialCoords 
 
         <form onSubmit={handleSubmit} className="marker-modal-form" style={{ padding: "20px" }}>
           <div className="form-row">
-            <label className="form-label">Marker Name / Identifier *</label>
+            <label className="form-label">{t("sceneIntelligence.markerName", "Marker Name / Identifier *")}</label>
             <input
               type="text"
               required
@@ -80,22 +82,22 @@ export default function AddMarkerModal({ isOpen, onClose, onSave, initialCoords 
           </div>
 
           <div className="form-row">
-            <label className="form-label">Marker Category / Type</label>
+            <label className="form-label">{t("sceneIntelligence.markerCategory", "Marker Category / Type")}</label>
             <select
               className="form-select"
               value={type}
               onChange={(e) => setType(e.target.value)}
             >
-              {PRESET_TYPES.map((t) => (
-                <option key={t} value={t}>
-                  {t}
+              {PRESET_TYPES.map((tVal) => (
+                <option key={tVal} value={tVal}>
+                  {tVal}
                 </option>
               ))}
             </select>
           </div>
 
           <div className="form-row">
-            <label className="form-label">Marker Color</label>
+            <label className="form-label">{t("sceneIntelligence.markerColor", "Marker Color")}</label>
             <div className="color-preset-row">
               {PRESET_COLORS.map((c) => (
                 <button
@@ -111,7 +113,7 @@ export default function AddMarkerModal({ isOpen, onClose, onSave, initialCoords 
           </div>
 
           <div className="form-row">
-            <label className="form-label">3D Coordinates [X, Y, Z]</label>
+            <label className="form-label">{t("sceneIntelligence.coordinates3D", "3D Coordinates [X, Y, Z]")}</label>
             <div className="coords-input-row">
               <input
                 type="number"
@@ -138,7 +140,7 @@ export default function AddMarkerModal({ isOpen, onClose, onSave, initialCoords 
                 onChange={(e) => setCoords([coords[0], coords[1], e.target.value])}
               />
             </div>
-            <small className="form-hint">Coordinates correspond to photogrammetric local metric space.</small>
+            <small className="form-hint">{t("sceneIntelligence.coordsHint", "Coordinates correspond to photogrammetric local metric space.")}</small>
           </div>
 
           <div className="modal-footer">
@@ -148,14 +150,14 @@ export default function AddMarkerModal({ isOpen, onClose, onSave, initialCoords 
               onClick={onClose}
               disabled={submitting}
             >
-              Cancel
+              {t("common.cancel", "Cancel")}
             </button>
             <button
               type="submit"
               className="btn btn-primary"
               disabled={submitting || !name.trim()}
             >
-              {submitting ? "Placing..." : "Drop Marker"}
+              {submitting ? t("common.loading", "Placing...") : t("sceneIntelligence.dropMarker", "Drop Marker")}
             </button>
           </div>
         </form>

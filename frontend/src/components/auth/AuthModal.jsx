@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { loginUser, clearAuthToken } from "../../api/missions";
+import { useUI } from "../../context/UIContext";
 
 export default function AuthModal({
   isOpen,
@@ -8,6 +9,7 @@ export default function AuthModal({
   onUserChange,
   notice,
 }) {
+  const { t } = useUI();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -289,7 +291,7 @@ export default function AuthModal({
                   marginBottom: "4px",
                 }}
               >
-                Email Address
+                {t("auth.personalEmail")}
               </label>
               <input
                 type="email"
@@ -318,7 +320,7 @@ export default function AuthModal({
                   marginBottom: "4px",
                 }}
               >
-                Password
+                {t("auth.password")}
               </label>
               <input
                 type="password"
@@ -366,7 +368,7 @@ export default function AuthModal({
                 opacity: loading || !email || !password ? 0.6 : 1,
               }}
             >
-              {loading ? "Authenticating..." : "Sign In with Credentials"}
+              {loading ? t("auth.loggingIn") : t("auth.submit")}
             </button>
           </form>
         </div>

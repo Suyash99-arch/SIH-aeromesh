@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import Icon from "../ui/Icon";
+import { useUI } from "../../context/UIContext";
 import {
   createMission,
   uploadVideo,
@@ -19,6 +20,7 @@ import "./NewIncidentWorkspace.css";
  * - 100% Offline-safe with zero external geocoding dependencies
  */
 export default function NewIncidentWorkspace({ onClose, onMissionCreated, currentUser, notice }) {
+  const { t } = useUI();
   const getLocalDatetimeString = (d = new Date()) => {
     const pad = (n) => String(n).padStart(2, "0");
     const year = d.getFullYear();
@@ -319,9 +321,9 @@ export default function NewIncidentWorkspace({ onClose, onMissionCreated, curren
             <div>
               <div className="incident-header-badge">
                 <span className="pulse-dot-cyan" />
-                <span>NEW AERIAL MISSION WORKSPACE · SURVEY & RECONSTRUCTION</span>
+                <span>{t("newMission.workspaceBadge")}</span>
               </div>
-              <h2 className="incident-header-title">Create Incident & Analyze Footage</h2>
+              <h2 className="incident-header-title">{t("newMission.workspaceTitle")}</h2>
             </div>
           </div>
 
@@ -329,7 +331,7 @@ export default function NewIncidentWorkspace({ onClose, onMissionCreated, curren
             type="button"
             className="incident-close-btn"
             onClick={onClose}
-            aria-label="Close workspace"
+            aria-label={t("newMission.closeWorkspace")}
           >
             <Icon name="X" size={18} />
           </button>
@@ -356,8 +358,8 @@ export default function NewIncidentWorkspace({ onClose, onMissionCreated, curren
                 <div style={{ flex: 1 }}>
                   <div style={{ color: "#f87171", fontWeight: 700, fontSize: "14px", marginBottom: "4px" }}>
                     {errorMessage.includes("worker not connected") || errorMessage.includes("Worker")
-                      ? "Processing Worker Disconnected"
-                      : "Submission Error"}
+                      ? t("newMission.workerDisconnected")
+                      : t("newMission.submissionError")}
                   </div>
                   <div style={{ color: "#cbd5e1", fontSize: "13px", lineHeight: "1.5" }}>
                     {errorMessage}
@@ -386,7 +388,7 @@ export default function NewIncidentWorkspace({ onClose, onMissionCreated, curren
                         }}
                       >
                         <Icon name="RotateCcw" size={14} />
-                        <span>Retry Pipeline Processing (Keep Uploaded Video)</span>
+                        <span>{t("newMission.retryPipelineKeepVideo")}</span>
                       </button>
                     </div>
                   )}
@@ -405,7 +407,7 @@ export default function NewIncidentWorkspace({ onClose, onMissionCreated, curren
                       }}
                     >
                       <strong style={{ color: "#38bdf8", display: "block", marginBottom: "4px" }}>
-                        How to connect a local worker via Cloudflare Tunnel:
+                        {t("newMission.tunnelHelpTitle")}
                       </strong>
                       1. Start worker: <code style={{ color: "#f1f5f9" }}>python -m uvicorn backend.main:app --port 8001</code> with PIPELINE_ENABLED=true<br />
                       2. Expose tunnel: <code style={{ color: "#f1f5f9" }}>cloudflared tunnel --url http://localhost:8001</code><br />
@@ -420,25 +422,25 @@ export default function NewIncidentWorkspace({ onClose, onMissionCreated, curren
             <div className="incident-section-card glass">
               <div className="section-card-header">
                 <Icon name="FileText" size={16} />
-                <h3>Incident Details</h3>
+                <h3>{t("newMission.incidentDetails")}</h3>
               </div>
 
               <div className="incident-form-grid">
                 <div className="form-field">
-                  <label htmlFor="inc-name">Incident Title / Name *</label>
+                  <label htmlFor="inc-name">{t("newMission.incidentTitle")}</label>
                   <input
                     id="inc-name"
                     type="text"
                     name="name"
                     value={formData.name}
                     onChange={handleInputChange}
-                    placeholder="e.g., Aerial Reconnaissance — Infrastructure Survey"
+                    placeholder={t("newMission.incidentTitlePlaceholder")}
                     required
                   />
                 </div>
 
                 <div className="form-field">
-                  <label htmlFor="inc-id">Incident ID (Auto-Generated)</label>
+                  <label htmlFor="inc-id">{t("newMission.incidentId")}</label>
                   <div className="inc-id-input-wrap">
                     <input
                       id="inc-id"
@@ -447,14 +449,14 @@ export default function NewIncidentWorkspace({ onClose, onMissionCreated, curren
                       readOnly
                       className="input-readonly mono"
                     />
-                    <span className="inc-id-tag">SYSTEM AUTO</span>
+                    <span className="inc-id-tag">{t("newMission.systemAuto")}</span>
                   </div>
                 </div>
 
                 <div className="form-field form-field-full">
                   <label htmlFor="inc-location">
-                    Incident Location
-                    <span className="field-hint">Coordinates, sector code, or landmark</span>
+                    {t("newMission.incidentLocation")}
+                    <span className="field-hint">{t("newMission.locationHint")}</span>
                   </label>
                   <div className="location-input-wrap">
                     <Icon name="MapPin" size={15} className="location-icon" />
@@ -464,26 +466,26 @@ export default function NewIncidentWorkspace({ onClose, onMissionCreated, curren
                       name="location"
                       value={formData.location}
                       onChange={handleInputChange}
-                      placeholder="e.g., Sector 04, North Perimeter (37.7749° N, 122.4194° W)"
+                      placeholder={t("newMission.locationPlaceholder")}
                     />
                   </div>
                 </div>
 
                 <div className="form-field form-field-full">
-                  <label htmlFor="inc-desc">Incident Description & Objectives</label>
+                  <label htmlFor="inc-desc">{t("newMission.incidentDesc")}</label>
                   <textarea
                     id="inc-desc"
                     name="description"
                     rows={2}
                     value={formData.description}
                     onChange={handleInputChange}
-                    placeholder="Describe survey, inspection, 3D mapping, or site response objectives..."
+                    placeholder={t("newMission.descPlaceholder")}
                   />
                 </div>
 
                 <div className="form-field form-field-datetime">
                   <div className="datetime-label-row">
-                    <label htmlFor="inc-datetime">Date & Time of Capture</label>
+                    <label htmlFor="inc-datetime">{t("newMission.captureDateTime")}</label>
                     <button
                       type="button"
                       className="live-sync-btn"
@@ -493,10 +495,10 @@ export default function NewIncidentWorkspace({ onClose, onMissionCreated, curren
                           dateTime: getLocalDatetimeString(new Date()),
                         }));
                       }}
-                      title="Sync timestamp to current exact local time"
+                      title={t("newMission.liveSyncTitle")}
                     >
                       <span className="live-clock-dot" />
-                      <span>LIVE SYNC NOW</span>
+                      <span>{t("newMission.liveSyncNow")}</span>
                     </button>
                   </div>
                   <div className="datetime-input-wrap">
@@ -508,7 +510,7 @@ export default function NewIncidentWorkspace({ onClose, onMissionCreated, curren
                       onChange={handleInputChange}
                     />
                     <div className="live-time-ticker">
-                      <span className="ticker-label">CURRENT REAL-TIME:</span>
+                      <span className="ticker-label">{t("newMission.currentRealTime")}</span>
                       <span className="ticker-val mono">
                         {liveTime.toLocaleDateString(undefined, {
                           year: "numeric",
@@ -527,14 +529,14 @@ export default function NewIncidentWorkspace({ onClose, onMissionCreated, curren
                 </div>
 
                 <div className="form-field">
-                  <label htmlFor="inc-operator">Assigned Operator / Team</label>
+                  <label htmlFor="inc-operator">{t("newMission.assignedOperator")}</label>
                   <input
                     id="inc-operator"
                     type="text"
                     name="operator"
                     value={formData.operator}
                     onChange={handleInputChange}
-                    placeholder="Operator callsign or squad identifier"
+                    placeholder={t("newMission.operatorPlaceholder")}
                   />
                 </div>
               </div>
@@ -544,7 +546,7 @@ export default function NewIncidentWorkspace({ onClose, onMissionCreated, curren
             <div className="incident-section-card glass">
               <div className="section-card-header">
                 <Icon name="Video" size={16} />
-                <h3>Drone Video Ingestion & Synchronized Preview</h3>
+                <h3>{t("newMission.videoIngestion")}</h3>
               </div>
 
               <div className="video-upload-preview-grid">
@@ -572,11 +574,11 @@ export default function NewIncidentWorkspace({ onClose, onMissionCreated, curren
                     <div className="dropzone-icon-circle">
                       <Icon name="UploadCloud" size={24} />
                     </div>
-                    <h4>{videoFile ? "Replace Video Footage" : "Drag & Drop Drone Footage"}</h4>
-                    <p>Supports MP4, MOV, or MKV captured by aerial drones</p>
+                    <h4>{videoFile ? t("newMission.replaceFootage") : t("newMission.dragDropFootage")}</h4>
+                    <p>{t("newMission.supportsFormats")}</p>
                     <button type="button" className="btn-browse-file">
                       <Icon name="Folder" size={14} />
-                      <span>{videoFile ? "Choose Different Video" : "Browse Local File"}</span>
+                      <span>{videoFile ? t("newMission.chooseDifferent") : t("newMission.browseLocal")}</span>
                     </button>
                     {videoMeta && (
                       <div className="selected-file-badge">
@@ -606,7 +608,7 @@ export default function NewIncidentWorkspace({ onClose, onMissionCreated, curren
                       />
                       <div className="preview-statusbar">
                         <span className="preview-indicator">
-                          <span className="dot-green" /> STREAM READY
+                          <span className="dot-green" /> {t("newMission.streamReady")}
                         </span>
                         <span className="preview-meta">{videoMeta?.name}</span>
                       </div>
@@ -614,8 +616,8 @@ export default function NewIncidentWorkspace({ onClose, onMissionCreated, curren
                   ) : (
                     <div className="video-preview-placeholder">
                       <Icon name="Film" size={32} />
-                      <p>Video preview will appear here immediately upon selection</p>
-                      <span className="placeholder-subtext">Hardware decoder active · Offline safe</span>
+                      <p>{t("newMission.previewPlaceholder")}</p>
+                      <span className="placeholder-subtext">{t("newMission.hardwareDecoderActive")}</span>
                     </div>
                   )}
                 </div>
@@ -629,38 +631,38 @@ export default function NewIncidentWorkspace({ onClose, onMissionCreated, curren
             <div className="rail-summary-card glass">
               <div className="rail-card-header">
                 <Icon name="Info" size={16} />
-                <h4>Incident Information</h4>
+                <h4>{t("newMission.incidentInformation")}</h4>
               </div>
 
               <div className="rail-info-list">
                 <div className="rail-info-row">
-                  <span className="info-label">Incident ID</span>
+                  <span className="info-label">{t("newMission.incidentIdLabel")}</span>
                   <span className="info-value mono cyan">{incidentId}</span>
                 </div>
                 <div className="rail-info-row">
-                  <span className="info-label">Title</span>
+                  <span className="info-label">{t("newMission.titleLabel")}</span>
                   <span className="info-value">{formData.name || "—"}</span>
                 </div>
                 <div className="rail-info-row">
-                  <span className="info-label">Location</span>
-                  <span className="info-value text-truncate">{formData.location || "Offline / Unset"}</span>
+                  <span className="info-label">{t("newMission.locationLabel")}</span>
+                  <span className="info-value text-truncate">{formData.location || t("newMission.offlineUnset")}</span>
                 </div>
                 <div className="rail-info-row">
-                  <span className="info-label">Operator</span>
-                  <span className="info-value">{formData.operator || "Anonymous"}</span>
+                  <span className="info-label">{t("newMission.operatorLabel")}</span>
+                  <span className="info-value">{formData.operator || t("newMission.anonymous")}</span>
                 </div>
                 <div className="rail-info-row">
-                  <span className="info-label">Capture Time</span>
+                  <span className="info-label">{t("newMission.captureTimeLabel")}</span>
                   <span className="info-value mono cyan" style={{ fontSize: "11px" }}>
-                    {formData.dateTime ? formData.dateTime.replace("T", " ") : "Real-time"}
+                    {formData.dateTime ? formData.dateTime.replace("T", " ") : t("newMission.realTime")}
                   </span>
                 </div>
                 <div className="rail-info-row">
-                  <span className="info-label">Target File</span>
-                  <span className="info-value text-truncate">{videoMeta ? videoMeta.name : "Awaiting footage"}</span>
+                  <span className="info-label">{t("newMission.targetFileLabel")}</span>
+                  <span className="info-value text-truncate">{videoMeta ? videoMeta.name : t("newMission.awaitingFootage")}</span>
                 </div>
                 <div className="rail-info-row">
-                  <span className="info-label">File Size</span>
+                  <span className="info-label">{t("newMission.fileSizeLabel")}</span>
                   <span className="info-value mono">{videoMeta ? videoMeta.size : "0.0 MB"}</span>
                 </div>
               </div>
@@ -669,19 +671,19 @@ export default function NewIncidentWorkspace({ onClose, onMissionCreated, curren
               <div className="hardware-spec-box">
                 <div className="hw-header">
                   <Icon name="Cpu" size={14} color="var(--cyan)" />
-                  <span>Compute Engine Authorization</span>
+                  <span>{t("newMission.computeAuthorization")}</span>
                 </div>
                 <div className="hw-content">
                   <div className="hw-spec-row">
-                    <span>Hardware:</span>
+                    <span>{t("newMission.hardwareLabel")}</span>
                     <strong>{computeDevice?.device_name || "Host Processor"}</strong>
                   </div>
                   <div className="hw-spec-row">
-                    <span>Inference Path:</span>
+                    <span>{t("newMission.inferencePathLabel")}</span>
                     <span>{computeDevice?.cuda_available ? "NVIDIA TensorRT GPU" : "CPU Multi-Threading"}</span>
                   </div>
                   <div className="hw-spec-row">
-                    <span>Est. Pipeline Time:</span>
+                    <span>{t("newMission.estPipelineTime")}</span>
                     <strong className="cyan">
                       {etaDetails?.eta_range_human || etaDetails?.eta_human || computeDevice?.estimated_duration || "~6 – 8 min"}
                     </strong>
@@ -689,12 +691,12 @@ export default function NewIncidentWorkspace({ onClose, onMissionCreated, curren
 
                   {etaDetails && (
                     <div style={{ marginTop: "10px", paddingTop: "8px", borderTop: "1px dashed rgba(255,255,255,0.15)", fontSize: "11px", color: "#94a3b8" }}>
-                      <div style={{ fontWeight: 600, color: "#38bdf8", marginBottom: "4px" }}>ETA Formula Inputs:</div>
+                      <div style={{ fontWeight: 600, color: "#38bdf8", marginBottom: "4px" }}>{t("newMission.etaFormulaInputs")}</div>
                       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px" }}>
-                        <span>Keyframes: <strong style={{ color: "#f8fafc" }}>{etaDetails.keyframe_count || 120}</strong></span>
-                        <span>Megapixels: <strong style={{ color: "#f8fafc" }}>{etaDetails.input_megapixels || "—"} MP</strong></span>
-                        <span>Throughput: <strong style={{ color: "#f8fafc" }}>{etaDetails.effective_throughput_mpix_s ? `${etaDetails.effective_throughput_mpix_s} MP/s` : "—"}</strong></span>
-                        <span>Confidence: <strong style={{ color: "#4ee38a" }}>{etaDetails.confidence_percent ? `${etaDetails.confidence_percent}%` : "—"}</strong></span>
+                        <span>{t("newMission.keyframesLabel")} <strong style={{ color: "#f8fafc" }}>{etaDetails.keyframe_count || 120}</strong></span>
+                        <span>{t("newMission.megapixelsLabel")} <strong style={{ color: "#f8fafc" }}>{etaDetails.input_megapixels || "—"} MP</strong></span>
+                        <span>{t("newMission.throughputLabel")} <strong style={{ color: "#f8fafc" }}>{etaDetails.effective_throughput_mpix_s ? `${etaDetails.effective_throughput_mpix_s} MP/s` : "—"}</strong></span>
+                        <span>{t("newMission.confidenceLabel")} <strong style={{ color: "#4ee38a" }}>{etaDetails.confidence_percent ? `${etaDetails.confidence_percent}%` : "—"}</strong></span>
                       </div>
                     </div>
                   )}
@@ -706,7 +708,7 @@ export default function NewIncidentWorkspace({ onClose, onMissionCreated, curren
             <div className="rail-actions-card glass">
               <div className="rail-card-header">
                 <Icon name="Zap" size={16} />
-                <h4>Quick Actions</h4>
+                <h4>{t("newMission.quickActions")}</h4>
               </div>
 
               <div className="quick-actions-btns">
@@ -717,7 +719,7 @@ export default function NewIncidentWorkspace({ onClose, onMissionCreated, curren
                   disabled={isSubmitting}
                 >
                   <Icon name="Save" size={14} />
-                  <span>Save as Draft</span>
+                  <span>{t("newMission.saveDraft")}</span>
                 </button>
 
                 <button
@@ -727,7 +729,7 @@ export default function NewIncidentWorkspace({ onClose, onMissionCreated, curren
                   disabled={isSubmitting}
                 >
                   <Icon name="Trash2" size={14} />
-                  <span>Clear All</span>
+                  <span>{t("newMission.clearAll")}</span>
                 </button>
 
                 <button
@@ -738,7 +740,7 @@ export default function NewIncidentWorkspace({ onClose, onMissionCreated, curren
                   id="btn-launch-incident-pipeline"
                 >
                   <Icon name={isSubmitting ? "Loader2" : "Rocket"} size={16} className={isSubmitting ? "spin" : ""} />
-                  <span>{isSubmitting ? "Authorizing Pipeline..." : "Authorize & Launch Pipeline"}</span>
+                  <span>{isSubmitting ? t("newMission.authorizingPipeline") : t("newMission.authorizeLaunch")}</span>
                 </button>
               </div>
 

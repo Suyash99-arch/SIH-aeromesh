@@ -16,9 +16,11 @@
     "@react-three/fiber": "^9.7.0",
     "@types/three": "^0.185.4",
     "framer-motion": "^13.1.1",
+    "i18next": "^26.4.2",
     "lucide-react": "^1.37.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
+    "react-i18next": "^17.0.15",
     "react-router-dom": "^7.18.3",
     "three": "^0.185.1",
     "typescript": "^5.7.2"

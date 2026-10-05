@@ -2,6 +2,7 @@ import { motion, useReducedMotion } from "framer-motion";
 import { useState, useEffect } from "react";
 import Icon from "../ui/Icon";
 import MissionSelectorPanel from "./MissionSelectorPanel";
+import { useUI } from "../../context/UIContext";
 import {
   missionNavigation,
   intelligenceNavigation,
@@ -79,8 +80,25 @@ function useEngineStatus() {
 }
 
 
-function Nav({ title, items, activePage, navigate }) {
+function Nav({ title, items, activePage, navigate, t }) {
   const reduceMotion = useReducedMotion();
+
+  const getNavLabel = (id, fallback) => {
+    const keyMap = {
+      overview: "nav.overview",
+      missions: "nav.missions",
+      drone: "nav.processing",
+      reconstruction: "nav.reconstruction",
+      analytics: "nav.sceneIntelligence",
+      map: "nav.geospatial",
+      reports: "nav.reports",
+      profile: "nav.profile",
+      settings: "nav.settings",
+    };
+    const key = keyMap[id] || `nav.${id}`;
+    const translated = t(key);
+    return (translated && translated !== key) ? translated : fallback;
+  };
 
   return (
     <nav className="nav-group">
@@ -106,7 +124,7 @@ function Nav({ title, items, activePage, navigate }) {
               />
             )}
             <Icon name={icon} />
-            <span>{label}</span>
+            <span>{getNavLabel(id, label)}</span>
             {count && <b>{count}</b>}
           </motion.button>
         );
@@ -124,8 +142,39 @@ export default function Sidebar({
   onCreateMission,
   onNavigateHome,
 }) {
+  const { t, language } = useUI();
   const [selectorOpen, setSelectorOpen] = useState(false);
   const engineStatus = useEngineStatus();
+
+  const getDetectorLabel = () => {
+    if (language !== "hi") return engineStatus.detector || t("sidebar.loading");
+    if (engineStatus.detectorStatus === "READY") return "YOLO तैयार";
+    return "संसूचक: लोड नहीं";
+  };
+
+  const getReconLabel = () => {
+    if (language !== "hi") return engineStatus.reconstruction || t("sidebar.loading");
+    if (engineStatus.reconstructionStatus === "READY") return "COLMAP तैयार";
+    return "पुनर्निर्माण अनुपलब्ध";
+  };
+
+  const getComputeLabel = () => {
+    if (language !== "hi") return engineStatus.compute || t("sidebar.cpuOnly");
+    return engineStatus.computeDevice === "cuda" ? "CUDA सक्रिय" : "केवल CPU";
+  };
+
+  const getTilingLabel = () => {
+    if (language !== "hi") return engineStatus.tiling || t("sidebar.tiled");
+    return "2x2 टाइलिंग (15% ओवरलैप)";
+  };
+
+  const getOverallLabel = () => {
+    if (language !== "hi") return engineStatus.overall || t("sidebar.checking");
+    if (engineStatus.overall === "ONLINE") return "ऑनलाइन";
+    if (engineStatus.overall === "PARTIAL") return "आंशिक";
+    if (engineStatus.overall === "DEGRADED") return "सीमित";
+    return "जांच जारी";
+  };
 
   return (
     <>
@@ -136,24 +185,24 @@ export default function Sidebar({
           role="button"
           tabIndex={0}
           style={{ cursor: "pointer" }}
-          title="Return to Presentation Home Page"
+          title={t("app.platformSubtitle")}
         >
           <div>
             <Icon name="Radar" size={21} />
           </div>
           <section>
-            <strong>HEXA SPARK</strong>
-            <small>AERIAL INTELLIGENCE PLATFORM</small>
+            <strong>AEROMESH</strong>
+            <small>{t("sidebar.brandSubtitle")}</small>
           </section>
         </div>
 
         <button className="workspace" onClick={() => setSelectorOpen(true)}>
           <b>{mission?.name?.[0] || "A"}</b>
           <span>
-            <small>ACTIVE MISSION</small>
+            <small>{t("sidebar.activeMission")}</small>
             <strong>
-              {mission?.name || "Unknown mission"} ·{" "}
-              {mission?.sector || "New mission"}
+              {mission?.name || t("sidebar.unknownMission")} ·{" "}
+              {mission?.sector || t("sidebar.newMission")}
             </strong>
           </span>
         </button>
@@ -164,41 +213,41 @@ export default function Sidebar({
           id="btn-sidebar-new-mission"
         >
           <Icon name="Plus" />
-          <span>New Mission</span>
+          <span>{t("sidebar.newMission")}</span>
         </button>
 
         <Nav
-          title="MISSION"
+          title={t("sidebar.groupMission")}
           items={missionNavigation}
-          {...{ activePage, navigate }}
+          {...{ activePage, navigate, t }}
         />
         <Nav
-          title="INTELLIGENCE"
+          title={t("sidebar.groupIntelligence")}
           items={intelligenceNavigation}
-          {...{ activePage, navigate }}
+          {...{ activePage, navigate, t }}
         />
         <Nav
-          title="OUTPUT"
+          title={t("sidebar.groupOutput")}
           items={outputNavigation}
-          {...{ activePage, navigate }}
+          {...{ activePage, navigate, t }}
         />
         <div className="sidebar-spacer" />
 
         <div className="engine">
           <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span>
-              <i /> AI ENGINE
+              <i /> {t("sidebar.aiEngine")}
             </span>
             <b style={{
               color: engineStatus.overall === "ONLINE" ? '#38bdf8' : engineStatus.overall === null ? '#fbbf24' : '#f87171',
               fontSize: '10px',
             }}>
-              {engineStatus.overall || "CHECKING"}
+              {getOverallLabel()}
             </b>
           </header>
           <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '6px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '2px 0' }}>
-              <span style={{ fontSize: '11px', color: '#94a3b8' }}>Detection</span>
+              <span style={{ fontSize: '11px', color: '#94a3b8' }}>{t("sidebar.detection")}</span>
               <b style={{
                 color: engineStatus.detectorStatus === 'READY' ? '#10b981' : '#f87171',
                 fontSize: '9.5px',
@@ -206,11 +255,11 @@ export default function Sidebar({
                 padding: '1px 5px',
                 borderRadius: '4px',
               }}>
-                {engineStatus.detector || 'Loading…'}
+                {getDetectorLabel()}
               </b>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '2px 0' }}>
-              <span style={{ fontSize: '11px', color: '#94a3b8' }}>SfM 3D</span>
+              <span style={{ fontSize: '11px', color: '#94a3b8' }}>{t("sidebar.sfm")}</span>
               <b style={{
                 color: engineStatus.reconstructionStatus === 'READY' ? '#10b981' : '#f87171',
                 fontSize: '9.5px',
@@ -218,11 +267,11 @@ export default function Sidebar({
                 padding: '1px 5px',
                 borderRadius: '4px',
               }}>
-                {engineStatus.reconstruction || 'Loading…'}
+                {getReconLabel()}
               </b>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '2px 0' }}>
-              <span style={{ fontSize: '11px', color: '#94a3b8' }}>Hardware</span>
+              <span style={{ fontSize: '11px', color: '#94a3b8' }}>{t("sidebar.hardware")}</span>
               <b style={{
                 color: engineStatus.computeDevice === 'cuda' ? '#38bdf8' : '#e2e8f0',
                 fontSize: '9.5px',
@@ -230,11 +279,11 @@ export default function Sidebar({
                 padding: '1px 5px',
                 borderRadius: '4px',
               }}>
-                {engineStatus.compute || 'CPU only'}
+                {getComputeLabel()}
               </b>
             </div>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '2px 0' }}>
-              <span style={{ fontSize: '11px', color: '#94a3b8' }}>Inference</span>
+              <span style={{ fontSize: '11px', color: '#94a3b8' }}>{t("sidebar.inference")}</span>
               <b style={{
                 color: '#38bdf8',
                 fontSize: '9.5px',
@@ -242,19 +291,19 @@ export default function Sidebar({
                 padding: '1px 5px',
                 borderRadius: '4px',
               }}>
-                {engineStatus.tiling || '2x2 Tiled'}
+                {getTilingLabel()}
               </b>
             </div>
           </div>
         </div>
 
         <Nav
-          title="SYSTEM"
+          title={t("sidebar.groupSystem")}
           items={systemNavigation}
-          {...{ activePage, navigate }}
+          {...{ activePage, navigate, t }}
         />
         <footer>
-          HEXA SPARK v0.9.0 <i>•</i> SIH BUILD
+          AEROMESH v1.0 <i>•</i> SIH BUILD
         </footer>
       </aside>
 

@@ -83,8 +83,9 @@ def _reconstruction_task(job_id: str, mission_id: str = "", video_path=None, max
         update_job(job_id, status="FAILED", stage="FAILED", error_message=recon_result.get("error", "Reconstruction failed"), message="Reconstruction failed")
         return get_job_result(job_id)
 
-    status = "COMPLETED" if recon_result.get("sparse_point_count", 0) >= 100 else "PARTIAL"
-    update_job(job_id, status=status, stage=status, progress_percent=100, message=f"3D reconstruction complete ({recon_result.get('sparse_point_count', 0)} points)")
+    pts = recon_result.get("sparse_point_count", 0) or recon_result.get("point_count", 0)
+    status = "COMPLETED" if pts >= 50 else "PARTIAL"
+    update_job(job_id, status=status, stage=status, progress_percent=100, message=f"3D reconstruction complete ({pts} points)")
     result = get_job_result(job_id) or {}
     result["reconstruction"] = recon_result
     return result
@@ -134,6 +135,17 @@ def _fusion_task(job_id: str, mission_id: str = "", reprojection_threshold_px: f
                 reprojection_threshold_px=thresh,
             )
         else:
+            try:
+                from .fuse_mission_3d import run_3d_fusion_for_mission
+                fuse_res = run_3d_fusion_for_mission(mission_id)
+                fused_dicts = fuse_res.get("objects", [])
+                update_job(job_id, status="COMPLETED", stage="COMPLETED", progress_percent=100, message=f"AI-to-3D spatial fusion completed ({len(fused_dicts)} objects)")
+                result = get_job_result(job_id) or {}
+                result["objects_3d"] = fused_dicts
+                return result
+            except Exception as _f_exc:
+                import logging
+                logging.getLogger(__name__).warning("run_3d_fusion_for_mission notice: %s", _f_exc)
             engine = SpatialFusionEngine(reprojection_threshold_px=thresh)
             poses_by_name = {}
 
@@ -255,13 +267,16 @@ def _real_pipeline_task(job_id: str):
     # Format findings for UI compatibility
     findings = []
     for d in detections:
+        c_name = str(d.get("class_name") or d.get("class") or "object")
+        b_box = d.get("bbox") or d.get("box_2d") or [0, 0, 0, 0]
+        f_id = d.get("frame_id", 1)
         findings.append({
-            "id": d.get("id") or str(d.get("box_2d", [])),
-            "title": str(d.get("class") or "object").title(),
+            "id": d.get("id") or f"det_{d.get('track_id', 'obj')}_{f_id}",
+            "title": c_name.title(),
             "confidence": int(round(float(d.get("confidence", 0.8)) * 100)) if float(d.get("confidence", 0.8)) <= 1.0 else int(d.get("confidence", 80)),
-            "frame": int(d.get("frame_id", 1)),
+            "frame": int(f_id) if str(f_id).isdigit() else 1,
             "severity": "medium",
-            "box": d.get("box_2d", [0, 0, 0, 0]),
+            "box": b_box,
         })
 
     mission.update({

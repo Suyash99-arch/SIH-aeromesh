@@ -5,6 +5,7 @@ import { Button, CountUp, Panel, Progress, Status } from "../components/ui/UI";
 import { missions, pipelineStages } from "../data/missions";
 import VideoPlayer from "../components/reconstruction/VideoPlayer";
 import MissionAnalysisWorkspace from "../components/analysis/MissionAnalysisWorkspace";
+import { useUI } from "../context/UIContext";
 import {
   fetchCalibrations,
   calibrateReferenceDistance,
@@ -213,13 +214,43 @@ function StagePipeline({ navigate, mission }) {
   );
 }
 
-export function OverviewPage({ mission, navigate }) {
+export function OverviewPage({ mission, navigate, notice, setMission }) {
+  const { t } = useUI();
   const safeMission = mission || {};
+  const [isRerunningDet, setIsRerunningDet] = useState(false);
+
+  const handleRerunDetection = async () => {
+    const mId = safeMission?.id || safeMission?._id;
+    if (!mId) return;
+    try {
+      setIsRerunningDet(true);
+      if (notice) notice(t("missionCommand.rerunning"));
+      const res = await fetch(`/api/v1/missions/${mId}/rerun-detection`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || `HTTP ${res.status}`);
+      }
+      if (notice) notice(t("missionCommand.rerunTriggered"));
+      const sumRes = await fetch(`/api/v1/missions/${mId}/summary`);
+      if (sumRes.ok) {
+        const sumData = await sumRes.json();
+        if (setMission) setMission((prev) => ({ ...prev, ...(sumData.summary || sumData) }));
+      }
+    } catch (e) {
+      if (notice) notice(`${t("missionCommand.rerunError")}: ${e.message}`, "error");
+    } finally {
+      setIsRerunningDet(false);
+    }
+  };
+
   const safeRecommendations =
     Array.isArray(safeMission.recommendations) &&
     safeMission.recommendations.length
       ? safeMission.recommendations
-      : ["Upload a drone video to start automatic analysis."];
+      : [t("dashboard.uploadPrompt")];
   const safeObjects =
     safeMission.objects && typeof safeMission.objects === "object"
       ? safeMission.objects
@@ -249,13 +280,25 @@ export function OverviewPage({ mission, navigate }) {
   return (
     <div className="executive-overview">
       <Header
-        kicker="HEXA SPARK / MISSION COMMAND"
-        title={`${safeMission.name && safeMission.name !== "mission" ? safeMission.name : (safeMission.video_name || safeMission.video_filename || "Mission Analysis")} — ${safeMission.sector || "Overview"}`}
-        copy="Executive aerial intelligence mission summary and dispatch status."
+        kicker={`AEROMESH / ${t("missionCommand.overview")}`}
+        title={`${safeMission.name && safeMission.name !== "mission" ? safeMission.name : (safeMission.video_name || safeMission.video_filename || t("nav.overview"))} — ${safeMission.sector || t("missionCommand.overview")}`}
+        copy={t("missionCommand.title")}
       >
-        <Status tone={isMissionFailed ? "critical" : isProcessing ? "info" : "success"}>
-          {(safeMission.status || "READY").toUpperCase()}
-        </Status>
+        <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+          <Button
+            variant="secondary"
+            icon="RotateCw"
+            id="rerun-detection-btn"
+            disabled={isRerunningDet || isProcessing}
+            onClick={handleRerunDetection}
+            style={{ fontSize: "12px", padding: "6px 12px" }}
+          >
+            {isRerunningDet ? t("missionCommand.rerunning") : t("missionCommand.rerunDetection")}
+          </Button>
+          <Status tone={isMissionFailed ? "critical" : isProcessing ? "info" : "success"}>
+            {(t(`stages.${(safeMission.status || "READY").toUpperCase()}`) || (safeMission.status || "READY")).toUpperCase()}
+          </Status>
+        </div>
       </Header>
 
       {/* Live Pipeline Failure Notification Banner if Failed */}
@@ -277,10 +320,10 @@ export function OverviewPage({ mission, navigate }) {
             <div style={{ width: 14, height: 14, borderRadius: "50%", background: "#ef4444", boxShadow: "0 0 10px #ef4444" }} />
             <div>
               <strong style={{ color: "#f87171", fontSize: "0.95rem" }}>
-                Pipeline Execution Failed at Stage: {(safeMission.failed_stage || "Processing").toUpperCase()}
+                {t("stages.FAILED")}: {(safeMission.failed_stage || "Processing").toUpperCase()}
               </strong>
               <div style={{ color: "#cbd5e1", fontSize: "0.82rem", marginTop: "2px" }}>
-                {safeMission.error || safeMission.error_message || "The pipeline encountered a terminal processing error."}
+                {safeMission.error || safeMission.error_message || t("stages.FAILED")}
               </div>
             </div>
           </div>
@@ -298,7 +341,7 @@ export function OverviewPage({ mission, navigate }) {
               whiteSpace: "nowrap",
             }}
           >
-            Inspect Failure Diagnostics →
+            {t("processing.logs")} →
           </button>
         </div>
       )}
@@ -322,10 +365,10 @@ export function OverviewPage({ mission, navigate }) {
             <div style={{ width: 14, height: 14, borderRadius: "50%", background: "#38bdf8", boxShadow: "0 0 10px #38bdf8" }} />
             <div>
               <strong style={{ color: "#38bdf8", fontSize: "0.95rem" }}>
-                Autonomous Pipeline Running: {safeMission.current_stage || "3D Feature Extraction"} ({safeMission.progress || 0}%)
+                {t("stages.PROCESSING")}: {safeMission.current_stage || t("processing.stageSfm")} ({safeMission.progress || 0}%)
               </strong>
               <div style={{ color: "#94a3b8", fontSize: "0.82rem", marginTop: "2px" }}>
-                COLMAP SfM reconstruction and YOLO11m spatial object triangulation in background.
+                {t("processing.subtitle")}
               </div>
             </div>
           </div>
@@ -343,7 +386,7 @@ export function OverviewPage({ mission, navigate }) {
               whiteSpace: "nowrap",
             }}
           >
-            Monitor Pipeline →
+            {t("processing.title")} →
           </button>
         </div>
       )}
@@ -359,21 +402,21 @@ export function OverviewPage({ mission, navigate }) {
             <div className="dispatch-icon-box">
               <Icon name="Box" size={18} />
             </div>
-            <span className="dispatch-domain">3D Photogrammetry</span>
+            <span className="dispatch-domain">{t("nav.reconstruction")}</span>
             <span className={`badge-tag ${isProcessing ? "valid" : (safeMission.reconstruction?.registered_cameras ?? 0) < 3 ? "low-conf" : "valid"}`}>
-              {isProcessing ? "PROCESSING" : (safeMission.reconstruction?.registered_cameras ?? 0) < 3 ? "FAILED" : "SURFACE MESH"}
+              {isProcessing ? t("stages.PROCESSING") : (safeMission.reconstruction?.registered_cameras ?? 0) < 3 ? t("stages.FAILED") : t("reconstruction.modeSolid")}
             </span>
           </div>
           <strong className="dispatch-title">
-            {isProcessing ? "Reconstruction In Progress" : (safeMission.reconstruction?.registered_cameras ?? 0) < 3 ? "Reconstruction Failed" : "3D Reconstruction Ready"}
+            {isProcessing ? t("stages.PROCESSING") : (safeMission.reconstruction?.registered_cameras ?? 0) < 3 ? t("stages.FAILED") : t("missionCommand.reconstructionMetric")}
           </strong>
           <p className="dispatch-meta">
             {(safeMission.reconstruction?.registered_cameras ?? 0) < 3
               ? (safeMission.reconstruction?.error || `SfM registered ${safeMission.reconstruction?.registered_cameras ?? 0} cameras — insufficient parallax/overlap`)
-              : `Surface mesh generated from ${safeMission.reconstruction?.registered_cameras ?? 0} registered keyframe cameras · ${Number(safeMission.reconstruction?.point_count || safeMission.reconstruction?.sparse_point_count || 0).toLocaleString()} sparse points`}
+              : `${safeMission.reconstruction?.registered_cameras ?? 0} ${t("missionCommand.registeredCameras")} · ${Number(safeMission.reconstruction?.point_count || safeMission.reconstruction?.sparse_point_count || 0).toLocaleString()} ${t("missionCommand.sparsePoints")}`}
           </p>
           <div className="dispatch-action-link">
-            <span>Open 3D Reconstruction</span>
+            <span>{t("missionCommand.openViewer")}</span>
             <Icon name="ArrowRight" size={13} />
           </div>
         </div>
@@ -387,18 +430,17 @@ export function OverviewPage({ mission, navigate }) {
             <div className="dispatch-icon-box">
               <Icon name="Radar" size={18} />
             </div>
-            <span className="dispatch-domain">Spatial Intelligence</span>
+            <span className="dispatch-domain">{t("nav.sceneIntelligence")}</span>
             <span className="badge-tag valid">VALID (≥2 VIEWS)</span>
           </div>
           <strong className="dispatch-title">
-            {validObjectsCount} Valid 3D Objects
+            {validObjectsCount} {t("missionCommand.fusedObjects")}
           </strong>
           <p className="dispatch-meta">
-            Multi-view triangulated (≥2 views)
-            {lowConfCount > 0 ? ` · ${lowConfCount} flagged low-confidence` : ""}
+            {t("sceneIntelligence.subtitle")}
           </p>
           <div className="dispatch-action-link">
-            <span>View 3D Objects</span>
+            <span>{t("missionCommand.openScene")}</span>
             <Icon name="ArrowRight" size={13} />
           </div>
         </div>
@@ -409,7 +451,7 @@ export function OverviewPage({ mission, navigate }) {
             <div className="dispatch-icon-box">
               <Icon name="Ruler" size={18} />
             </div>
-            <span className="dispatch-domain">GIS & Scale</span>
+            <span className="dispatch-domain">{t("nav.geospatial")}</span>
             <span
               className={`badge-tag ${isMetricCalibrated ? "valid" : "low-conf"}`}
             >
@@ -417,15 +459,15 @@ export function OverviewPage({ mission, navigate }) {
             </span>
           </div>
           <strong className="dispatch-title">
-            {isMetricCalibrated ? "Scale Calibrated" : "Unreferenced Scale"}
+            {isMetricCalibrated ? t("reconstruction.scaleCalibrated") : t("reconstruction.scaleUncalibrated")}
           </strong>
           <p className="dispatch-meta">
             {isMetricCalibrated
-              ? "Ground baseline calibrated (15.0m) · Metric distances and elevations verified"
-              : "Arbitrary photogrammetric scale · Ground reference baseline calibration available"}
+              ? t("reconstruction.scaleCalibrated")
+              : t("reconstruction.scaleUncalibrated")}
           </p>
           <div className="dispatch-action-link">
-            <span>View Measurements</span>
+            <span>{t("reconstruction.measuringTool")}</span>
             <Icon name="ArrowRight" size={13} />
           </div>
         </div>
@@ -436,18 +478,17 @@ export function OverviewPage({ mission, navigate }) {
             <div className="dispatch-icon-box">
               <Icon name="Film" size={18} />
             </div>
-            <span className="dispatch-domain">Flight Processing</span>
+            <span className="dispatch-domain">{t("nav.processing")}</span>
             <span className="badge-tag valid">24 FPS SYNC</span>
           </div>
           <strong className="dispatch-title">
-            {safeFrames.toLocaleString()} Frames Processed
+            {safeFrames.toLocaleString()} {t("dashboard.frames")}
           </strong>
           <p className="dispatch-meta">
-            Flight telemetry & sharpness analyzed (
-            {safeMission.duration || "00:30"} duration)
+            {t("dashboard.duration")}: {safeMission.duration || "00:30"}
           </p>
           <div className="dispatch-action-link">
-            <span>Open Flight Processing</span>
+            <span>{t("nav.processing")}</span>
             <Icon name="ArrowRight" size={13} />
           </div>
         </div>
@@ -508,6 +549,7 @@ export function OverviewPage({ mission, navigate }) {
 }
 
 export function MissionsPage({ mission, setMission, navigate, notice, onCreateMission }) {
+  const { t } = useUI();
   const shouldReduceMotion = useReducedMotion();
   const [q, setQ] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -534,14 +576,14 @@ export function MissionsPage({ mission, setMission, navigate, notice, onCreateMi
 
   const handleDelete = async (mId, e) => {
     e.stopPropagation();
-    if (!window.confirm(`Are you sure you want to delete mission '${mId}'? This will remove all 3D reconstruction and video files.`)) {
+    if (!window.confirm(t("dashboard.confirmDelete"))) {
       return;
     }
     try {
       setDeletingId(mId);
       const { deleteMission } = await import("../api/missions");
       await deleteMission(mId);
-      notice?.("Mission deleted successfully", "success");
+      notice?.(t("common.save"), "success");
       loadMissions();
     } catch (err) {
       alert("Failed to delete mission: " + err.message);
@@ -577,13 +619,13 @@ export function MissionsPage({ mission, setMission, navigate, notice, onCreateMi
   return (
     <>
       <Header
-        kicker="MISSION DASHBOARD"
-        title="Flight Missions & 3D Workspaces"
-        copy="Manage your aerial intelligence missions, inspect 3D reconstructions, and dispatch spatial processing jobs."
+        kicker={t("nav.dashboard")}
+        title={t("dashboard.title")}
+        copy={t("dashboard.subtitle")}
       >
         {onCreateMission && (
           <Button variant="primary" icon="Plus" onClick={onCreateMission}>
-            + New Mission Upload
+            {t("dashboard.createMissionBtn")}
           </Button>
         )}
       </Header>
@@ -595,7 +637,7 @@ export function MissionsPage({ mission, setMission, navigate, notice, onCreateMi
             <Icon name="HardDrive" size={20} />
           </div>
           <div>
-            <div style={{ fontSize: "11px", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em" }}>Storage Usage</div>
+            <div style={{ fontSize: "11px", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em" }}>{t("dashboard.storageUsed")}</div>
             <div style={{ fontSize: "18px", fontWeight: 700, color: "#f8fafc" }}>{totalStorageMB} MB</div>
           </div>
         </Panel>
@@ -605,7 +647,7 @@ export function MissionsPage({ mission, setMission, navigate, notice, onCreateMi
             <Icon name="Compass" size={20} />
           </div>
           <div>
-            <div style={{ fontSize: "11px", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em" }}>Total Missions</div>
+            <div style={{ fontSize: "11px", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em" }}>{t("dashboard.allMissions")}</div>
             <div style={{ fontSize: "18px", fontWeight: 700, color: "#f8fafc" }}>{missionsList.length}</div>
           </div>
         </Panel>
@@ -614,14 +656,19 @@ export function MissionsPage({ mission, setMission, navigate, notice, onCreateMi
       <Panel className="mission-list">
         <header className="table-tools" style={{ display: "flex", flexWrap: "wrap", gap: "12px", alignItems: "center", justifyContent: "space-between" }}>
           <div>
-            <h3>Registered Missions ({filteredList.length})</h3>
-            <span>Live status synced with background processing runner</span>
+            <h3>{t("dashboard.allMissions")} ({filteredList.length})</h3>
+            <span>{t("dashboard.subtitle")}</span>
           </div>
 
           <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
             {/* Status Filter Buttons */}
             <div style={{ display: "flex", background: "rgba(15, 23, 42, 0.6)", padding: "3px", borderRadius: "8px", border: "1px solid rgba(255,255,255,0.08)" }}>
-              {["all", "ready", "processing", "failed"].map((st) => (
+              {[
+                { id: "all", label: t("dashboard.allMissions") },
+                { id: "ready", label: t("dashboard.completed") },
+                { id: "processing", label: t("dashboard.processing") },
+                { id: "failed", label: t("dashboard.failed") }
+              ].map(({ id: st, label }) => (
                 <button
                   key={st}
                   onClick={() => setStatusFilter(st)}
@@ -634,10 +681,9 @@ export function MissionsPage({ mission, setMission, navigate, notice, onCreateMi
                     fontSize: "12px",
                     fontWeight: 600,
                     cursor: "pointer",
-                    textTransform: "capitalize",
                   }}
                 >
-                  {st}
+                  {label}
                 </button>
               ))}
             </div>
@@ -645,7 +691,7 @@ export function MissionsPage({ mission, setMission, navigate, notice, onCreateMi
             <input
               value={q}
               onChange={(e) => setQ(e.target.value)}
-              placeholder="Search by name or sector..."
+              placeholder={t("dashboard.searchMissions")}
               style={{ width: "200px" }}
             />
           </div>
@@ -653,22 +699,22 @@ export function MissionsPage({ mission, setMission, navigate, notice, onCreateMi
 
         {loading ? (
           <div style={{ padding: "40px", textAlign: "center", color: "#94a3b8" }}>
-            Loading flight missions...
+            {t("selector.loading")}
           </div>
         ) : filteredList.length === 0 ? (
           <div style={{ padding: "48px 24px", textAlign: "center", background: "rgba(15, 23, 42, 0.4)", borderRadius: "12px", border: "1px dashed rgba(255, 255, 255, 0.12)", margin: "16px 0" }}>
             <div style={{ width: 48, height: 48, borderRadius: "50%", background: "rgba(56, 189, 248, 0.12)", color: "#38bdf8", display: "grid", placeItems: "center", margin: "0 auto 16px" }}>
               <Icon name="Plus" size={24} />
             </div>
-            <h3 style={{ fontSize: "16px", color: "#f8fafc", marginBottom: "6px" }}>No Flight Missions Found</h3>
+            <h3 style={{ fontSize: "16px", color: "#f8fafc", marginBottom: "6px" }}>{t("dashboard.noMissionsFound")}</h3>
             <p style={{ fontSize: "13px", color: "#94a3b8", maxWidth: "420px", margin: "0 auto 20px" }}>
               {q || statusFilter !== "all"
-                ? "No flight missions match your current search or status filters."
-                : "Your workspace is empty. Upload a drone flight video to run 3D photogrammetry & spatial object detection."}
+                ? t("dashboard.noMissionsFound")
+                : t("dashboard.uploadPrompt")}
             </p>
             {onCreateMission && (
               <Button variant="primary" icon="Plus" onClick={onCreateMission}>
-                + Upload Drone Flight Video
+                {t("dashboard.createMissionBtn")}
               </Button>
             )}
           </div>
@@ -676,7 +722,7 @@ export function MissionsPage({ mission, setMission, navigate, notice, onCreateMi
           filteredList.map((m, index) => {
             const isSelected = mission?.id === m.id;
             const isProcessing = m.status === "processing" || m.status === "queued";
-            const statusText = isProcessing ? `PROCESSING (${m.progress || 0}%)` : (m.status || "READY").toUpperCase();
+            const statusText = isProcessing ? `${t("stages.PROCESSING")} (${m.progress || 0}%)` : (t(`stages.${(m.status || "READY").toUpperCase()}`) || (m.status || "READY")).toUpperCase();
 
             return (
               <motion.div
@@ -684,16 +730,16 @@ export function MissionsPage({ mission, setMission, navigate, notice, onCreateMi
                 key={m.id}
                 role="button"
                 tabIndex={0}
-                aria-label={`Select mission ${m.name}`}
+                aria-label={`${t("dashboard.openMission")} ${m.name}`}
                 onClick={() => {
                   setMission(m.id);
-                  notice?.(`${m.name} is now active app-wide`);
+                  notice?.(`${m.name} active app-wide`);
                 }}
                 onKeyDown={(e) => {
                   if (e.key === "Enter" || e.key === " ") {
                     e.preventDefault();
                     setMission(m.id);
-                    notice?.(`${m.name} is now active app-wide`);
+                    notice?.(`${m.name} active app-wide`);
                   }
                 }}
                 initial={shouldReduceMotion ? false : { opacity: 0, y: 12 }}
@@ -703,19 +749,19 @@ export function MissionsPage({ mission, setMission, navigate, notice, onCreateMi
                 <span className={`mission-dot ${m.status}`} />
                 <section style={{ flex: 1 }}>
                   <strong>
-                    {m.name} <em>— {m.sector || m.location || "Sector Recon"}</em>
+                    {m.name} <em>— {m.sector || m.location || t("selector.defaultSector")}</em>
                   </strong>
                   <small>
-                    {m.type || "Single-Pass Aerial Ingestion"} · {m.video?.resolution?.width ? `${m.video.resolution.width}x${m.video.resolution.height}` : "HD Video"}
+                    {m.type || t("fallback.singlePassAerial")} · {m.video?.resolution?.width ? `${m.video.resolution.width}x${m.video.resolution.height}` : t("fallback.hdVideo")}
                   </small>
                 </section>
                 <span>
                   {m.video?.size_mb ? `${m.video.size_mb} MB` : "—"}
-                  <small>Size</small>
+                  <small>{t("newMission.fileSize")}</small>
                 </span>
                 <span>
                   {m.objects?.total ?? 0}
-                  <small>Objects</small>
+                  <small>{t("missionCommand.fusedObjects")}</small>
                 </span>
                 <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
                   <Status tone={m.status === "failed" ? "critical" : isProcessing ? "info" : "success"}>
@@ -727,8 +773,8 @@ export function MissionsPage({ mission, setMission, navigate, notice, onCreateMi
                       handleDelete(m.id, e);
                     }}
                     disabled={deletingId === m.id}
-                    aria-label={`Delete mission ${m.name}`}
-                    title="Delete Mission"
+                    aria-label={`${t("dashboard.deleteMission")} ${m.name}`}
+                    title={t("dashboard.deleteMission")}
                     style={{
                       background: "rgba(239, 68, 68, 0.15)",
                       border: "1px solid rgba(239, 68, 68, 0.3)",
@@ -739,7 +785,7 @@ export function MissionsPage({ mission, setMission, navigate, notice, onCreateMi
                       cursor: "pointer",
                     }}
                   >
-                    {deletingId === m.id ? "..." : "Delete"}
+                    {deletingId === m.id ? "..." : t("dashboard.deleteMission")}
                   </button>
                 </div>
               </motion.div>
@@ -795,10 +841,11 @@ export function MissionsPage({ mission, setMission, navigate, notice, onCreateMi
 }
 
 export function DronePage({ mission }) {
+  const { t } = useUI();
   if (!mission) {
     return (
       <div className="drone-layout" style={{ padding: "40px", textAlign: "center", color: "#94a3b8" }}>
-        Loading flight telemetry and video stream...
+        {t("common.loading")}
       </div>
     );
   }
@@ -832,16 +879,16 @@ export function DronePage({ mission }) {
   return (
     <>
       <Header
-        kicker="FLIGHT PROCESSING"
-        title="Video, quality & trajectory"
-        copy="Local drone footage with synchronized frame, quality and trajectory context."
+        kicker={t("nav.processing")}
+        title={t("processing.title")}
+        copy={t("processing.subtitle")}
       >
         <Button
           variant="primary"
           icon="Play"
           onClick={() => setPlaying(!playing)}
         >
-          {playing ? "Pause feed" : "Play feed"}
+          {playing ? t("videoFrames.pause") : t("videoFrames.play")}
         </Button>
       </Header>
 
@@ -879,7 +926,7 @@ export function DronePage({ mission }) {
                   ? `${activeQuality.overall}%`
                   : activeQuality.sharpness != null
                   ? `${activeQuality.sharpness}%`
-                  : "Not available"}
+                  : t("fallback.notAvailable")}
               </div>
               <div className="crosshair">+</div>
               {detect && (
@@ -896,10 +943,10 @@ export function DronePage({ mission }) {
               icon={playing ? "Pause" : "Play"}
               onClick={() => setPlaying(!playing)}
             >
-              {playing ? "Pause" : "Play"}
+              {playing ? t("videoFrames.pause") : t("videoFrames.play")}
             </Button>
             <Button icon="RotateCcw" onClick={() => setFrame(1)}>
-              Replay
+              {t("processing.replay")}
             </Button>
             <input
               type="range"
@@ -1004,7 +1051,7 @@ export function DronePage({ mission }) {
               </div>
             ) : (
               <div style={{ color: "var(--dim, #91adb8)", fontSize: "0.85rem", padding: "10px 0" }}>
-                Not available: flight telemetry was not recorded for this video
+                {t("fallback.notAvailableFlight")}
               </div>
             )}
           </Panel>
@@ -1036,7 +1083,7 @@ export function DronePage({ mission }) {
               </div>
             ) : (
               <div style={{ color: "var(--dim, #91adb8)", fontSize: "0.85rem", padding: "10px 0" }}>
-                Not available: frame quality metrics have not been computed
+                {t("fallback.notAvailableQuality")}
               </div>
             )}
             <div style={{ marginTop: 12, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,0.08)", fontSize: "0.8rem", color: "var(--dim, #91adb8)" }}>
@@ -1044,7 +1091,7 @@ export function DronePage({ mission }) {
               <strong style={{ color: "var(--fg, #e5f3f7)" }}>
                 {mission.reconstruction?.mean_reprojection_error != null
                   ? `${Number(mission.reconstruction.mean_reprojection_error).toFixed(2)} px reprojection error`
-                  : "Not available: SfM reconstruction required"}
+                  : t("fallback.notAvailableSfm")}
               </strong>
             </div>
           </Panel>
@@ -1557,46 +1604,47 @@ function Phase7MeasurementsSection({ mission, notice }) {
 }
 
 export function IntelligencePage({ kind, mission, navigate, notice }) {
+  const { t } = useUI();
   const cfg = {
     scene: [
-      "SCENE INTELLIGENCE",
-      "Scene Intelligence",
-      "Static and dynamic objects are separated before reconstruction.",
+      t("sceneIntelligence.title", "SCENE INTELLIGENCE"),
+      t("sceneIntelligence.title", "Scene Intelligence"),
+      t("sceneIntelligence.subtitle", "Static and dynamic objects are separated before reconstruction."),
     ],
     analytics: [
-      "SCENE INTELLIGENCE",
-      "Scene Intelligence",
-      "Static and dynamic objects are separated before reconstruction.",
+      t("sceneIntelligence.title", "SCENE INTELLIGENCE"),
+      t("sceneIntelligence.title", "Scene Intelligence"),
+      t("sceneIntelligence.subtitle", "Static and dynamic objects are separated before reconstruction."),
     ],
     geospatial: [
-      "GEOSPATIAL INTELLIGENCE",
-      "Geospatial Intelligence",
-      "Where events occurred, with trajectory and confidence context.",
+      t("geospatial.title", "GEOSPATIAL INTELLIGENCE"),
+      t("geospatial.title", "Geospatial Intelligence"),
+      t("geospatial.subtitle", "Where events occurred, with trajectory and confidence context."),
     ],
     map: [
-      "GEOSPATIAL INTELLIGENCE",
-      "Geospatial Intelligence",
-      "Where events occurred, with trajectory and confidence context.",
+      t("geospatial.title", "GEOSPATIAL INTELLIGENCE"),
+      t("geospatial.title", "Geospatial Intelligence"),
+      t("geospatial.subtitle", "Where events occurred, with trajectory and confidence context."),
     ],
     measurements: [
-      "METRIC MEASUREMENTS",
-      "Measurements",
-      "Prototype measurements estimated from reconstruction confidence and available reference information.",
+      t("reconstruction.measuringTool", "METRIC MEASUREMENTS"),
+      t("reconstruction.measuringTool", "Measurements"),
+      t("reconstruction.clickTwoPoints", "Prototype measurements estimated from reconstruction confidence and available reference information."),
     ],
     findings: [
-      "AI INTELLIGENCE",
-      "AI Findings",
-      "Evidence, 3D confirmation and recommended actions.",
+      t("sceneIntelligence.spatialIntelligence", "AI INTELLIGENCE"),
+      t("sceneIntelligence.spatialIntelligence", "AI Findings"),
+      t("sceneIntelligence.subtitle", "Evidence, 3D confirmation and recommended actions."),
     ],
     reports: [
-      "OUTPUT",
-      "Mission Reports",
-      "Preview, generate and export a mission-specific decision report.",
+      t("reports.phase9Output", "OUTPUT"),
+      t("reports.reportsWorkspaceTitle", "Mission Reports"),
+      t("reports.reportsWorkspaceSubtitle", "Preview, generate and export a mission-specific decision report."),
     ],
   }[kind] || [
-    "INTELLIGENCE",
-    "Scene Intelligence",
-    "Spatial and semantic aerial intelligence.",
+    t("sceneIntelligence.spatialBadge", "INTELLIGENCE"),
+    t("sceneIntelligence.title", "Scene Intelligence"),
+    t("sceneIntelligence.subtitle", "Spatial and semantic aerial intelligence."),
   ];
 
   if (kind === "findings") {
@@ -1731,10 +1779,10 @@ export function IntelligencePage({ kind, mission, navigate, notice }) {
 
               {/* Legend & Metadata */}
               <text x="20" y="30" fill="#e5f3f7" fontSize="12" fontWeight="bold">
-                SfM Camera Plan View ({poses.length} Poses)
+                {t("geospatial.cameraPlanView", `SfM Camera Plan View (${poses.length} Poses)`, { count: poses.length })}
               </text>
               <text x="20" y="380" fill="#91adb8" fontSize="10">
-                Coverage: {mission.coverage || "Uncalculated"} | Video frames: {mission.frames || "N/A"}
+                {t("geospatial.coverage", "Coverage")}: {mission.coverage || "Uncalculated"} | {t("geospatial.videoFrames", "Video frames")}: {mission.frames || "N/A"}
               </text>
             </svg>
           ) : (
@@ -1754,10 +1802,10 @@ export function IntelligencePage({ kind, mission, navigate, notice }) {
             >
               <div style={{ fontSize: 36, marginBottom: 12, opacity: 0.8 }}>🗺️</div>
               <h4 style={{ margin: "0 0 8px 0", color: "#e5f3f7", fontSize: 16 }}>
-                Not available: SfM poses required for plan view
+                {t("geospatial.posesRequired", "Not available: SfM poses required for plan view")}
               </h4>
               <p style={{ margin: 0, color: "#91adb8", fontSize: 13, maxWidth: 440, lineHeight: 1.5 }}>
-                Flight plan reconstruction requires calibrated camera poses from photogrammetric Structure from Motion. No camera poses were reconstructed for this mission.
+                {t("geospatial.posesRequiredDesc", "Flight plan reconstruction requires calibrated camera poses from photogrammetric Structure from Motion. No camera poses were reconstructed for this mission.")}
               </p>
             </div>
           )}
@@ -1766,32 +1814,32 @@ export function IntelligencePage({ kind, mission, navigate, notice }) {
         <div className="command-stats">
           {[
             {
-              label: "Flight path",
+              label: t("geospatial.flightPath", "Flight path"),
               value: hasPoses
-                ? `${poses.length} registered poses`
-                : (safeMission.telemetry?.position || "Not available: telemetry not recorded"),
+                ? t("geospatial.registeredPoses", `${poses.length} registered poses`, { count: poses.length })
+                : (safeMission.telemetry?.position || t("geospatial.telemetryNotRecorded", "Not available: telemetry not recorded")),
               icon: "Compass",
               tone: "confidence",
             },
             {
-              label: "Coverage",
+              label: t("geospatial.coverage", "Coverage"),
               value: (safeMission.coverage && safeMission.coverage !== "0.00 km²")
                 ? safeMission.coverage
-                : "Not available: coverage uncalculated",
+                : t("geospatial.coverageUncalculated", "Not available: coverage uncalculated"),
               icon: "MapPin",
               tone: "confidence",
             },
             {
-              label: "Detections",
+              label: t("missionCommand.totalDetections", "Detections"),
               value: Array.isArray(safeMission.findings) ? safeMission.findings.length : "0",
               icon: "Radar",
               tone: "confidence",
             },
             {
-              label: "Accuracy",
+              label: t("geospatial.accuracy", "Accuracy"),
               value: safeMission.telemetry?.accuracy || (safeMission.reconstruction?.mean_reprojection_error != null
                 ? `±${Number(safeMission.reconstruction.mean_reprojection_error).toFixed(2)} px`
-                : "Not available: RTK GNSS not recorded"),
+                : t("geospatial.gnssNotRecorded", "Not available: RTK GNSS not recorded")),
               icon: "Target",
               tone: "confidence",
             },
@@ -1822,38 +1870,38 @@ export function IntelligencePage({ kind, mission, navigate, notice }) {
         <Header kicker={cfg[0]} title={cfg[1]} copy={cfg[2]} />
         <div className="analytics-grid">
           <Panel>
-            <span className="eyebrow">OBJECT SUMMARY</span>
+            <span className="eyebrow">{t("sceneIntelligence.objectList", "OBJECT SUMMARY")}</span>
             <div className="object-stats">
               <Stat
-                label="Total"
+                label={t("dashboard.total", "Total")}
                 value={totalObjs}
                 tone="confidence"
                 icon="Grid3x3"
                 loading={!mission}
               />
               <Stat
-                label="People"
+                label={t("sceneIntelligence.people", "People")}
                 value={peopleObjs}
                 tone="people"
                 icon="Users"
                 loading={!mission}
               />
               <Stat
-                label="Vehicles"
+                label={t("sceneIntelligence.vehicles", "Vehicles")}
                 value={vehiclesObjs}
                 tone="vehicles"
                 icon="Truck"
                 loading={!mission}
               />
               <Stat
-                label="Structures"
+                label={t("sceneIntelligence.buildingsFacades", "Structures")}
                 value={structuresObjs}
                 tone="structures"
                 icon="Building2"
                 loading={!mission}
               />
               <Stat
-                label="Hazards"
+                label={t("sceneIntelligence.terrainBadge", "Hazards")}
                 value={hazardsObjs}
                 tone="hazards"
                 icon="AlertTriangle"
@@ -1863,21 +1911,21 @@ export function IntelligencePage({ kind, mission, navigate, notice }) {
           </Panel>
 
           <Panel>
-            <span className="eyebrow">OBJECT CLASSIFICATION</span>
+            <span className="eyebrow">{t("sceneIntelligence.filterControls", "OBJECT CLASSIFICATION")}</span>
             <div className="classification">
               <div className="class-item">
-                <span>Static Objects</span>
+                <span>{t("sceneIntelligence.motionStatic", "Static Objects")}</span>
                 <b>{structuresObjs + hazardsObjs}</b>
               </div>
               <div className="class-item">
-                <span>Dynamic Objects</span>
+                <span>{t("geospatial.dynamicObjects", "Dynamic Objects")}</span>
                 <b>{peopleObjs + vehiclesObjs}</b>
               </div>
             </div>
           </Panel>
 
           <Panel>
-            <span className="eyebrow">CONFIDENCE DISTRIBUTION</span>
+            <span className="eyebrow">{t("geospatial.confidenceDistribution", "CONFIDENCE DISTRIBUTION")}</span>
             {(mission?.findings || []).map((f, idx) => (
               <div key={f.id || f.object_id || `conf-${idx}`} className="confidence-bar">
                 <span>{f.title}</span>
@@ -1895,6 +1943,7 @@ export function IntelligencePage({ kind, mission, navigate, notice }) {
 }
 
 function Reports({ mission, notice }) {
+  const { t } = useUI();
   const [report, setReport] = useState(null);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
@@ -1902,7 +1951,7 @@ function Reports({ mission, notice }) {
   const [openModal, setOpenModal] = useState(false);
   const [geoJsonStatus, setGeoJsonStatus] = useState({
     available: false,
-    reason: "Checking georeferencing status…",
+    reason: t("reports.geoJsonUnavailableNote", "Unavailable — mission is not georeferenced."),
   });
   const [downloadingPdf, setDownloadingPdf] = useState(false);
   const [pdfError, setPdfError] = useState(null);
@@ -1982,7 +2031,7 @@ function Reports({ mission, notice }) {
           }
           setGeoJsonStatus({
             available: false,
-            reason: "Scene is not georeferenced.",
+            reason: t("reports.geoJsonUnavailableNote", "Unavailable — mission is not georeferenced."),
           });
         }
       } finally {
@@ -2041,9 +2090,9 @@ function Reports({ mission, notice }) {
     return (
       <div className="reports-workspace">
         <Header
-          kicker="PHASE 9 OUTPUT"
-          title="Mission Reports & Exports"
-          copy="Compiling authentic photogrammetry and spatial fusion evidence..."
+          kicker={t("reports.phase9Output", "PHASE 9 OUTPUT")}
+          title={t("reports.reportsWorkspaceTitle", "Mission Reports & Exports")}
+          copy={t("reports.compilingReport", "Compiling authentic photogrammetry and spatial fusion evidence...")}
         />
         <div
           style={{
@@ -2059,7 +2108,7 @@ function Reports({ mission, notice }) {
             style={{ margin: "0 auto 12px auto", display: "block" }}
           />
           <div>
-            Compiling authoritative photogrammetry and spatial fusion report...
+            {t("reports.compilingReport", "Compiling authoritative photogrammetry and spatial fusion report...")}
           </div>
         </div>
       </div>
@@ -2073,9 +2122,9 @@ function Reports({ mission, notice }) {
     >
       <div className="reports-workspace">
       <Header
-        kicker="PHASE 9 OUTPUT"
-        title="Mission Reports & Exports"
-        copy="Generate, preview, and export comprehensive decision reports with authentic photogrammetry and spatial fusion evidence."
+        kicker={t("reports.phase9Output", "PHASE 9 OUTPUT")}
+        title={t("reports.reportsWorkspaceTitle", "Mission Reports & Exports")}
+        copy={t("reports.reportsWorkspaceSubtitle", "Generate, preview, and export comprehensive decision reports with authentic photogrammetry and spatial fusion evidence.")}
       >
         <div style={{ display: "flex", gap: "8px" }}>
           <Button
@@ -2088,11 +2137,11 @@ function Reports({ mission, notice }) {
               size={15}
               className={generating ? "spin" : ""}
             />
-            {generating ? "Generating…" : "Generate Report"}
+            {generating ? t("reports.generatingReport", "Generating…") : t("reports.generateReport", "Generate Report")}
           </Button>
           <Button onClick={() => setOpenModal(true)}>
             <Icon name="FileText" size={15} />
-            Preview Full Report
+            {t("reports.previewFullReport", "Preview Full Report")}
           </Button>
         </div>
       </Header>
@@ -2101,7 +2150,7 @@ function Reports({ mission, notice }) {
       <div className="reports-header-card">
         <div className="reports-header-top">
           <div className="reports-title-group">
-            <span className="eyebrow">MISSION REPORT</span>
+            <span className="eyebrow">{t("reports.missionReportEyebrow", "MISSION REPORT")}</span>
             <h2>
               {repMission?.name || mission?.name || "Mission"} —{" "}
               {mission?.sector || repMission?.sector || "Operational Sector"}
@@ -2109,15 +2158,15 @@ function Reports({ mission, notice }) {
             <div className="reports-meta-badge-row">
               <span className="reports-badge reports-badge--success">
                 <Icon name="CheckCircle2" size={13} />
-                Status:{" "}
+                {t("reports.status", "Status:")}{" "}
                 {repMission?.status || mission?.status || "MESH_GENERATED"}
               </span>
               <span className="reports-badge reports-badge--info">
                 <Icon name="Calendar" size={13} />
-                Generated:{" "}
+                {t("reports.generated", "Generated:")}{" "}
                 {report?.generatedAt
                   ? new Date(report.generatedAt).toLocaleString()
-                  : "Just now"}
+                  : t("reports.justNow", "Just now")}
               </span>
               <span className="reports-badge reports-badge--warning">
                 <Icon name="Layers" size={13} />
@@ -2129,22 +2178,22 @@ function Reports({ mission, notice }) {
 
         <div className="command-stats" style={{ marginTop: "10px" }}>
           <Stat
-            label="SfM Cameras"
+            label={t("reports.sfmCameras", "SfM Cameras")}
             value={repRec.registered_cameras ?? repRec.registered_images ?? 0}
             tone="cyan"
           />
           <Stat
-            label="Sparse Points"
+            label={t("reports.sparsePoints", "Sparse Points")}
             value={repRec.sparse_points_count ?? repRec.sparse_point_count ?? 0}
             tone="violet"
           />
           <Stat
-            label="Unique Tracks"
+            label={t("reports.uniqueTracks", "Unique Tracks")}
             value={repTrk.unique_tracks ?? repTrk.uniqueTracks ?? 0}
             tone="emerald"
           />
           <Stat
-            label="Fused 3D Objects"
+            label={t("reports.fusedObjects", "Fused 3D Objects")}
             value={repFusion.fused_objects_count ?? 0}
             tone="amber"
           />
@@ -2155,28 +2204,25 @@ function Reports({ mission, notice }) {
       <div className="reports-disclosure-box">
         <Icon name="AlertTriangle" size={20} />
         <div>
-          <h4>Scientific Accuracy & Coordinate Framework Disclosure</h4>
+          <h4>{t("reports.scientificDisclosure", "Scientific Accuracy & Coordinate Framework Disclosure")}</h4>
           <ul>
             <li>
-              <b>Coordinate Framework:</b> <code>LOCAL_ARBITRARY</code> —
-              Monocular drone video lacks absolute WGS84 GPS ground control.
-              Coordinates represent local optical frame units.
+              <b>{t("reports.coordFrameworkTitle", "Coordinate Framework:")}</b> <code>LOCAL_ARBITRARY</code> —{" "}
+              {t("reports.coordFrameworkDesc", "Monocular drone video lacks absolute WGS84 GPS ground control. Coordinates represent local optical frame units.")}
             </li>
             <li>
-              <b>Scale Calibration:</b> <code>RELATIVE_SCALE</code> —
-              Coordinates are relative scale unless an explicit ground reference
-              baseline is calibrated (e.g. 15.0m baseline).
+              <b>{t("reports.scaleCalibTitle", "Scale Calibration:")}</b> <code>RELATIVE_SCALE</code> —{" "}
+              {t("reports.scaleCalibDesc", "Coordinates are relative scale unless an explicit ground reference baseline is calibrated (e.g. 15.0m baseline).")}
             </li>
             <li>
-              <b>Georeferencing Status:</b> <code>UNREFERENCED</code> — No
-              synthetic latitude/longitude is fabricated; GeoJSON GIS export
-              remains disabled.
+              <b>{t("reports.georefStatusTitle", "Georeferencing Status:")}</b> <code>UNREFERENCED</code> —{" "}
+              {t("reports.georefStatusDesc", "No synthetic latitude/longitude is fabricated; GeoJSON GIS export remains disabled.")}
             </li>
             <li>
-              <b>Reconstruction Integrity:</b> Authoritative sparse SfM (
-              {repRec.sparse_points_count ?? repRec.sparse_point_count ?? 0}{" "}
-              points) is preserved. Dense MVS is only executed when GPU/CUDA
-              is available, and no synthetic dense points are fabricated.
+              <b>{t("reports.reconIntegrityTitle", "Reconstruction Integrity:")}</b>{" "}
+              {t("reports.reconIntegrityDesc", {
+                count: repRec.sparse_points_count ?? repRec.sparse_point_count ?? 0,
+              })}
             </li>
           </ul>
         </div>
@@ -2196,7 +2242,7 @@ function Reports({ mission, notice }) {
           }}
         >
           <Icon name="Download" size={18} color="#818cf8" />
-          Download & Export Center
+          {t("reports.downloadExportCenter", "Download & Export Center")}
         </h3>
         <div className="reports-exports-grid">
           {/* PDF Card */}
@@ -2206,12 +2252,10 @@ function Reports({ mission, notice }) {
                 <div className="export-card-icon">
                   <Icon name="FileText" size={18} />
                 </div>
-                <h4 className="export-card-title">Executive PDF Report</h4>
+                <h4 className="export-card-title">{t("reports.executivePdfReport", "Executive PDF Report")}</h4>
               </div>
               <p className="export-card-desc" style={{ marginTop: "8px" }}>
-                Multi-page executive decision report with SfM reconstruction,
-                spatial fusion metrics, calibration, and embedded visual
-                reprojection overlays.
+                {t("reports.executivePdfDescFull", "Multi-page executive decision report with SfM reconstruction, spatial fusion metrics, calibration, and embedded visual reprojection overlays.")}
               </p>
             </div>
             <a
@@ -2227,7 +2271,7 @@ function Reports({ mission, notice }) {
                 size={14}
                 className={downloadingPdf ? "spin" : ""}
               />
-              {downloadingPdf ? "Downloading PDF…" : "Download PDF"}
+              {downloadingPdf ? t("reports.downloadingPdfBtn", "Downloading PDF…") : t("reports.downloadPdfBtn", "Download PDF")}
             </a>
             {pdfError && (
               <p
@@ -2249,12 +2293,10 @@ function Reports({ mission, notice }) {
                 <div className="export-card-icon">
                   <Icon name="Table" size={18} />
                 </div>
-                <h4 className="export-card-title">3D Object Data (CSV)</h4>
+                <h4 className="export-card-title">{t("reports.objectDataCsvTitle", "3D Object Data (CSV)")}</h4>
               </div>
               <p className="export-card-desc" style={{ marginTop: "8px" }}>
-                Tabular export containing one row per localized semantic
-                object/track with local 3D coordinates, motion state,
-                confidence, and metric dimensions.
+                {t("reports.objectDataCsvDesc", "Tabular export containing one row per localized semantic object/track with local 3D coordinates, motion state, confidence, and metric dimensions.")}
               </p>
             </div>
             <a
@@ -2263,7 +2305,7 @@ function Reports({ mission, notice }) {
               className="export-download-btn export-download-btn--secondary"
             >
               <Icon name="Download" size={14} />
-              Download CSV
+              {t("reports.downloadCsvBtn", "Download CSV")}
             </a>
           </div>
 
@@ -2274,12 +2316,10 @@ function Reports({ mission, notice }) {
                 <div className="export-card-icon">
                   <Icon name="FileJson" size={18} />
                 </div>
-                <h4 className="export-card-title">Mission Artifact (JSON)</h4>
+                <h4 className="export-card-title">{t("reports.missionArtifactJsonTitle", "Mission Artifact (JSON)")}</h4>
               </div>
               <p className="export-card-desc" style={{ marginTop: "8px" }}>
-                Complete structured mission JSON containing video metadata,
-                detection statistics, reconstruction points, 3D fusion, and
-                provenance.
+                {t("reports.missionArtifactJsonDesc", "Complete structured mission JSON containing video metadata, detection statistics, reconstruction points, 3D fusion, and provenance.")}
               </p>
             </div>
             <a
@@ -2288,7 +2328,7 @@ function Reports({ mission, notice }) {
               className="export-download-btn export-download-btn--secondary"
             >
               <Icon name="Download" size={14} />
-              Download JSON
+              {t("reports.downloadJsonBtn", "Download JSON")}
             </a>
           </div>
 
@@ -2299,11 +2339,10 @@ function Reports({ mission, notice }) {
                 <div className="export-card-icon export-card-icon--warning">
                   <Icon name="Globe" size={18} />
                 </div>
-                <h4 className="export-card-title">GeoJSON Layer</h4>
+                <h4 className="export-card-title">{t("reports.geoJsonTitle", "GeoJSON Layer")}</h4>
               </div>
               <p className="export-card-desc" style={{ marginTop: "8px" }}>
-                Geographic coordinates in WGS84 for GIS integration. Requires
-                verified GPS RTK or GCP ground reference.
+                {t("reports.geoJsonDesc", "Geographic coordinates in WGS84 for GIS integration. Requires verified GPS RTK or GCP ground reference.")}
               </p>
               <div className="export-card-unavailable-note">
                 <Icon
@@ -2312,14 +2351,14 @@ function Reports({ mission, notice }) {
                   style={{ display: "inline", marginRight: "4px" }}
                 />
                 {geoJsonStatus?.reason ||
-                  "Unavailable — mission is not georeferenced."}
+                  t("reports.geoJsonUnavailableNote", "Unavailable — mission is not georeferenced.")}
               </div>
             </div>
             <button
               disabled
               className="export-download-btn export-download-btn--disabled"
             >
-              Download GeoJSON (Unavailable)
+              {t("reports.geoJsonUnavailable", "Download GeoJSON (Unavailable)")}
             </button>
           </div>
 
@@ -2330,12 +2369,10 @@ function Reports({ mission, notice }) {
                 <div className="export-card-icon">
                   <Icon name="Archive" size={18} />
                 </div>
-                <h4 className="export-card-title">Evidence Package (.zip)</h4>
+                <h4 className="export-card-title">{t("reports.evidencePackageTitle", "Evidence Package (.zip)")}</h4>
               </div>
               <p className="export-card-desc" style={{ marginTop: "8px" }}>
-                Complete audit archive containing the executive PDF, CSV data,
-                JSON metadata, GeoJSON refusal disclosure, and visual
-                reprojection overlays.
+                {t("reports.evidencePackageDesc", "Complete audit archive containing the executive PDF, CSV data, JSON metadata, GeoJSON refusal disclosure, and visual reprojection overlays.")}
               </p>
             </div>
             <a
@@ -2344,7 +2381,7 @@ function Reports({ mission, notice }) {
               className="export-download-btn export-download-btn--primary"
             >
               <Icon name="Archive" size={14} />
-              Download Evidence Package
+              {t("reports.downloadEvidencePackageBtn", "Download Evidence Package")}
             </a>
           </div>
         </div>
@@ -2364,20 +2401,20 @@ function Reports({ mission, notice }) {
           }}
         >
           <Icon name="Eye" size={18} color="#818cf8" />
-          Report Summary Preview
+          {t("reports.reportSummaryPreview", "Report Summary Preview")}
         </h3>
 
         <div className="report-preview-tabs">
           {[
-            ["mission", "Mission"],
-            ["detection", "Detection"],
-            ["tracking", "Tracking"],
-            ["reconstruction", "Reconstruction"],
-            ["fusion", "3D Fusion"],
-            ["measurements", "Measurements"],
-            ["calibration", "Calibration"],
-            ["evidence", "Evidence"],
-            ["limitations", "Limitations"],
+            ["mission", t("reports.tabMission", "Mission")],
+            ["detection", t("reports.tabDetection", "Detection")],
+            ["tracking", t("reports.tabTracking", "Tracking")],
+            ["reconstruction", t("reports.tabReconstruction", "Reconstruction")],
+            ["fusion", t("reports.tabFusion", "3D Fusion")],
+            ["measurements", t("reports.tabMeasurements", "Measurements")],
+            ["calibration", t("reports.tabCalibration", "Calibration")],
+            ["evidence", t("reports.tabEvidence", "Evidence")],
+            ["limitations", t("reports.tabLimitations", "Limitations")],
           ].map(([id, label]) => (
             <button
               key={id}
@@ -2922,16 +2959,16 @@ function Reports({ mission, notice }) {
                 value={repRec.registered_cameras ?? 0}
               />
               <Stat
-                label="Sparse Points"
+                label={t("missionCommand.sparsePoints", "Sparse Points")}
                 value={repRec.sparse_points_count ?? repRec.sparse_point_count ?? 0}
               />
               <Stat
-                label="Surface Mesh Faces"
+                label={t("missionCommand.denseFaces", "Surface Mesh Faces")}
                 value={repRec.mesh_faces ?? 0}
               />
-              <Stat label="Unique Tracks" value={repTrk.unique_tracks ?? 0} />
+              <Stat label={t("missionCommand.uniqueTracks", "Unique Tracks")} value={repTrk.unique_tracks ?? 0} />
               <Stat
-                label="Fused Objects"
+                label={t("missionCommand.fusedObjects")}
                 value={repFusion.fused_objects_count ?? repFusion.total_fused_objects ?? 0}
               />
               <Stat label="Scale Status" value={repMission?.is_calibrated ? "15.00 m (Calibrated)" : "Relative Scale (Uncalibrated)"} />
@@ -2954,7 +2991,7 @@ function Reports({ mission, notice }) {
                   size={14}
                   className={downloadingPdf ? "spin" : ""}
                 />
-                {downloadingPdf ? "Downloading…" : "Download PDF Report"}
+                {downloadingPdf ? t("reports.downloading", "Downloading…") : t("missionCommand.downloadPdf", "Download PDF Report")}
               </a>
               <a
                 href={getExportPackageUrl(missionId)}
@@ -2963,7 +3000,7 @@ function Reports({ mission, notice }) {
                 style={{ width: "auto" }}
               >
                 <Icon name="Archive" size={14} />
-                Download Evidence Package (.zip)
+                {t("reports.downloadEvidenceZip", "Download Evidence Package (.zip)")}
               </a>
             </div>
           </article>
@@ -2975,6 +3012,7 @@ function Reports({ mission, notice }) {
 }
 
 export function ChallengePage({ mission }) {
+  const { t } = useUI();
   const items = [
     [
       "Single flight path",
@@ -2988,7 +3026,7 @@ export function ChallengePage({ mission }) {
       "Visible / partial / occluded surfaces",
       mission.reconstruction?.occluded != null
         ? `${mission.reconstruction.occluded}% occluded`
-        : "Not available: 3D occlusion uncalculated",
+        : t("fallback.notAvailableOcclusion"),
     ],
     [
       "Motion blur",
@@ -2996,7 +3034,7 @@ export function ChallengePage({ mission }) {
       "Affected-frame review",
       mission.quality?.blur != null
         ? `${mission.quality.blur}% quality`
-        : "Not available: blur unmeasured",
+        : t("fallback.notAvailableBlur"),
     ],
     [
       "Video compression",
@@ -3004,7 +3042,7 @@ export function ChallengePage({ mission }) {
       "Compression score",
       mission.quality?.compression != null
         ? `${mission.quality.compression}% quality`
-        : "Not available: compression score unmeasured",
+        : t("fallback.notAvailableCompression"),
     ],
     [
       "Changing light / shadows",
@@ -3012,7 +3050,7 @@ export function ChallengePage({ mission }) {
       "Exposure quality score",
       mission.quality?.lighting != null
         ? `${mission.quality.lighting}% quality`
-        : "Not available: lighting unmeasured",
+        : t("fallback.notAvailableLighting"),
     ],
     [
       "Moving objects",
@@ -3026,7 +3064,7 @@ export function ChallengePage({ mission }) {
       "GPS errors",
       "Trajectory correction",
       "RTK/PPK corrected path",
-      mission.telemetry?.accuracy || "Not available: RTK GNSS not recorded",
+      mission.telemetry?.accuracy || t("fallback.notAvailableGnss"),
     ],
     [
       "Sensor noise",
@@ -3034,7 +3072,7 @@ export function ChallengePage({ mission }) {
       "Sensor score",
       mission.quality?.sensor != null
         ? `${mission.quality.sensor}% quality`
-        : "Not available: sensor quality unmeasured",
+        : t("fallback.notAvailableSensorQuality"),
     ],
     [
       "Occluded surfaces",
@@ -3042,7 +3080,7 @@ export function ChallengePage({ mission }) {
       "Recommended capture angle",
       mission.reconstruction?.partial != null
         ? `${mission.reconstruction.partial}% partial`
-        : "Not available: partial surface uncalculated",
+        : t("fallback.notAvailableSurface"),
     ],
     [
       "Near-real-time processing",
@@ -3056,7 +3094,7 @@ export function ChallengePage({ mission }) {
       "Estimated uncertainty",
       mission.measurements?.uncertainty || (mission.reconstruction?.mean_reprojection_error != null
         ? `±${Number(mission.reconstruction.mean_reprojection_error).toFixed(2)} px`
-        : "Not available: SfM reconstruction required"),
+        : t("fallback.notAvailableSfm")),
     ],
     [
       "Actionable intelligence",
@@ -3069,20 +3107,20 @@ export function ChallengePage({ mission }) {
   return (
     <>
       <Header
-        kicker="SIH DEMONSTRATION"
-        title="SIH Challenge → AEROMESH Solution"
-        copy="A transparent mapping from field constraints to demonstrable product capabilities."
+        kicker={t("challenge.kicker", "SIH DEMONSTRATION")}
+        title={t("challenge.title", "SIH Challenge → AEROMESH Solution")}
+        copy={t("challenge.subtitle", "A transparent mapping from field constraints to demonstrable product capabilities.")}
       />
       <div className="challenge-grid">
         {items.map(([p, f, e, r]) => (
           <Panel key={p}>
-            <span className="eyebrow">CHALLENGE</span>
+            <span className="eyebrow">{t("challenge.eyebrow", "CHALLENGE")}</span>
             <h3>{p}</h3>
             <p>
-              <b>AEROMESH feature:</b> {f}
+              <b>{t("challenge.aeromeshFeature", "AEROMESH feature:")}</b> {f}
             </p>
             <p>
-              <b>Evidence/demo:</b> {e}
+              <b>{t("challenge.evidenceDemo", "Evidence/demo:")}</b> {e}
             </p>
             <Status tone="info">{r}</Status>
           </Panel>
@@ -3093,19 +3131,20 @@ export function ChallengePage({ mission }) {
 }
 
 export function SettingsPage({ notice }) {
+  const { t } = useUI();
   const [reduced, setReduced] = useState(false);
 
   return (
     <>
       <Header
-        kicker="SYSTEM"
-        title="Platform Settings"
-        copy="Prototype preferences and integration readiness."
+        kicker={t("settings.eyebrowSystem", "SYSTEM")}
+        title={t("settings.platformSettingsTitle", "Platform Settings")}
+        copy={t("settings.platformSettingsCopy", "Prototype preferences and integration readiness.")}
       />
       <Panel className="settings-page">
         <div>
-          <span className="eyebrow">PROCESSING</span>
-          <h3>Operational preferences</h3>
+          <span className="eyebrow">{t("settings.eyebrowProcessing", "PROCESSING")}</span>
+          <h3>{t("settings.operationalPreferences", "Operational preferences")}</h3>
           <label>
             <input
               type="checkbox"
@@ -3114,7 +3153,7 @@ export function SettingsPage({ notice }) {
                 notice("Continuous quality analysis preference saved")
               }
             />
-            Continuous quality analysis
+            {t("settings.continuousQuality", "Continuous quality analysis")}
           </label>
           <label>
             <input
@@ -3125,23 +3164,23 @@ export function SettingsPage({ notice }) {
                 notice("Reduced motion preference saved");
               }}
             />
-            Reduced motion
+            {t("settings.reducedMotion", "Reduced motion")}
           </label>
         </div>
 
         <div>
-          <span className="eyebrow">INTEGRATION STATUS</span>
+          <span className="eyebrow">{t("settings.eyebrowIntegration", "INTEGRATION STATUS")}</span>
           <p>
-            Video system: <b>Canvas-based simulation (fallback mode)</b>
+            {t("settings.videoSystem", "Video system:")} <b>Canvas-based simulation (fallback mode)</b>
           </p>
           <p>
-            3D stack: <b>React Three Fiber / Three.js</b>
+            {t("settings.threeDStack", "3D stack:")} <b>React Three Fiber / Three.js</b>
           </p>
           <p>
-            Map renderer: <b>SVG with mission data</b>
+            {t("settings.mapRenderer", "Map renderer:")} <b>SVG with mission data</b>
           </p>
           <p>
-            Mission data: <b>Synchronized across all views</b>
+            {t("settings.missionData", "Mission data:")} <b>Synchronized across all views</b>
           </p>
         </div>
       </Panel>

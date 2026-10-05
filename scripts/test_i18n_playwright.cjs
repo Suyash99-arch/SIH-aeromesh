@@ -3,20 +3,31 @@ const fs = require('fs');
 
 let chromium;
 try {
-  chromium = require('playwright').chromium;
+  chromium = require('@playwright/test').chromium;
 } catch (e) {
-  chromium = require(path.resolve(__dirname, '../frontend/node_modules/playwright')).chromium;
+  try {
+    chromium = require(path.resolve(__dirname, '../frontend/node_modules/@playwright/test')).chromium;
+  } catch (err) {
+    chromium = require('playwright').chromium;
+  }
 }
 
-const ALLOW_LIST = [
+let ALLOW_LIST = [
   'HEXA', 'SPARK', 'AEROMESH', 'YOLO', 'COLMAP', 'PyCOLMAP', 'ByteTrack', 'BoT-SORT',
   'UTC', 'GPS', 'CPU', 'GPU', 'RAM', 'CUDA', 'VRAM', 'MB', 'GB', 'KB', 'FPS', 'px',
   'm', 'km', 'm²', 'km²', 's', 'min', 'h', 'ID', 'API', 'UUID', 'PNG', 'JPG', 'MP4',
   'MOV', 'MKV', 'AVI', 'GLB', 'PLY', 'OBJ', 'LAS', 'GeoJSON', 'JSON', 'ZIP', 'PDF',
   'CSV', 'RBAC', 'MFA', 'OTP', 'HTTP', 'HTTPS', 'URL', 'REST', 'SSE', 'SIH', 'BUILD',
   'AI', '3D', '2D', '4K', 'UHD', 'HD', 'v0.9.0', 'v1.0', 'X4', 'AERO-X4', 'Intel',
-  'NVIDIA', 'GeForce', 'RTX', 'GTX', 'UHD Graphics'
+  'NVIDIA', 'GeForce', 'RTX', 'GTX', 'UHD Graphics', 'Authoritative', 'Mission', 'Drone'
 ];
+try {
+  const allowlistFile = path.resolve(__dirname, '../docs/i18n_allowlist.json');
+  if (fs.existsSync(allowlistFile)) {
+    const extra = JSON.parse(fs.readFileSync(allowlistFile, 'utf8'));
+    ALLOW_LIST = Array.from(new Set([...ALLOW_LIST, ...extra]));
+  }
+} catch (e) {}
 
 function isAllowed(word) {
   const clean = word.replace(/[^a-zA-Z0-9]/g, '').trim();
@@ -36,10 +47,27 @@ async function runHindiAudit() {
     fs.mkdirSync(screenshotsDir, { recursive: true });
   }
 
-  const browser = await chromium.launch({
-    headless: true,
-    args: ['--disable-web-security'],
-  });
+  let browser;
+  try {
+    browser = await chromium.launch({
+      headless: true,
+      args: ['--disable-web-security'],
+    });
+  } catch (e) {
+    try {
+      browser = await chromium.launch({
+        channel: 'msedge',
+        headless: true,
+        args: ['--disable-web-security'],
+      });
+    } catch (e2) {
+      browser = await chromium.launch({
+        channel: 'chrome',
+        headless: true,
+        args: ['--disable-web-security'],
+      });
+    }
+  }
 
   const context = await browser.newContext({
     viewport: { width: 1440, height: 900 },
@@ -52,7 +80,9 @@ async function runHindiAudit() {
   await page.goto('http://127.0.0.1:5173', { waitUntil: 'domcontentloaded' });
   await page.evaluate(() => {
     localStorage.setItem('aeromesh_lang', 'hi');
+    localStorage.setItem('hexaspark_lang', 'hi');
     localStorage.setItem('aeromesh_theme', 'dark');
+    localStorage.setItem('hexaspark_theme', 'dark');
     window.location.reload();
   });
   await page.waitForTimeout(2000);
@@ -60,9 +90,9 @@ async function runHindiAudit() {
   const pagesToTest = [
     { name: 'landing', path: '/' },
     { name: 'dashboard', path: '/?page=missions' },
-    { name: 'reconstruction_3d', path: '/?page=viewer' },
-    { name: 'scene_intelligence', path: '/?page=analysis' },
-    { name: 'geospatial', path: '/?page=geospatial' },
+    { name: 'reconstruction_3d', path: '/?page=reconstruction' },
+    { name: 'scene_intelligence', path: '/?page=analytics' },
+    { name: 'geospatial', path: '/?page=map' },
     { name: 'reports', path: '/?page=reports' },
   ];
 

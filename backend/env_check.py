@@ -187,3 +187,25 @@ def verify_environment(strict: bool = False) -> Dict[str, Any]:
         "production_config": check_production_config(strict=strict),
     }
 
+
+if __name__ == "__main__":
+    import sys
+    try:
+        res = verify_environment(strict=True)
+        cv = res["opencv"]
+        ff = res["ffmpeg"]
+        if not cv.get("available"):
+            print("ERROR: OpenCV is not available in the active Python environment.", file=sys.stderr)
+            sys.exit(1)
+        if not ff.get("available"):
+            print("ERROR: FFmpeg / FFprobe binaries not found on system PATH.", file=sys.stderr)
+            sys.exit(1)
+        pkg = cv["packages"][0] if cv.get("packages") else "opencv"
+        print(f"OPENCV:{pkg} v{cv.get('version', '')}")
+        print(f"FFMPEG:{ff.get('ffmpeg_path', '')}")
+        sys.exit(0)
+    except Exception as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        sys.exit(1)
+
+

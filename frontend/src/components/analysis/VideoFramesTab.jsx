@@ -1,6 +1,7 @@
 import React, { useRef, useState } from "react";
 import Icon from "../ui/Icon";
 import { resolveAssetUrl } from "../../api/missions";
+import { useUI } from "../../context/UIContext";
 
 
 function getBoundingBoxStyle(bbox, frameWidth = 1920, frameHeight = 1080) {
@@ -59,6 +60,7 @@ export default function VideoFramesTab({
   onSelectKeyframe,
   onSwitchTo3D,
 }) {
+  const { t } = useUI();
   const videoSrc = resolveAssetUrl(
     mission?.assets?.video || (missionId ? `/api/v1/missions/${missionId}/video` : "")
   );
@@ -90,7 +92,7 @@ export default function VideoFramesTab({
           <div className="card-header">
             <div className="flex items-center gap-2">
               <Icon name="Film" size={14} className="card-header-icon" />
-              <h3>Source Drone Flight Video & Keyframe Telemetry</h3>
+              <h3>{t("videoFrames.title")}</h3>
             </div>
             <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
               <span className="video-codec-pill">H.264 / MP4 · Local Playback</span>
@@ -241,7 +243,7 @@ export default function VideoFramesTab({
           <div className="card-header between">
             <div className="flex items-center gap-2">
               <Icon name="Grid" size={14} className="card-header-icon" />
-              <h3>Keyframe Extraction Gallery</h3>
+              <h3>{t("videoFrames.title")}</h3>
             </div>
             <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
               <span className="gallery-count-pill">
@@ -254,7 +256,7 @@ export default function VideoFramesTab({
             {filteredKeyframes.length === 0 ? (
               <div className="gallery-empty">
                 <Icon name="Clock" size={24} className="mb-2 opacity-50" />
-                <span>No keyframes extracted yet. Run the pipeline to populate keyframes.</span>
+                <span>{t("videoFrames.noDetectionsOnFrame")}</span>
               </div>
             ) : (
               filteredKeyframes.map((kf, idx) => {
@@ -310,7 +312,7 @@ export default function VideoFramesTab({
       <aside className="frame-details-panel">
         <div className="panel-header">
           <Icon name="Search" size={14} className="panel-icon" />
-          <h3>Frame Details & Inspection</h3>
+          <h3>{t("videoFrames.inspectFrame")}</h3>
         </div>
 
         {selectedKeyframe ? (
@@ -404,7 +406,7 @@ export default function VideoFramesTab({
             {/* Diagnostics Stats */}
             <div className="frame-meta-grid">
               <div className="meta-cell">
-                <span className="meta-cell-label">Timestamp</span>
+                <span className="meta-cell-label">{t("videoFrames.timestamp")}</span>
                 <span className="meta-cell-val">
                   {typeof selectedKeyframe.timestamp === "number"
                     ? `${selectedKeyframe.timestamp.toFixed(2)}s`
@@ -412,7 +414,7 @@ export default function VideoFramesTab({
                 </span>
               </div>
               <div className="meta-cell">
-                <span className="meta-cell-label">Total Detections</span>
+                <span className="meta-cell-label">{t("missionCommand.totalDetections")}</span>
                 <span className="meta-cell-val cyan">
                   {selectedKeyframe.detections_count ||
                     (selectedKeyframe.detections
@@ -425,7 +427,7 @@ export default function VideoFramesTab({
             {/* Confidence Slider Control */}
             <div style={{ margin: "10px 0", padding: "8px 12px", background: "rgba(15, 23, 42, 0.7)", borderRadius: "6px", border: "1px solid rgba(255, 255, 255, 0.08)" }}>
               <div style={{ display: "flex", justifyContent: "space-between", fontSize: "11px", marginBottom: "4px", color: "#94a3b8" }}>
-                <span>Confidence Filter:</span>
+                <span>{t("videoFrames.minConfidence")}:</span>
                 <b style={{ color: "#38bdf8" }}>≥ {Math.round(minConfidence * 100)}%</b>
               </div>
               <input
@@ -441,7 +443,7 @@ export default function VideoFramesTab({
 
             {/* Detections Breakdown by Class */}
             <div className="detections-by-class-section">
-              <h4>Class Breakdown</h4>
+              <h4>{t("missionCommand.byClass")}</h4>
               <div className="class-breakdown-pills">
                 {selectedKeyframe.counts_by_class &&
                 Object.keys(selectedKeyframe.counts_by_class).length > 0 ? (
@@ -454,14 +456,14 @@ export default function VideoFramesTab({
                     ),
                   )
                 ) : (
-                  <div className="text-xs text-muted">No objects detected in this frame.</div>
+                  <div className="text-xs text-muted">{t("videoFrames.noDetectionsOnFrame")}</div>
                 )}
               </div>
             </div>
 
             {/* Individual Bounding Box Detections */}
             <div className="frame-detections-list">
-              <h4>Bounding Box Detections</h4>
+              <h4>{t("videoFrames.title")}</h4>
               {selectedKeyframe.detections && selectedKeyframe.detections.length > 0 ? (
                 <div className="detections-scroll">
                   {selectedKeyframe.detections.map((det, dIdx) => (
@@ -489,7 +491,7 @@ export default function VideoFramesTab({
                 </div>
               ) : (
                 <div className="text-xs text-muted">
-                  No bounding boxes registered for this frame.
+                  {t("videoFrames.noDetectionsOnFrame")}
                 </div>
               )}
             </div>
@@ -502,14 +504,14 @@ export default function VideoFramesTab({
                 onClick={onSwitchTo3D}
               >
                 <Icon name="Box" size={14} />
-                Inspect in 3D Model View
+                {t("missionCommand.openViewer")}
               </button>
             </div>
           </div>
         ) : (
           <div className="frame-details-empty">
             <Icon name="MousePointer" size={20} className="opacity-40 mb-2" />
-            <span>Select a keyframe from the gallery above to inspect detections and bounding boxes.</span>
+            <span>{t("videoFrames.inspectFrame")}</span>
           </div>
         )}
       </aside>

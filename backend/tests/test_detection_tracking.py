@@ -400,3 +400,85 @@ def test_detection_model_invariants_across_all_three_levels():
     assert mean_reproj == 3.0
     acceptance_rate = (valid_count / eval_count) * 100.0
     assert acceptance_rate == 100.0
+
+
+def test_three_distinct_numbers_and_model_names_integrity():
+    """Requirement A3:
+    1. detections >= tracks >= fused
+    2. sum(by_class) == total
+    3. class names only from model.names (no invented or remapped classes)
+    """
+    from backend.summary_builder import build_canonical_mission_summary
+    from backend.main import _load_detection_model
+
+    model, model_name, is_aeromesh = _load_detection_model(use_aeromesh=True)
+    valid_model_classes = set(model.names.values()) if hasattr(model, "names") else set()
+
+    # Synthetic mission data with 127 detections, 37 tracks, 34 fused objects
+    fake_obs = []
+    classes = list(valid_model_classes) if valid_model_classes else ["van", "person"]
+    for i in range(127):
+        cls = classes[i % len(classes)]
+        fake_obs.append({
+            "frame": i // 3,
+            "trackId": f"T{(i % 37) + 1:04d}",
+            "class": cls,
+            "confidence": 0.5 + (i % 50) * 0.01,
+            "boundingBox": [10.0, 10.0, 50.0, 50.0],
+        })
+
+    fake_tracks = []
+    for t in range(37):
+        cls = classes[t % len(classes)]
+        fake_tracks.append({
+            "trackId": f"T{t + 1:04d}",
+            "class": cls,
+            "hits": 3,
+            "confidence": 0.7,
+        })
+
+    fake_fused = []
+    for f in range(34):
+        fake_fused.append({
+            "id": f"T{f + 1:04d}",
+            "class_name": classes[f % len(classes)],
+            "position": [float(f), float(f), 5.0],
+        })
+
+    m_data = {
+        "status": "complete",
+        "detections": {
+            "total_detections": len(fake_obs),
+            "observations": fake_obs,
+            "byClass": {"dummy_track_clobber": 37},  # Simulates old clobbered byClass
+        },
+        "tracks": fake_tracks,
+        "spatial_fusion": {
+            "fused_objects": fake_fused,
+        },
+    }
+
+    summary = build_canonical_mission_summary("test-distinct-numbers", m_data)
+
+    total_detections = summary["detection"]["total_detections"]
+    unique_tracks = summary["tracking"]["unique_tracks"]
+    total_fused = summary["spatial_fusion"]["total_fused_objects"]
+
+    # Invariant 1: detections >= tracks >= fused
+    assert total_detections >= unique_tracks >= total_fused
+    assert total_detections == 127
+    assert unique_tracks == 37
+    assert total_fused == 34
+
+    # Invariant 2: sum(by_class) == total
+    det_by_class = summary["detection"]["detections_by_class"]
+    trk_by_class = summary["tracking"]["tracks_by_class"]
+    assert sum(det_by_class.values()) == total_detections
+    assert sum(trk_by_class.values()) == unique_tracks
+
+    # Invariant 3: class names ONLY from model.names
+    for cls in det_by_class.keys():
+        assert cls in valid_model_classes, f"Class '{cls}' not found in model.names: {valid_model_classes}"
+    for cls in trk_by_class.keys():
+        assert cls in valid_model_classes, f"Class '{cls}' not found in model.names: {valid_model_classes}"
+

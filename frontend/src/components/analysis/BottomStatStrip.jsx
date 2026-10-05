@@ -1,5 +1,6 @@
 import React from "react";
 import Icon from "../ui/Icon";
+import { useUI } from "../../context/UIContext";
 
 /**
  * Bottom Stat Strip
@@ -20,11 +21,12 @@ export default function BottomStatStrip({
   meshVertices = null,
   scaleStatus = "RELATIVE_SCALE",
 }) {
+  const { t } = useUI();
   const densityDisplay = meshVertices
     ? `${Number(meshVertices).toLocaleString()} Vertices`
     : pointCount
       ? `${Number(pointCount).toLocaleString()} Points`
-      : "No Reconstruction";
+      : t("dashboard.noMissionsFound");
 
   return (
     <footer className="incident-bottom-stat-strip" aria-label="Incident Detection Summary">
@@ -32,39 +34,37 @@ export default function BottomStatStrip({
       <div className="stat-strip-cell">
         <div className="stat-strip-label">
           <Icon name="Users" size={13} className="stat-icon cyan" />
-          <span>TOTAL PEOPLE</span>
+          <span>{t("sceneIntelligence.totalPeople")}</span>
         </div>
         <div className="stat-strip-value cyan">{totalPeople}</div>
-        <div className="stat-strip-sub">Pedestrians & Personnel</div>
+        <div className="stat-strip-sub">{t("sceneIntelligence.pedestriansPersonnel")}</div>
       </div>
 
       {/* 2. Vehicles Count */}
       <div className="stat-strip-cell">
         <div className="stat-strip-label">
           <Icon name="Truck" size={13} className="stat-icon cyan" />
-          <span>TOTAL VEHICLES</span>
+          <span>{t("sceneIntelligence.totalVehicles")}</span>
         </div>
         <div className="stat-strip-value cyan">{totalVehicles}</div>
-        <div className="stat-strip-sub">Automotive & Transport</div>
+        <div className="stat-strip-sub">{t("sceneIntelligence.automotiveTransport")}</div>
       </div>
-
-
 
       {/* 5. Entry / Exit Points */}
       <div className="stat-strip-cell">
         <div className="stat-strip-label">
           <Icon name="DoorOpen" size={13} className="stat-icon purple" />
-          <span>ENTRY / EXIT POINTS</span>
+          <span>{t("sceneIntelligence.entryExitPoints")}</span>
         </div>
         <div className="stat-strip-value purple">{entryExitCount}</div>
-        <div className="stat-strip-sub">Operator Saved Markings</div>
+        <div className="stat-strip-sub">{t("sceneIntelligence.operatorSavedMarkings")}</div>
       </div>
 
       {/* 6. 3D Surface Density */}
       <div className="stat-strip-cell">
         <div className="stat-strip-label">
           <Icon name="Layers" size={13} className="stat-icon blue" />
-          <span>3D RECONSTRUCTION</span>
+          <span>{t("reconstruction.title")}</span>
         </div>
         <div className="stat-strip-value">{densityDisplay}</div>
         <div className="stat-strip-sub">{scaleStatus}</div>

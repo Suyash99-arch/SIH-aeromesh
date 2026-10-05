@@ -193,23 +193,23 @@ def build_canonical_mission_summary(
 
     # Resolve detections_by_class
     det_by_class: Dict[str, int] = {}
-    if isinstance(raw_detections, dict) and raw_detections.get("detections_by_class"):
-        det_by_class = {str(k).lower(): int(v) for k, v in raw_detections["detections_by_class"].items()}
-    elif isinstance(raw_detections, dict) and raw_detections.get("byClass"):
-        det_by_class = {str(k).lower(): int(v) for k, v in raw_detections["byClass"].items()}
-    elif det_list:
+    if det_list:
         for d in det_list:
             cls_name = str(d.get("class") or d.get("className") or d.get("category") or "object").lower()
             det_by_class[cls_name] = det_by_class.get(cls_name, 0) + 1
+    elif isinstance(raw_detections, dict) and raw_detections.get("detections_by_class"):
+        det_by_class = {str(k).lower(): int(v) for k, v in raw_detections["detections_by_class"].items()}
+    elif isinstance(raw_detections, dict) and raw_detections.get("byClass"):
+        det_by_class = {str(k).lower(): int(v) for k, v in raw_detections["byClass"].items()}
 
-    if isinstance(raw_detections, dict) and raw_detections.get("total_detections") is not None:
+    if det_list:
+        total_detections = len(det_list)
+    elif isinstance(raw_detections, dict) and raw_detections.get("total_detections") is not None:
         total_detections = int(raw_detections["total_detections"])
     elif isinstance(raw_detections, dict) and raw_detections.get("count") is not None:
         total_detections = int(raw_detections["count"])
     elif det_by_class:
         total_detections = sum(det_by_class.values())
-    elif det_list:
-        total_detections = len(det_list)
     elif data.get("objects", {}).get("total") is not None:
         total_detections = int(data["objects"]["total"])
     else:
@@ -228,7 +228,7 @@ def build_canonical_mission_summary(
     track_by_class: Dict[str, int] = {}
     if raw_tracks:
         for t in raw_tracks:
-            cls_name = str(t.get("class") or t.get("category") or "object").lower()
+            cls_name = str(t.get("class") or t.get("category") or t.get("class_name") or "object").lower()
             track_by_class[cls_name] = track_by_class.get(cls_name, 0) + 1
     elif isinstance(tracking_meta, dict) and tracking_meta.get("tracks_by_class"):
         track_by_class = {str(k).lower(): int(v) for k, v in tracking_meta["tracks_by_class"].items()}
@@ -259,14 +259,15 @@ def build_canonical_mission_summary(
     if track_by_class:
         unique_tracks = sum(track_by_class.values())
 
-    # Compute high-level semantic object categories from actual detections
-    people_count = sum(v for k, v in det_by_class.items() if k in ("person", "pedestrian", "people", "human"))
+    # Compute high-level semantic object categories from confirmed tracks (fallback to detections)
+    semantic_source = track_by_class if track_by_class else det_by_class
+    people_count = sum(v for k, v in semantic_source.items() if k in ("person", "pedestrian", "people", "human"))
     vehicle_classes = ("car", "van", "truck", "bus", "tricycle", "motorcycle", "bicycle", "vehicle", "automobile")
-    vehicles_count = sum(v for k, v in det_by_class.items() if any(vc in k for vc in vehicle_classes))
-    structures_count = sum(v for k, v in det_by_class.items() if k in ("building", "structure", "house", "tower", "bridge", "roof"))
-    hazards_count = sum(v for k, v in det_by_class.items() if k in ("hazard", "fire", "smoke", "debris", "flood"))
+    vehicles_count = sum(v for k, v in semantic_source.items() if any(vc in k for vc in vehicle_classes))
+    structures_count = sum(v for k, v in semantic_source.items() if k in ("building", "structure", "house", "tower", "bridge", "roof"))
+    hazards_count = sum(v for k, v in semantic_source.items() if k in ("hazard", "fire", "smoke", "debris", "flood"))
     objects_summary = {
-        "total": total_detections,
+        "total": unique_tracks if unique_tracks > 0 else total_detections,
         "people": people_count,
         "vehicles": vehicles_count,
         "structures": structures_count,
@@ -310,7 +311,15 @@ def build_canonical_mission_summary(
     import os
     reproj_threshold = float(os.getenv("SPATIAL_FUSION_REPROJ_THRESHOLD", "25.0"))
     scene = data.get("semantic_scene") or {}
-    all_fused_candidates = scene.get("objects") or data.get("objects_3d") or data.get("fused_objects") or []
+    spatial_fusion_meta = data.get("spatial_fusion") or {}
+    all_fused_candidates = (
+        scene.get("objects")
+        or data.get("objects_3d")
+        or data.get("fused_objects")
+        or spatial_fusion_meta.get("fused_objects")
+        or spatial_fusion_meta.get("objects")
+        or []
+    )
     
     # Invariant: fused <= unique_tracks
     if len(all_fused_candidates) > unique_tracks and unique_tracks > 0:
@@ -501,8 +510,9 @@ def build_canonical_mission_summary(
         "spatial_fusion": {
             "coordinate_system": "LOCAL_ARBITRARY",
             "scale_status": "RELATIVE_SCALE",
-            "total_fused_objects": len(accepted_fused),
+            "total_fused_objects": len(all_fused_candidates),
             "valid_objects": valid_fused,
+            "valid_fused_objects": valid_fused,
             "rejected_objects": rejected_count,
             "rejected_candidates_count": rejected_count,
             "total_candidates_evaluated": len(all_fused_candidates),
@@ -510,7 +520,8 @@ def build_canonical_mission_summary(
             "static_objects": static_fused,
             "reprojection_threshold_px": reproj_threshold,
             "acceptance_rate_pct": f"{acceptance_rate}%" if isinstance(acceptance_rate, (int, float)) else acceptance_rate,
-            "fused_objects": accepted_fused,
+            "fused_objects": all_fused_candidates if all_fused_candidates else accepted_fused,
+            "valid_fused_objects_list": accepted_fused,
         },
         "provenance": {
             "software": BRAND_SUITE,

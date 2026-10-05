@@ -1,5 +1,6 @@
 import React from "react";
 import Icon from "../ui/Icon";
+import { useUI } from "../../context/UIContext";
 
 /**
  * View Filters Sidebar & Custom Markings Panel
@@ -21,21 +22,22 @@ export default function ViewFiltersSidebar({
   entryExitCount = 0,
   onClose,
 }) {
+  const { t } = useUI();
   return (
-    <aside className="view-filters-sidebar" aria-label="Scene Filters and Markings">
+    <aside className="view-filters-sidebar" aria-label={t("sceneIntelligence.viewFilters")}>
       {/* 1. VIEW FILTERS */}
       <div className="sidebar-section">
         <div className="sidebar-section-header between">
           <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
             <Icon name="Sliders" size={14} className="section-icon" />
-            <span className="section-title">VIEW FILTERS</span>
+            <span className="section-title">{t("sceneIntelligence.viewFilters")}</span>
           </div>
           {onClose && (
             <button
               type="button"
               onClick={onClose}
               className="sidebar-close-btn"
-              title="Close Filters"
+              title={t("sceneIntelligence.closeFilters")}
               style={{
                 background: "transparent",
                 border: "none",
@@ -62,7 +64,7 @@ export default function ViewFiltersSidebar({
                 onToggleLayer?.("humans");
               }}
             />
-            <span className="filter-label">Humans</span>
+            <span className="filter-label">{t("sceneIntelligence.humans")}</span>
             <span className="filter-badge count">{totalPeople}</span>
           </label>
 
@@ -73,7 +75,7 @@ export default function ViewFiltersSidebar({
               checked={layers.vehicles !== false}
               onChange={() => onToggleLayer?.("vehicles")}
             />
-            <span className="filter-label">Vehicles (3D Boxes)</span>
+            <span className="filter-label">{t("sceneIntelligence.vehicles3D")}</span>
             <span className="filter-badge count">{totalVehicles}</span>
           </label>
 
@@ -84,8 +86,8 @@ export default function ViewFiltersSidebar({
               checked={layers.buildings !== false}
               onChange={() => onToggleLayer?.("buildings")}
             />
-            <span className="filter-label">Buildings & Facades</span>
-            <span className="filter-badge active">Spatial</span>
+            <span className="filter-label">{t("sceneIntelligence.buildingsFacades")}</span>
+            <span className="filter-badge active">{t("sceneIntelligence.spatialBadge")}</span>
           </label>
 
           {/* Infrastructure */}
@@ -95,8 +97,8 @@ export default function ViewFiltersSidebar({
               checked={layers.infrastructure !== false}
               onChange={() => onToggleLayer?.("infrastructure")}
             />
-            <span className="filter-label">Road & Rail Infra</span>
-            <span className="filter-badge active">Corridor</span>
+            <span className="filter-label">{t("sceneIntelligence.roadRail")}</span>
+            <span className="filter-badge active">{t("sceneIntelligence.corridorBadge")}</span>
           </label>
 
           {/* Vegetation */}
@@ -106,8 +108,8 @@ export default function ViewFiltersSidebar({
               checked={layers.vegetation !== false}
               onChange={() => onToggleLayer?.("vegetation")}
             />
-            <span className="filter-label">Vegetation & Canopy</span>
-            <span className="filter-badge">Terrain</span>
+            <span className="filter-label">{t("sceneIntelligence.vegetationCanopy")}</span>
+            <span className="filter-badge">{t("sceneIntelligence.terrainBadge")}</span>
           </label>
 
           {/* Entry/Exit Points */}
@@ -117,7 +119,7 @@ export default function ViewFiltersSidebar({
               checked={layers.entryExit !== false}
               onChange={() => onToggleLayer?.("entryExit")}
             />
-            <span className="filter-label">Entry / Exit Points</span>
+            <span className="filter-label">{t("sceneIntelligence.entryExitPoints")}</span>
             <span className="filter-badge count">{entryExitCount}</span>
           </label>
 
@@ -128,8 +130,8 @@ export default function ViewFiltersSidebar({
               checked={layers.mesh !== false}
               onChange={() => onToggleLayer?.("mesh")}
             />
-            <span className="filter-label">3D Surface Mesh</span>
-            <span className="filter-badge active">Active</span>
+            <span className="filter-label">{t("sceneIntelligence.surfaceMesh")}</span>
+            <span className="filter-badge active">{t("sceneIntelligence.activeBadge")}</span>
           </label>
 
           {/* Point Cloud Overlay */}
@@ -139,8 +141,8 @@ export default function ViewFiltersSidebar({
               checked={layers.pointCloud === true}
               onChange={() => onToggleLayer?.("pointCloud")}
             />
-            <span className="filter-label">Point Cloud Overlay</span>
-            <span className="filter-badge">Optional</span>
+            <span className="filter-label">{t("sceneIntelligence.pointCloudOverlay")}</span>
+            <span className="filter-badge">{t("sceneIntelligence.optionalBadge")}</span>
           </label>
         </div>
       </div>
@@ -152,23 +154,23 @@ export default function ViewFiltersSidebar({
         <div className="sidebar-section-header between">
           <div className="flex items-center gap-1.5" style={{ minWidth: 0, flexShrink: 1 }}>
             <Icon name="MapPin" size={14} className="section-icon cyan" />
-            <span className="section-title" style={{ whiteSpace: "nowrap", fontSize: "11px", letterSpacing: "0.03em" }}>CUSTOM MARKINGS</span>
+            <span className="section-title" style={{ whiteSpace: "nowrap", fontSize: "11px", letterSpacing: "0.03em" }}>{t("sceneIntelligence.customMarkings")}</span>
           </div>
           <button
             type="button"
             className="add-marker-btn"
             onClick={onOpenAddMarkerModal}
-            title="Add a custom labeled marker to the 3D scene"
+            title={t("sceneIntelligence.dropMarker")}
           >
-            + Drop Marker
+            {t("sceneIntelligence.dropMarker")}
           </button>
         </div>
 
         <div className="saved-markings-list">
           {customMarkings.length === 0 ? (
             <div className="markings-empty">
-              <span>No custom markers dropped yet.</span>
-              <small>Click "+ Drop Marker" to place persistent entry/exit, survivor, or hazard pins onto the 3D scene.</small>
+              <span>{t("sceneIntelligence.noCustomMarkers")}</span>
+              <small>{t("sceneIntelligence.dropMarkerHint")}</small>
             </div>
           ) : (
             customMarkings.map((m) => {

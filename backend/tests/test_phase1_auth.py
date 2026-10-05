@@ -32,6 +32,8 @@ def test_argon2_password_hashing():
 
 
 def test_government_org_registration():
+    from backend.security import save_invite_code
+    code = save_invite_code(f"GOV-INVITE-{RUN_ID}-1", "admin@aeromesh.internal", "UAV", f"Air Force Reconnaissance {RUN_ID}")
     res = client.post(
         "/api/v1/auth/register",
         json={
@@ -42,6 +44,7 @@ def test_government_org_registration():
             "organization_name": f"Air Force Reconnaissance {RUN_ID}",
             "department": "UAV Flight Operations",
             "role": ROLE_ADMIN,
+            "invite_code": code,
         },
     )
     assert res.status_code == 200
@@ -77,6 +80,8 @@ def test_individual_registration():
 
 
 def test_duplicate_registration_rejected():
+    from backend.security import save_invite_code
+    code = save_invite_code(f"GOV-INVITE-{RUN_ID}-2", "admin@aeromesh.internal", "UAV", f"Air Force Reconnaissance {RUN_ID}")
     res = client.post(
         "/api/v1/auth/register",
         json={
@@ -84,6 +89,7 @@ def test_duplicate_registration_rejected():
             "password": "DuplicatePassword123!",
             "portal_type": PORTAL_GOV_ORG,
             "organization_name": f"Air Force Reconnaissance {RUN_ID}",
+            "invite_code": code,
         },
     )
     assert res.status_code == 400

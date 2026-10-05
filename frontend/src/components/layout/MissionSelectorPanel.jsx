@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import Icon from "../ui/Icon";
 import { listMissions } from "../../api/missions";
+import { useUI } from "../../context/UIContext";
 
 export default function MissionSelectorPanel({
   active,
@@ -8,6 +9,7 @@ export default function MissionSelectorPanel({
   notice,
   onClose,
 }) {
+  const { t } = useUI();
   const [missions, setMissions] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -34,18 +36,18 @@ export default function MissionSelectorPanel({
         </button>
         <div className="panel-header">
           <Icon name="Compass" size={18} />
-          <h3>Active Flight Mission Switcher</h3>
+          <h3>{t("selector.title")}</h3>
         </div>
 
         {loading ? (
           <div style={{ padding: "24px", textAlign: "center", color: "#94a3b8" }}>
-            Loading flight missions...
+            {t("selector.loading")}
           </div>
         ) : missions.length === 0 ? (
           <div style={{ padding: "24px", textAlign: "center", color: "#94a3b8" }}>
-            <p>No active flight missions found in workspace.</p>
+            <p>{t("selector.empty")}</p>
             <p style={{ fontSize: "13px", marginTop: "8px" }}>
-              Upload drone flight video to initiate 3D reconstruction.
+              {t("selector.uploadPrompt")}
             </p>
           </div>
         ) : (
@@ -64,7 +66,7 @@ export default function MissionSelectorPanel({
                 >
                   <div className="item-main">
                     <span className="name">{m.name}</span>
-                    <span className="sector">{m.sector || m.location || "Sector Recon"}</span>
+                    <span className="sector">{m.sector || m.location || t("selector.defaultSector")}</span>
                   </div>
                   <span className={`status-pill ${m.status}`}>{m.status}</span>
                 </button>

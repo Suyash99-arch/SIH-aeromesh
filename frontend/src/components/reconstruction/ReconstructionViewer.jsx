@@ -15,6 +15,7 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
 import { resolveAssetUrl, fetchArtifactsStatus } from "../../api/missions.js";
 import ErrorBoundary from "../common/ErrorBoundary";
+import { useUI } from "../../context/UIContext";
 
 // Global cache for downloaded ArrayBuffers and bounds to eliminate redundant network transfers
 // without holding live GPU-bound BufferGeometry instances across mission switches.
@@ -1603,6 +1604,7 @@ export default function ReconstructionViewer({
   onSceneClick,
   onTriggerProcessing,
 }) {
+  const { t, language } = useUI();
   const containerRef = useRef();
   const cameraActionsRef = useRef({});
   const [internalLayers, setInternalLayers] = useState({});
@@ -1916,13 +1918,13 @@ export default function ReconstructionViewer({
                   <line x1="12" y1="16" x2="12.01" y2="16" />
                 </svg>
                 <h4 style={{ margin: "0 0 6px 0", color: "#f87171", fontSize: "14px", fontWeight: 700 }}>
-                  Reconstruction Failed: {mission?.failure_reason || mission?.reconstruction?.error || "COLMAP incremental SfM could not reconstruct 3D points"}
+                  {t("reconstruction.reconFailed", "Reconstruction Failed")}: {mission?.failure_reason || mission?.reconstruction?.error || t("reconstruction.sfmFailedDesc", "COLMAP incremental SfM could not reconstruct 3D points")}
                 </h4>
                 <div style={{ margin: "0 0 14px 0", fontSize: "12px", maxWidth: "460px", color: "#cbd5e1", lineHeight: 1.6, textAlign: "left", background: "rgba(15, 23, 42, 0.7)", padding: "10px 14px", borderRadius: "6px", border: "1px solid rgba(239, 68, 68, 0.3)" }}>
-                  <div>• <b>Frames supplied to SfM:</b> {mission?.reconstruction?.total_images ?? mission?.reconstruction?.camera_count ?? 35}</div>
-                  <div>• <b>Registered Cameras:</b> {mission?.reconstruction?.registered_cameras ?? 0} (minimum required: 3)</div>
-                  <div>• <b>Sparse Points:</b> {mission?.reconstruction?.sparse_point_count ?? 0}</div>
-                  <div>• <b>Backend Diagnostic:</b> {mission?.reconstruction?.error || mission?.failure_reason || "COLMAP incremental SfM could not reconstruct 3D points"}</div>
+                  <div>• <b>{t("dashboard.frames")}:</b> {mission?.reconstruction?.total_images ?? mission?.reconstruction?.camera_count ?? 35}</div>
+                  <div>• <b>{t("reconstruction.registeredCamerasCount")}:</b> {mission?.reconstruction?.registered_cameras ?? 0} ({language === "hi" ? "न्यूनतम आवश्यक" : "minimum required"}: 3)</div>
+                  <div>• <b>{t("reconstruction.sparsePointCount")}:</b> {mission?.reconstruction?.sparse_point_count ?? 0}</div>
+                  <div>• <b>{t("processing.logs")}:</b> {mission?.reconstruction?.error || mission?.failure_reason || t("reconstruction.sfmFailedDesc", "COLMAP incremental SfM could not reconstruct 3D points")}</div>
                 </div>
                 {onTriggerProcessing && (
                   <button
@@ -2023,13 +2025,13 @@ export default function ReconstructionViewer({
               }}
             >
               {[
-                { key: "buildings", label: "Buildings", available: true, active: effectiveLayers.buildings !== false },
-                { key: "infrastructure", label: "Infra", available: true, active: effectiveLayers.infrastructure !== false },
-                { key: "vehicles", label: "Vehicles", available: true, active: effectiveLayers.vehicles !== false },
-                { key: "vegetation", label: "Vegetation", available: true, active: effectiveLayers.vegetation !== false },
-                { key: "cameraTrajectory", label: "Flight", available: true, active: effectiveLayers.cameraTrajectory !== false },
-                { key: "grid", label: "Grid", available: true, active: effectiveLayers.grid !== false },
-                { key: "labels", label: "Labels", available: true, active: effectiveLayers.labels !== false },
+                { key: "buildings", label: language === "hi" ? "भवन" : "Buildings", available: true, active: effectiveLayers.buildings !== false },
+                { key: "infrastructure", label: language === "hi" ? "ढांचा" : "Infra", available: true, active: effectiveLayers.infrastructure !== false },
+                { key: "vehicles", label: language === "hi" ? "वाहन" : "Vehicles", available: true, active: effectiveLayers.vehicles !== false },
+                { key: "vegetation", label: language === "hi" ? "वनस्पति" : "Vegetation", available: true, active: effectiveLayers.vegetation !== false },
+                { key: "cameraTrajectory", label: language === "hi" ? "उड़ान" : "Flight", available: true, active: effectiveLayers.cameraTrajectory !== false },
+                { key: "grid", label: language === "hi" ? "ग्रिड" : "Grid", available: true, active: effectiveLayers.grid !== false },
+                { key: "labels", label: language === "hi" ? "लेबल" : "Labels", available: true, active: effectiveLayers.labels !== false },
               ].map(({ key, label, available, active }) => (
                 <button
                   key={key}
@@ -2111,10 +2113,10 @@ export default function ReconstructionViewer({
                 }}
               >
                 {[
-                  { id: "textured", label: "Textured" },
-                  { id: "solid", label: "Solid" },
-                  { id: "wireframe", label: "Wireframe" },
-                  { id: "point_cloud", label: "Point Cloud" },
+                  { id: "textured", label: language === "hi" ? "टेक्सचर्ड" : "Textured" },
+                  { id: "solid", label: language === "hi" ? "सॉलिड" : "Solid" },
+                  { id: "wireframe", label: language === "hi" ? "वायरफ्रेम" : "Wireframe" },
+                  { id: "point_cloud", label: language === "hi" ? "पॉइंट क्लाउड" : "Point Cloud" },
                 ].map((m) => (
                   <button
                     key={m.id}
@@ -2147,7 +2149,7 @@ export default function ReconstructionViewer({
                   }
                   title="Free 3D Orbit (Drag left mouse button to rotate scene in all directions)"
                 >
-                  🔄 Free Orbit
+                  {language === "hi" ? "🔄 मुक्त घूर्णन" : "🔄 Free Orbit"}
                 </button>
                 <button
                   onClick={() => setCurrentTool("pan")}
@@ -2156,35 +2158,35 @@ export default function ReconstructionViewer({
                   }
                   title="Pan Camera (Drag left mouse button to slide scene)"
                 >
-                  ✋ Pan
+                  {language === "hi" ? "✋ पैन" : "✋ Pan"}
                 </button>
                 <button
                   onClick={() => cameraActionsRef.current.topView?.()}
                   style={navBtnStyle}
                   title="Top 2D Plan View (Look straight down)"
                 >
-                  📐 Top 2D
+                  {language === "hi" ? "📐 शीर्ष 2D" : "📐 Top 2D"}
                 </button>
                 <button
                   onClick={() => cameraActionsRef.current.isoView?.()}
                   style={navBtnStyle}
                   title="3D Aerial Isometric Vantage Point"
                 >
-                  🌐 3D Iso
+                  {language === "hi" ? "🌐 3D आइसो" : "🌐 3D Iso"}
                 </button>
                 <button
                   onClick={() => cameraActionsRef.current.fit?.()}
                   style={navBtnStyle}
                   title="Fit 3D Reconstructed Model to Center"
                 >
-                  ⛶ Fit
+                  {language === "hi" ? "⛶ फ़िट" : "⛶ Fit"}
                 </button>
                 <button
                   onClick={() => cameraActionsRef.current.reset?.()}
                   style={navBtnStyle}
                   title="Reset Camera Vantage Point"
                 >
-                  ⟲ Reset
+                  {language === "hi" ? "⟲ रीसेट" : "⟲ Reset"}
                 </button>
                 <button
                   onClick={() => cameraActionsRef.current.zoomIn?.()}
@@ -2232,14 +2234,14 @@ export default function ReconstructionViewer({
                   }
                   title="Click 2 points on the 3D surface to measure Euclidean distance"
                 >
-                  📏 Measure
+                  {language === "hi" ? "📏 मापें" : "📏 Measure"}
                 </button>
                 <button
                   onClick={toggleFullscreen}
                   style={navBtnStyle}
                   title="Toggle Fullscreen 3D Viewport"
                 >
-                  ⛶ Fullscreen
+                  {language === "hi" ? "⛶ पूर्ण स्क्रीन" : "⛶ Fullscreen"}
                 </button>
               </div>
 
@@ -2261,10 +2263,10 @@ export default function ReconstructionViewer({
                 >
                   <span>
                     {measurePoints.length === 0
-                      ? "Click 1st surface point"
+                      ? t("reconstruction.clickTwoPoints", "Click 1st surface point")
                       : measurePoints.length === 1
-                        ? "Click 2nd surface point"
-                        : "Distance measured"}
+                        ? t("reconstruction.clickTwoPoints", "Click 2nd surface point")
+                        : t("reconstruction.pointToPointDistance", "Distance measured")}
                   </span>
                   {measurePoints.length > 0 && (
                     <button
@@ -2279,7 +2281,7 @@ export default function ReconstructionViewer({
                         fontSize: "10px",
                       }}
                     >
-                      Clear
+                      {t("common.cancel", "Clear")}
                     </button>
                   )}
                 </div>
@@ -2339,7 +2341,7 @@ export default function ReconstructionViewer({
             </div>
             <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
               <div>
-                Class:{" "}
+                {t("sceneIntelligence.class", "Class")}:{" "}
                 <b style={{ color: "#38d7ff" }}>
                   {selectedObject.class || selectedObject.class_name}
                 </b>
@@ -2407,15 +2409,15 @@ export default function ReconstructionViewer({
         >
           <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
             <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#22d3ee", display: "inline-block" }} />
-            <span>CYAN: Static 3D Object</span>
+            <span>CYAN: {t("sceneIntelligence.motionStatic")}</span>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
             <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#f97316", display: "inline-block" }} />
-            <span>AMBER: Moving 3D Object</span>
+            <span>AMBER: {t("sceneIntelligence.motionDynamic")}</span>
           </div>
           <div style={{ display: "flex", alignItems: "center", gap: "5px" }}>
             <span style={{ width: 6, height: 6, borderRadius: "50%", background: "#38bdf8", display: "inline-block" }} />
-            <span>BLUE: Surface Mesh</span>
+            <span>BLUE: {t("reconstruction.modeSolid")}</span>
           </div>
         </div>
 
@@ -2462,23 +2464,23 @@ export default function ReconstructionViewer({
           }}
         >
           <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
-            <span>Cameras: <b style={{ color: "#ffffff" }}>{mission?.reconstruction?.registered_cameras ?? reconstructionMeta?.registered_cameras ?? 0} Registered</b></span>
+            <span>{t("reconstruction.registeredCamerasCount")}: <b style={{ color: "#ffffff" }}>{mission?.reconstruction?.registered_cameras ?? reconstructionMeta?.registered_cameras ?? 0} {t("sceneIntelligence.registered", "Registered")}</b></span>
             <span style={{ opacity: 0.35 }}>•</span>
-            <span>Points: <b style={{ color: "#38bdf8" }}>{(mission?.reconstruction?.sparse_point_count ?? reconstructionMeta?.sparse_point_count ?? 0).toLocaleString()}</b></span>
+            <span>{t("reconstruction.sparsePointCount")}: <b style={{ color: "#38bdf8" }}>{(mission?.reconstruction?.sparse_point_count ?? reconstructionMeta?.sparse_point_count ?? 0).toLocaleString()}</b></span>
             <span style={{ opacity: 0.35 }}>•</span>
-            <span>Mesh: <b style={{ color: "#a78bfa" }}>{mission?.reconstruction?.mesh_status === 'AVAILABLE' ? `${(mission?.reconstruction?.mesh_faces ?? reconstructionMeta?.mesh_faces ?? 0).toLocaleString()} Faces` : 'Unavailable'}</b></span>
+            <span>{t("reconstruction.meshFacesCount")}: <b style={{ color: "#a78bfa" }}>{mission?.reconstruction?.mesh_status === 'AVAILABLE' ? `${(mission?.reconstruction?.mesh_faces ?? reconstructionMeta?.mesh_faces ?? 0).toLocaleString()} ${t("sceneIntelligence.faces", "Faces")}` : t("sceneIntelligence.unavailable", "Unavailable")}</b></span>
             <span style={{ opacity: 0.35 }}>•</span>
-            <span>Fused 3D: <b style={{ color: "#fbbf24" }}>{semanticObjects?.length || mission?.objects_3d?.length || mission?.spatial_fusion?.total_fused_objects || 0} Entities</b></span>
+            <span>{t("missionCommand.fusedObjects")}: <b style={{ color: "#fbbf24" }}>{semanticObjects?.length || mission?.objects_3d?.length || mission?.spatial_fusion?.total_fused_objects || 0} {t("sceneIntelligence.semanticObjects", "Entities")}</b></span>
             <span style={{ opacity: 0.35 }}>•</span>
             <span>
-              Scale:{" "}
+              {t("sceneIntelligence.scaleStatus", "Scale")}:{" "}
               <b style={{ color: scaleStatus === 'METRIC_SCALE' || scaleStatus === 'METRIC_CALIBRATED' || scaleStatus === 'CALIBRATED' ? '#34d399' : '#fbbf24' }}>
-                {scaleStatus === 'METRIC_SCALE' || scaleStatus === 'METRIC_CALIBRATED' || scaleStatus === 'CALIBRATED' ? 'METRIC (Calibrated)' : 'RELATIVE (Uncalibrated)'}
+                {scaleStatus === 'METRIC_SCALE' || scaleStatus === 'METRIC_CALIBRATED' || scaleStatus === 'CALIBRATED' ? t("reconstruction.scaleCalibrated", "METRIC (Calibrated)") : t("reconstruction.scaleUncalibrated", "RELATIVE (Uncalibrated)")}
               </b>
             </span>
           </div>
           <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
-            <span style={{ color: "#38d7ff", fontWeight: 600 }}>● Photogrammetric Pipeline Active</span>
+            <span style={{ color: "#38d7ff", fontWeight: 600 }}>● {t("processing.pipelineVerified", "Photogrammetric Pipeline Active")}</span>
           </div>
         </div>
       </div>

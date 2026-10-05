@@ -1,0 +1,3319 @@
+[
+  {
+    "file": "frontend/src/pages/Pages.jsx",
+    "tCalls": [
+      {
+        "line": 227,
+        "key": "missionCommand.rerunning"
+      },
+      {
+        "line": 236,
+        "key": "missionCommand.rerunTriggered"
+      },
+      {
+        "line": 243,
+        "key": "missionCommand.rerunError"
+      },
+      {
+        "line": 253,
+        "key": "dashboard.uploadPrompt"
+      },
+      {
+        "line": 283,
+        "key": "missionCommand.overview"
+      },
+      {
+        "line": 284,
+        "key": "nav.overview"
+      },
+      {
+        "line": 284,
+        "key": "missionCommand.overview"
+      },
+      {
+        "line": 285,
+        "key": "missionCommand.title"
+      },
+      {
+        "line": 296,
+        "key": "missionCommand.rerunning"
+      },
+      {
+        "line": 296,
+        "key": "missionCommand.rerunDetection"
+      },
+      {
+        "line": 323,
+        "key": "stages.FAILED"
+      },
+      {
+        "line": 326,
+        "key": "stages.FAILED"
+      },
+      {
+        "line": 344,
+        "key": "processing.logs"
+      },
+      {
+        "line": 368,
+        "key": "stages.PROCESSING"
+      },
+      {
+        "line": 368,
+        "key": "processing.stageSfm"
+      },
+      {
+        "line": 371,
+        "key": "processing.subtitle"
+      },
+      {
+        "line": 389,
+        "key": "processing.title"
+      },
+      {
+        "line": 405,
+        "key": "nav.reconstruction"
+      },
+      {
+        "line": 407,
+        "key": "stages.PROCESSING"
+      },
+      {
+        "line": 407,
+        "key": "stages.FAILED"
+      },
+      {
+        "line": 407,
+        "key": "reconstruction.modeSolid"
+      },
+      {
+        "line": 411,
+        "key": "stages.PROCESSING"
+      },
+      {
+        "line": 411,
+        "key": "stages.FAILED"
+      },
+      {
+        "line": 411,
+        "key": "missionCommand.reconstructionMetric"
+      },
+      {
+        "line": 416,
+        "key": "missionCommand.registeredCameras"
+      },
+      {
+        "line": 416,
+        "key": "missionCommand.sparsePoints"
+      },
+      {
+        "line": 419,
+        "key": "missionCommand.openViewer"
+      },
+      {
+        "line": 433,
+        "key": "nav.sceneIntelligence"
+      },
+      {
+        "line": 437,
+        "key": "missionCommand.fusedObjects"
+      },
+      {
+        "line": 440,
+        "key": "sceneIntelligence.subtitle"
+      },
+      {
+        "line": 443,
+        "key": "missionCommand.openScene"
+      },
+      {
+        "line": 454,
+        "key": "nav.geospatial"
+      },
+      {
+        "line": 462,
+        "key": "reconstruction.scaleCalibrated"
+      },
+      {
+        "line": 462,
+        "key": "reconstruction.scaleUncalibrated"
+      },
+      {
+        "line": 466,
+        "key": "reconstruction.scaleCalibrated"
+      },
+      {
+        "line": 467,
+        "key": "reconstruction.scaleUncalibrated"
+      },
+      {
+        "line": 470,
+        "key": "reconstruction.measuringTool"
+      },
+      {
+        "line": 481,
+        "key": "nav.processing"
+      },
+      {
+        "line": 485,
+        "key": "dashboard.frames"
+      },
+      {
+        "line": 488,
+        "key": "dashboard.duration"
+      },
+      {
+        "line": 491,
+        "key": "nav.processing"
+      },
+      {
+        "line": 580,
+        "key": "dashboard.confirmDelete"
+      },
+      {
+        "line": 587,
+        "key": "common.save"
+      },
+      {
+        "line": 623,
+        "key": "nav.dashboard"
+      },
+      {
+        "line": 624,
+        "key": "dashboard.title"
+      },
+      {
+        "line": 625,
+        "key": "dashboard.subtitle"
+      },
+      {
+        "line": 629,
+        "key": "dashboard.createMissionBtn"
+      },
+      {
+        "line": 641,
+        "key": "dashboard.storageUsed"
+      },
+      {
+        "line": 651,
+        "key": "dashboard.allMissions"
+      },
+      {
+        "line": 660,
+        "key": "dashboard.allMissions"
+      },
+      {
+        "line": 661,
+        "key": "dashboard.subtitle"
+      },
+      {
+        "line": 668,
+        "key": "dashboard.allMissions"
+      },
+      {
+        "line": 669,
+        "key": "dashboard.completed"
+      },
+      {
+        "line": 670,
+        "key": "dashboard.processing"
+      },
+      {
+        "line": 671,
+        "key": "dashboard.failed"
+      },
+      {
+        "line": 695,
+        "key": "dashboard.searchMissions"
+      },
+      {
+        "line": 703,
+        "key": "selector.loading"
+      },
+      {
+        "line": 710,
+        "key": "dashboard.noMissionsFound"
+      },
+      {
+        "line": 713,
+        "key": "dashboard.noMissionsFound"
+      },
+      {
+        "line": 714,
+        "key": "dashboard.uploadPrompt"
+      },
+      {
+        "line": 718,
+        "key": "dashboard.createMissionBtn"
+      },
+      {
+        "line": 726,
+        "key": "stages.PROCESSING"
+      },
+      {
+        "line": 734,
+        "key": "dashboard.openMission"
+      },
+      {
+        "line": 753,
+        "key": "selector.defaultSector"
+      },
+      {
+        "line": 761,
+        "key": "newMission.fileSize"
+      },
+      {
+        "line": 765,
+        "key": "missionCommand.fusedObjects"
+      },
+      {
+        "line": 777,
+        "key": "dashboard.deleteMission"
+      },
+      {
+        "line": 778,
+        "key": "dashboard.deleteMission"
+      },
+      {
+        "line": 789,
+        "key": "dashboard.deleteMission"
+      },
+      {
+        "line": 849,
+        "key": "common.loading"
+      },
+      {
+        "line": 883,
+        "key": "nav.processing"
+      },
+      {
+        "line": 884,
+        "key": "processing.title"
+      },
+      {
+        "line": 885,
+        "key": "processing.subtitle"
+      },
+      {
+        "line": 892,
+        "key": "videoFrames.pause"
+      },
+      {
+        "line": 892,
+        "key": "videoFrames.play"
+      },
+      {
+        "line": 947,
+        "key": "videoFrames.pause"
+      },
+      {
+        "line": 947,
+        "key": "videoFrames.play"
+      },
+      {
+        "line": 950,
+        "key": "processing.replay"
+      },
+      {
+        "line": 1611,
+        "key": "sceneIntelligence.title"
+      },
+      {
+        "line": 1612,
+        "key": "sceneIntelligence.title"
+      },
+      {
+        "line": 1613,
+        "key": "sceneIntelligence.subtitle"
+      },
+      {
+        "line": 1616,
+        "key": "sceneIntelligence.title"
+      },
+      {
+        "line": 1617,
+        "key": "sceneIntelligence.title"
+      },
+      {
+        "line": 1618,
+        "key": "sceneIntelligence.subtitle"
+      },
+      {
+        "line": 1621,
+        "key": "geospatial.title"
+      },
+      {
+        "line": 1622,
+        "key": "geospatial.title"
+      },
+      {
+        "line": 1623,
+        "key": "geospatial.subtitle"
+      },
+      {
+        "line": 1626,
+        "key": "geospatial.title"
+      },
+      {
+        "line": 1627,
+        "key": "geospatial.title"
+      },
+      {
+        "line": 1628,
+        "key": "geospatial.subtitle"
+      },
+      {
+        "line": 1631,
+        "key": "reconstruction.measuringTool"
+      },
+      {
+        "line": 1632,
+        "key": "reconstruction.measuringTool"
+      },
+      {
+        "line": 1633,
+        "key": "reconstruction.clickTwoPoints"
+      },
+      {
+        "line": 1636,
+        "key": "sceneIntelligence.spatialIntelligence"
+      },
+      {
+        "line": 1637,
+        "key": "sceneIntelligence.spatialIntelligence"
+      },
+      {
+        "line": 1638,
+        "key": "sceneIntelligence.subtitle"
+      },
+      {
+        "line": 1641,
+        "key": "reports.phase9Output"
+      },
+      {
+        "line": 1642,
+        "key": "reports.reportsWorkspaceTitle"
+      },
+      {
+        "line": 1643,
+        "key": "reports.reportsWorkspaceSubtitle"
+      },
+      {
+        "line": 1646,
+        "key": "sceneIntelligence.spatialBadge"
+      },
+      {
+        "line": 1647,
+        "key": "sceneIntelligence.title"
+      },
+      {
+        "line": 1648,
+        "key": "sceneIntelligence.subtitle"
+      },
+      {
+        "line": 1783,
+        "key": "geospatial.cameraPlanView"
+      },
+      {
+        "line": 1786,
+        "key": "geospatial.coverage"
+      },
+      {
+        "line": 1786,
+        "key": "geospatial.videoFrames"
+      },
+      {
+        "line": 1806,
+        "key": "geospatial.posesRequired"
+      },
+      {
+        "line": 1809,
+        "key": "geospatial.posesRequiredDesc"
+      },
+      {
+        "line": 1818,
+        "key": "geospatial.flightPath"
+      },
+      {
+        "line": 1820,
+        "key": "geospatial.registeredPoses"
+      },
+      {
+        "line": 1826,
+        "key": "geospatial.coverage"
+      },
+      {
+        "line": 1834,
+        "key": "missionCommand.totalDetections"
+      },
+      {
+        "line": 1840,
+        "key": "geospatial.accuracy"
+      },
+      {
+        "line": 1874,
+        "key": "sceneIntelligence.objectList"
+      },
+      {
+        "line": 1877,
+        "key": "dashboard.total"
+      },
+      {
+        "line": 1884,
+        "key": "sceneIntelligence.people"
+      },
+      {
+        "line": 1891,
+        "key": "sceneIntelligence.vehicles"
+      },
+      {
+        "line": 1898,
+        "key": "sceneIntelligence.buildingsFacades"
+      },
+      {
+        "line": 1905,
+        "key": "sceneIntelligence.terrainBadge"
+      },
+      {
+        "line": 1915,
+        "key": "sceneIntelligence.filterControls"
+      },
+      {
+        "line": 1918,
+        "key": "sceneIntelligence.motionStatic"
+      },
+      {
+        "line": 1922,
+        "key": "geospatial.dynamicObjects"
+      },
+      {
+        "line": 1929,
+        "key": "geospatial.confidenceDistribution"
+      },
+      {
+        "line": 2094,
+        "key": "reports.phase9Output"
+      },
+      {
+        "line": 2095,
+        "key": "reports.reportsWorkspaceTitle"
+      },
+      {
+        "line": 2096,
+        "key": "reports.compilingReport"
+      },
+      {
+        "line": 2112,
+        "key": "reports.compilingReport"
+      },
+      {
+        "line": 2126,
+        "key": "reports.phase9Output"
+      },
+      {
+        "line": 2127,
+        "key": "reports.reportsWorkspaceTitle"
+      },
+      {
+        "line": 2128,
+        "key": "reports.reportsWorkspaceSubtitle"
+      },
+      {
+        "line": 2141,
+        "key": "reports.generatingReport"
+      },
+      {
+        "line": 2141,
+        "key": "reports.generateReport"
+      },
+      {
+        "line": 2145,
+        "key": "reports.previewFullReport"
+      },
+      {
+        "line": 2154,
+        "key": "reports.missionReportEyebrow"
+      },
+      {
+        "line": 2162,
+        "key": "reports.status"
+      },
+      {
+        "line": 2167,
+        "key": "reports.generated"
+      },
+      {
+        "line": 2170,
+        "key": "reports.justNow"
+      },
+      {
+        "line": 2182,
+        "key": "reports.sfmCameras"
+      },
+      {
+        "line": 2187,
+        "key": "reports.sparsePoints"
+      },
+      {
+        "line": 2192,
+        "key": "reports.uniqueTracks"
+      },
+      {
+        "line": 2197,
+        "key": "reports.fusedObjects"
+      },
+      {
+        "line": 2208,
+        "key": "reports.scientificDisclosure"
+      },
+      {
+        "line": 2249,
+        "key": "reports.downloadExportCenter"
+      },
+      {
+        "line": 2259,
+        "key": "reports.executivePdfReport"
+      },
+      {
+        "line": 2417,
+        "key": "reports.reportSummaryPreview"
+      },
+      {
+        "line": 2422,
+        "key": "reports.tabMission"
+      },
+      {
+        "line": 2423,
+        "key": "reports.tabDetection"
+      },
+      {
+        "line": 2424,
+        "key": "reports.tabTracking"
+      },
+      {
+        "line": 2425,
+        "key": "reports.tabReconstruction"
+      },
+      {
+        "line": 2426,
+        "key": "reports.tabFusion"
+      },
+      {
+        "line": 2427,
+        "key": "reports.tabMeasurements"
+      },
+      {
+        "line": 2428,
+        "key": "reports.tabCalibration"
+      },
+      {
+        "line": 2429,
+        "key": "reports.tabEvidence"
+      },
+      {
+        "line": 2430,
+        "key": "reports.tabLimitations"
+      },
+      {
+        "line": 3007,
+        "key": "reports.downloading"
+      },
+      {
+        "line": 3007,
+        "key": "missionCommand.downloadPdf"
+      },
+      {
+        "line": 3016,
+        "key": "reports.downloadEvidenceZip"
+      },
+      {
+        "line": 3123,
+        "key": "challenge.kicker"
+      },
+      {
+        "line": 3124,
+        "key": "challenge.title"
+      },
+      {
+        "line": 3125,
+        "key": "challenge.subtitle"
+      },
+      {
+        "line": 3130,
+        "key": "challenge.eyebrow"
+      },
+      {
+        "line": 3133,
+        "key": "challenge.aeromeshFeature"
+      },
+      {
+        "line": 3136,
+        "key": "challenge.evidenceDemo"
+      },
+      {
+        "line": 3153,
+        "key": "settings.eyebrowSystem"
+      },
+      {
+        "line": 3154,
+        "key": "settings.platformSettingsTitle"
+      },
+      {
+        "line": 3155,
+        "key": "settings.platformSettingsCopy"
+      },
+      {
+        "line": 3159,
+        "key": "settings.eyebrowProcessing"
+      },
+      {
+        "line": 3160,
+        "key": "settings.operationalPreferences"
+      },
+      {
+        "line": 3169,
+        "key": "settings.continuousQuality"
+      },
+      {
+        "line": 3180,
+        "key": "settings.reducedMotion"
+      },
+      {
+        "line": 3185,
+        "key": "settings.eyebrowIntegration"
+      },
+      {
+        "line": 3187,
+        "key": "settings.videoSystem"
+      },
+      {
+        "line": 3190,
+        "key": "settings.threeDStack"
+      },
+      {
+        "line": 3193,
+        "key": "settings.mapRenderer"
+      },
+      {
+        "line": 3196,
+        "key": "settings.missionData"
+      }
+    ],
+    "literals": [
+      {
+        "line": 133,
+        "text": "Evidence:",
+        "type": "tag-content"
+      },
+      {
+        "line": 136,
+        "text": "Recommended action:",
+        "type": "tag-content"
+      },
+      {
+        "line": 434,
+        "text": "VALID (≥2 VIEWS)",
+        "type": "tag-content"
+      },
+      {
+        "line": 500,
+        "text": "MISSION PROGRESSION",
+        "type": "tag-content"
+      },
+      {
+        "line": 501,
+        "text": "Video → quality → trajectory → reconstruction → intelligence",
+        "type": "tag-content"
+      },
+      {
+        "line": 504,
+        "text": "Mission processing",
+        "type": "tag-content"
+      },
+      {
+        "line": 513,
+        "text": "MISSION-SPECIFIC RECOMMENDATIONS",
+        "type": "tag-content"
+      },
+      {
+        "line": 514,
+        "text": "Operational Decision Support",
+        "type": "tag-content"
+      },
+      {
+        "line": 526,
+        "text": "FINAL MISSION REPORT",
+        "type": "tag-content"
+      },
+      {
+        "line": 527,
+        "text": "Standardized Deliverables",
+        "type": "tag-content"
+      },
+      {
+        "line": 800,
+        "text": "ACTIVE MISSION CONTEXT",
+        "type": "tag-content"
+      },
+      {
+        "line": 921,
+        "text": "Unreferenced local coordinate frame",
+        "type": "tag-content"
+      },
+      {
+        "line": 973,
+        "text": "Quality-over-Time Timeline (Click to scrub)",
+        "type": "tag-content"
+      },
+      {
+        "line": 1019,
+        "text": "FLIGHT TELEMETRY",
+        "type": "tag-content"
+      },
+      {
+        "line": 1023,
+        "text": "Source",
+        "type": "tag-content"
+      },
+      {
+        "line": 1028,
+        "text": "Speed",
+        "type": "tag-content"
+      },
+      {
+        "line": 1034,
+        "text": "Heading",
+        "type": "tag-content"
+      },
+      {
+        "line": 1040,
+        "text": "Altitude",
+        "type": "tag-content"
+      },
+      {
+        "line": 1045,
+        "text": "Position",
+        "type": "tag-content"
+      },
+      {
+        "line": 1065,
+        "text": "Overall Score",
+        "type": "tag-content"
+      },
+      {
+        "line": 1069,
+        "text": "Sharpness (Laplacian)",
+        "type": "tag-content"
+      },
+      {
+        "line": 1073,
+        "text": "Motion Blur (Anisotropy)",
+        "type": "tag-content"
+      },
+      {
+        "line": 1077,
+        "text": "Lighting / Exposure",
+        "type": "tag-content"
+      },
+      {
+        "line": 1081,
+        "text": "Compression (Blockiness)",
+        "type": "tag-content"
+      },
+      {
+        "line": 1091,
+        "text": "SfM Uncertainty:",
+        "type": "tag-content"
+      },
+      {
+        "line": 1101,
+        "text": "DETECTIONS",
+        "type": "tag-content"
+      },
+      {
+        "line": 1313,
+        "text": "10.0",
+        "type": "placeholder"
+      },
+      {
+        "line": 1346,
+        "text": "MEASUREMENT MODE",
+        "type": "tag-content"
+      },
+      {
+        "line": 1444,
+        "text": "MEASUREMENT INSPECTION",
+        "type": "tag-content"
+      },
+      {
+        "line": 2211,
+        "text": "Coordinate Framework:",
+        "type": "tag-content"
+      },
+      {
+        "line": 2211,
+        "text": "LOCAL_ARBITRARY",
+        "type": "tag-content"
+      },
+      {
+        "line": 2216,
+        "text": "Scale Calibration:",
+        "type": "tag-content"
+      },
+      {
+        "line": 2216,
+        "text": "RELATIVE_SCALE",
+        "type": "tag-content"
+      },
+      {
+        "line": 2221,
+        "text": "Georeferencing Status:",
+        "type": "tag-content"
+      },
+      {
+        "line": 2221,
+        "text": "UNREFERENCED",
+        "type": "tag-content"
+      },
+      {
+        "line": 2226,
+        "text": "Reconstruction Integrity:",
+        "type": "tag-content"
+      },
+      {
+        "line": 2327,
+        "text": "Mission Artifact (JSON)",
+        "type": "tag-content"
+      },
+      {
+        "line": 2352,
+        "text": "GeoJSON Layer",
+        "type": "tag-content"
+      },
+      {
+        "line": 2383,
+        "text": "Evidence Package (.zip)",
+        "type": "tag-content"
+      },
+      {
+        "line": 2452,
+        "text": "Mission ID",
+        "type": "tag-content"
+      },
+      {
+        "line": 2456,
+        "text": "Mission Name",
+        "type": "tag-content"
+      },
+      {
+        "line": 2462,
+        "text": "Operator",
+        "type": "tag-content"
+      },
+      {
+        "line": 2466,
+        "text": "Location / Sector",
+        "type": "tag-content"
+      },
+      {
+        "line": 2472,
+        "text": "Video File",
+        "type": "tag-content"
+      },
+      {
+        "line": 2476,
+        "text": "Resolution",
+        "type": "tag-content"
+      },
+      {
+        "line": 2484,
+        "text": "Native FPS",
+        "type": "tag-content"
+      },
+      {
+        "line": 2488,
+        "text": "Duration / Frames",
+        "type": "tag-content"
+      },
+      {
+        "line": 2509,
+        "text": "Detector Model",
+        "type": "tag-content"
+      },
+      {
+        "line": 2516,
+        "text": "Sampling FPS",
+        "type": "tag-content"
+      },
+      {
+        "line": 2522,
+        "text": "Total Detections",
+        "type": "tag-content"
+      },
+      {
+        "line": 2526,
+        "text": "Frames Processed",
+        "type": "tag-content"
+      },
+      {
+        "line": 2532,
+        "text": "Class Breakdown",
+        "type": "tag-content"
+      },
+      {
+        "line": 2546,
+        "text": "Confidence Stats",
+        "type": "tag-content"
+      },
+      {
+        "line": 2570,
+        "text": "Tracker Engine",
+        "type": "tag-content"
+      },
+      {
+        "line": 2576,
+        "text": "Unique Tracks",
+        "type": "tag-content"
+      },
+      {
+        "line": 2582,
+        "text": "Tracks Breakdown",
+        "type": "tag-content"
+      },
+      {
+        "line": 2608,
+        "text": "SfM Camera Model",
+        "type": "tag-content"
+      },
+      {
+        "line": 2612,
+        "text": "Registered Cameras",
+        "type": "tag-content"
+      },
+      {
+        "line": 2621,
+        "text": "Sparse Points",
+        "type": "tag-content"
+      },
+      {
+        "line": 2627,
+        "text": "Mean Reprojection Error",
+        "type": "tag-content"
+      },
+      {
+        "line": 2637,
+        "text": "Surface Mesh",
+        "type": "tag-content"
+      },
+      {
+        "line": 2644,
+        "text": "Mesh Complexity",
+        "type": "tag-content"
+      },
+      {
+        "line": 2654,
+        "text": "Dense Reconstruction",
+        "type": "tag-content"
+      },
+      {
+        "line": 2677,
+        "text": "Authoritative Tracks",
+        "type": "tag-content"
+      },
+      {
+        "line": 2681,
+        "text": "Tracks Evaluated",
+        "type": "tag-content"
+      },
+      {
+        "line": 2687,
+        "text": "Association Breakdown",
+        "type": "tag-content"
+      },
+      {
+        "line": 2699,
+        "text": "Mean Reproj Error",
+        "type": "tag-content"
+      },
+      {
+        "line": 2707,
+        "text": "Acceptance Rate",
+        "type": "tag-content"
+      },
+      {
+        "line": 2727,
+        "text": "Object ID",
+        "type": "tag-content"
+      },
+      {
+        "line": 2728,
+        "text": "Track",
+        "type": "tag-content"
+      },
+      {
+        "line": 2729,
+        "text": "Class",
+        "type": "tag-content"
+      },
+      {
+        "line": 2730,
+        "text": "Motion",
+        "type": "tag-content"
+      },
+      {
+        "line": 2731,
+        "text": "Status",
+        "type": "tag-content"
+      },
+      {
+        "line": 2732,
+        "text": "Local 3D Position [X, Y, Z]",
+        "type": "tag-content"
+      },
+      {
+        "line": 2733,
+        "text": "Reproj (px)",
+        "type": "tag-content"
+      },
+      {
+        "line": 2779,
+        "text": "Measurement Label",
+        "type": "tag-content"
+      },
+      {
+        "line": 2780,
+        "text": "Value",
+        "type": "tag-content"
+      },
+      {
+        "line": 2781,
+        "text": "Unit",
+        "type": "tag-content"
+      },
+      {
+        "line": 2782,
+        "text": "Status",
+        "type": "tag-content"
+      },
+      {
+        "line": 2783,
+        "text": "Confidence",
+        "type": "tag-content"
+      },
+      {
+        "line": 2784,
+        "text": "Uncertainty",
+        "type": "tag-content"
+      },
+      {
+        "line": 2836,
+        "text": "Calibration ID",
+        "type": "tag-content"
+      },
+      {
+        "line": 2842,
+        "text": "Method",
+        "type": "tag-content"
+      },
+      {
+        "line": 2850,
+        "text": "Scale Factor",
+        "type": "tag-content"
+      },
+      {
+        "line": 2858,
+        "text": "Known Baseline",
+        "type": "tag-content"
+      },
+      {
+        "line": 2867,
+        "text": "Source Evidence",
+        "type": "tag-content"
+      },
+      {
+        "line": 2876,
+        "text": "Confidence / Uncertainty",
+        "type": "tag-content"
+      },
+      {
+        "line": 3187,
+        "text": "Canvas-based simulation (fallback mode)",
+        "type": "tag-content"
+      },
+      {
+        "line": 3190,
+        "text": "React Three Fiber / Three.js",
+        "type": "tag-content"
+      },
+      {
+        "line": 3193,
+        "text": "SVG with mission data",
+        "type": "tag-content"
+      },
+      {
+        "line": 3196,
+        "text": "Synchronized across all views",
+        "type": "tag-content"
+      }
+    ]
+  },
+  {
+    "file": "frontend/src/pages/HomePage.jsx",
+    "tCalls": [],
+    "literals": [
+      {
+        "line": 1265,
+        "text": "HEXA SPARK",
+        "type": "tag-content"
+      },
+      {
+        "line": 1266,
+        "text": "AERIAL 3D INTELLIGENCE",
+        "type": "tag-content"
+      },
+      {
+        "line": 1271,
+        "text": "Overview",
+        "type": "tag-content"
+      },
+      {
+        "line": 1272,
+        "text": "Pipeline Motion",
+        "type": "tag-content"
+      },
+      {
+        "line": 1274,
+        "text": "Capabilities",
+        "type": "tag-content"
+      },
+      {
+        "line": 1275,
+        "text": "Sovereign Security",
+        "type": "tag-content"
+      },
+      {
+        "line": 1293,
+        "text": "View your Operator Profile",
+        "type": "title"
+      },
+      {
+        "line": 1328,
+        "text": "Gov / Org",
+        "type": "tag-content"
+      },
+      {
+        "line": 1348,
+        "text": "Individual",
+        "type": "tag-content"
+      },
+      {
+        "line": 1371,
+        "text": "Guest Mode",
+        "type": "tag-content"
+      },
+      {
+        "line": 1390,
+        "text": "HEXA SPARK",
+        "type": "tag-content"
+      },
+      {
+        "line": 1393,
+        "text": "to 3D Geospatial Intelligence",
+        "type": "tag-content"
+      },
+      {
+        "line": 1410,
+        "text": "Government & Org Portal",
+        "type": "tag-content"
+      },
+      {
+        "line": 1419,
+        "text": "Individual Portal",
+        "type": "tag-content"
+      },
+      {
+        "line": 1435,
+        "text": "Try It Now (Guest Sandbox)",
+        "type": "tag-content"
+      },
+      {
+        "line": 1476,
+        "text": "Hardware Engine",
+        "type": "tag-content"
+      },
+      {
+        "line": 1513,
+        "text": "Explore in 360°",
+        "type": "tag-content"
+      },
+      {
+        "line": 1525,
+        "text": "Detailed Analysis",
+        "type": "tag-content"
+      },
+      {
+        "line": 1537,
+        "text": "Future Ready",
+        "type": "tag-content"
+      },
+      {
+        "line": 1553,
+        "text": "HEXA SPARK MISSION LIFECYCLE",
+        "type": "tag-content"
+      },
+      {
+        "line": 1554,
+        "text": "The 11-Stage Aerial Intelligence Pipeline",
+        "type": "tag-content"
+      },
+      {
+        "line": 1566,
+        "text": "Pipeline Stages",
+        "type": "aria-label"
+      },
+      {
+        "line": 1614,
+        "text": "HOW IT WORKS TECHNICALLY",
+        "type": "tag-content"
+      },
+      {
+        "line": 1622,
+        "text": "Formulation / Specs:",
+        "type": "tag-content"
+      },
+      {
+        "line": 1626,
+        "text": "I/O Pipeline:",
+        "type": "tag-content"
+      },
+      {
+        "line": 1650,
+        "text": "Previous Stage",
+        "type": "title"
+      },
+      {
+        "line": 1664,
+        "text": "Next Stage",
+        "type": "title"
+      },
+      {
+        "line": 1677,
+        "text": "Launch in Workspace",
+        "type": "tag-content"
+      },
+      {
+        "line": 1697,
+        "text": "ENTERPRISE SYSTEM ARCHITECTURE",
+        "type": "tag-content"
+      },
+      {
+        "line": 1698,
+        "text": "Built for Precision GIS & Aerial Intelligence",
+        "type": "tag-content"
+      },
+      {
+        "line": 1721,
+        "text": "YOLOv11 Spatial Fusion",
+        "type": "tag-content"
+      },
+      {
+        "line": 1733,
+        "text": "Scale Calibration",
+        "type": "tag-content"
+      },
+      {
+        "line": 1745,
+        "text": "Standardized Handoff",
+        "type": "tag-content"
+      },
+      {
+        "line": 1758,
+        "text": "SOVEREIGN DATA ASSURANCE & COMPLIANCE",
+        "type": "tag-content"
+      },
+      {
+        "line": 1759,
+        "text": "Enterprise Security & Multi-Tenant Isolation",
+        "type": "tag-content"
+      },
+      {
+        "line": 1771,
+        "text": "Multi-Tenant Data Isolation",
+        "type": "tag-content"
+      },
+      {
+        "line": 1781,
+        "text": "Argon2id & httpOnly Auth",
+        "type": "tag-content"
+      },
+      {
+        "line": 1791,
+        "text": "Air-Gapped Sovereign Readiness",
+        "type": "tag-content"
+      },
+      {
+        "line": 1801,
+        "text": "Tamper-Evident Audit Trails",
+        "type": "tag-content"
+      },
+      {
+        "line": 1812,
+        "text": "HEXA SPARK DEPLOYMENT READY",
+        "type": "tag-content"
+      },
+      {
+        "line": 1813,
+        "text": "Transform Aerial Footage into 3D Intelligence",
+        "type": "tag-content"
+      },
+      {
+        "line": 1822,
+        "text": "Organization Gateway",
+        "type": "tag-content"
+      },
+      {
+        "line": 1832,
+        "text": "Launch Guest Sandbox",
+        "type": "tag-content"
+      },
+      {
+        "line": 1849,
+        "text": "Smart India Hackathon 2024",
+        "type": "tag-content"
+      },
+      {
+        "line": 1850,
+        "text": "FastAPI · Three.js · YOLOv11 · COLMAP",
+        "type": "tag-content"
+      }
+    ]
+  },
+  {
+    "file": "frontend/src/components/reconstruction/ReconstructionViewer.jsx",
+    "tCalls": [
+      {
+        "line": 1924,
+        "key": "dashboard.frames"
+      },
+      {
+        "line": 1925,
+        "key": "reconstruction.registeredCamerasCount"
+      },
+      {
+        "line": 1926,
+        "key": "reconstruction.sparsePointCount"
+      },
+      {
+        "line": 1927,
+        "key": "processing.logs"
+      },
+      {
+        "line": 2266,
+        "key": "reconstruction.clickTwoPoints"
+      },
+      {
+        "line": 2268,
+        "key": "reconstruction.clickTwoPoints"
+      },
+      {
+        "line": 2269,
+        "key": "reconstruction.pointToPointDistance"
+      },
+      {
+        "line": 2284,
+        "key": "common.cancel"
+      },
+      {
+        "line": 2344,
+        "key": "sceneIntelligence.class"
+      },
+      {
+        "line": 2412,
+        "key": "sceneIntelligence.motionStatic"
+      },
+      {
+        "line": 2416,
+        "key": "sceneIntelligence.motionDynamic"
+      },
+      {
+        "line": 2420,
+        "key": "reconstruction.modeSolid"
+      },
+      {
+        "line": 2467,
+        "key": "reconstruction.registeredCamerasCount"
+      },
+      {
+        "line": 2467,
+        "key": "sceneIntelligence.registered"
+      },
+      {
+        "line": 2469,
+        "key": "reconstruction.sparsePointCount"
+      },
+      {
+        "line": 2471,
+        "key": "reconstruction.meshFacesCount"
+      },
+      {
+        "line": 2471,
+        "key": "sceneIntelligence.faces"
+      },
+      {
+        "line": 2471,
+        "key": "sceneIntelligence.unavailable"
+      },
+      {
+        "line": 2473,
+        "key": "missionCommand.fusedObjects"
+      },
+      {
+        "line": 2473,
+        "key": "sceneIntelligence.semanticObjects"
+      },
+      {
+        "line": 2476,
+        "key": "sceneIntelligence.scaleStatus"
+      },
+      {
+        "line": 2478,
+        "key": "reconstruction.scaleCalibrated"
+      },
+      {
+        "line": 2478,
+        "key": "reconstruction.scaleUncalibrated"
+      },
+      {
+        "line": 2483,
+        "key": "processing.pipelineVerified"
+      }
+    ],
+    "literals": [
+      {
+        "line": 2064,
+        "text": "Pts:",
+        "type": "tag-content"
+      },
+      {
+        "line": 2150,
+        "text": "Free 3D Orbit (Drag left mouse button to rotate scene in all directions)",
+        "type": "title"
+      },
+      {
+        "line": 2159,
+        "text": "Pan Camera (Drag left mouse button to slide scene)",
+        "type": "title"
+      },
+      {
+        "line": 2166,
+        "text": "Top 2D Plan View (Look straight down)",
+        "type": "title"
+      },
+      {
+        "line": 2173,
+        "text": "3D Aerial Isometric Vantage Point",
+        "type": "title"
+      },
+      {
+        "line": 2180,
+        "text": "Fit 3D Reconstructed Model to Center",
+        "type": "title"
+      },
+      {
+        "line": 2187,
+        "text": "Reset Camera Vantage Point",
+        "type": "title"
+      },
+      {
+        "line": 2194,
+        "text": "Zoom In",
+        "type": "title"
+      },
+      {
+        "line": 2201,
+        "text": "Zoom Out",
+        "type": "title"
+      },
+      {
+        "line": 2235,
+        "text": "Click 2 points on the 3D surface to measure Euclidean distance",
+        "type": "title"
+      },
+      {
+        "line": 2242,
+        "text": "Toggle Fullscreen 3D Viewport",
+        "type": "title"
+      },
+      {
+        "line": 2337,
+        "text": "Close card",
+        "type": "title"
+      },
+      {
+        "line": 2408,
+        "text": "Reconstruction legend",
+        "type": "aria-label"
+      },
+      {
+        "line": 2440,
+        "text": "North orientation",
+        "type": "aria-label"
+      }
+    ]
+  },
+  {
+    "file": "frontend/src/components/analysis/MissionAnalysisWorkspace.jsx",
+    "tCalls": [
+      {
+        "line": 647,
+        "key": "sceneIntelligence.metric"
+      },
+      {
+        "line": 652,
+        "key": "sceneIntelligence.relativeScale"
+      },
+      {
+        "line": 673,
+        "key": "sceneIntelligence.noTrajectoryAvailable"
+      },
+      {
+        "line": 686,
+        "key": "sceneIntelligence.modelView3D"
+      },
+      {
+        "line": 694,
+        "key": "sceneIntelligence.videoFramesTab"
+      },
+      {
+        "line": 721,
+        "key": "sceneIntelligence.exitFullscreen"
+      },
+      {
+        "line": 721,
+        "key": "sceneIntelligence.fullscreen"
+      },
+      {
+        "line": 733,
+        "key": "sceneIntelligence.exitFullscreen"
+      },
+      {
+        "line": 733,
+        "key": "sceneIntelligence.fullscreen"
+      },
+      {
+        "line": 795,
+        "key": "sceneIntelligence.layerVisibility"
+      },
+      {
+        "line": 808,
+        "key": "sceneIntelligence.mesh"
+      },
+      {
+        "line": 809,
+        "key": "sceneIntelligence.pointCloud"
+      },
+      {
+        "line": 810,
+        "key": "sceneIntelligence.semanticObjects"
+      },
+      {
+        "line": 811,
+        "key": "sceneIntelligence.cameraTrajectory"
+      },
+      {
+        "line": 812,
+        "key": "sceneIntelligence.vehicles"
+      },
+      {
+        "line": 813,
+        "key": "sceneIntelligence.filterPeople"
+      },
+      {
+        "line": 814,
+        "key": "sceneIntelligence.referenceGrid"
+      },
+      {
+        "line": 815,
+        "key": "sceneIntelligence.objectLabels"
+      },
+      {
+        "line": 816,
+        "key": "sceneIntelligence.lowConfidenceViews"
+      },
+      {
+        "line": 891,
+        "key": "sceneIntelligence.inspect"
+      },
+      {
+        "line": 916,
+        "key": "sceneIntelligence.tabOverview"
+      },
+      {
+        "line": 922,
+        "key": "sceneIntelligence.tabObjects"
+      },
+      {
+        "line": 928,
+        "key": "sceneIntelligence.tabAnalytics"
+      },
+      {
+        "line": 951,
+        "key": "sceneIntelligence.confidence"
+      },
+      {
+        "line": 977,
+        "key": "sceneIntelligence.modelArchitecture"
+      },
+      {
+        "line": 978,
+        "key": "sceneIntelligence.surfaceMeshBadge"
+      },
+      {
+        "line": 984,
+        "key": "sceneIntelligence.registeredCameras"
+      },
+      {
+        "line": 989,
+        "key": "sceneIntelligence.unavailable"
+      },
+      {
+        "line": 993,
+        "key": "sceneIntelligence.sparsePoints"
+      },
+      {
+        "line": 997,
+        "key": "sceneIntelligence.unavailable"
+      },
+      {
+        "line": 1001,
+        "key": "sceneIntelligence.meshFaces"
+      },
+      {
+        "line": 1005,
+        "key": "sceneIntelligence.unavailable"
+      },
+      {
+        "line": 1010,
+        "key": "sceneIntelligence.meanReprojError"
+      },
+      {
+        "line": 1015,
+        "key": "sceneIntelligence.unavailable"
+      },
+      {
+        "line": 1024,
+        "key": "sceneIntelligence.coordinateReference"
+      },
+      {
+        "line": 1030,
+        "key": "sceneIntelligence.coordinateSystem"
+      },
+      {
+        "line": 1034,
+        "key": "sceneIntelligence.scaleStatus"
+      },
+      {
+        "line": 1041,
+        "key": "sceneIntelligence.metricCalibrated"
+      },
+      {
+        "line": 1042,
+        "key": "sceneIntelligence.unreferenced"
+      },
+      {
+        "line": 1046,
+        "key": "sceneIntelligence.denseStereo"
+      },
+      {
+        "line": 1047,
+        "key": "sceneIntelligence.cudaGpuRequired"
+      },
+      {
+        "line": 1050,
+        "key": "sceneIntelligence.georeferencing"
+      },
+      {
+        "line": 1052,
+        "key": "sceneIntelligence.unreferencedEpsg"
+      },
+      {
+        "line": 1089,
+        "key": "sceneIntelligence.exploreDetections"
+      },
+      {
+        "line": 1122,
+        "key": "sceneIntelligence.selected3DObject"
+      },
+      {
+        "line": 1140,
+        "key": "sceneIntelligence.backToList"
+      },
+      {
+        "line": 1147,
+        "key": "sceneIntelligence.xLocal"
+      },
+      {
+        "line": 1155,
+        "key": "sceneIntelligence.yHeight"
+      },
+      {
+        "line": 1163,
+        "key": "sceneIntelligence.zDepth"
+      },
+      {
+        "line": 1176,
+        "key": "sceneIntelligence.semanticClass"
+      },
+      {
+        "line": 1182,
+        "key": "sceneIntelligence.motionDynamics"
+      },
+      {
+        "line": 1192,
+        "key": "sceneIntelligence.sfmAssociationStatus"
+      },
+      {
+        "line": 1206,
+        "key": "sceneIntelligence.evidenceKeyframes"
+      },
+      {
+        "line": 1210,
+        "key": "sceneIntelligence.frame"
+      },
+      {
+        "line": 1211,
+        "key": "sceneIntelligence.frames"
+      },
+      {
+        "line": 1216,
+        "key": "sceneIntelligence.triangulated"
+      },
+      {
+        "line": 1220,
+        "key": "sceneIntelligence.spatialConfidence"
+      },
+      {
+        "line": 1267,
+        "key": "sceneIntelligence.inspectEvidence"
+      },
+      {
+        "line": 1273,
+        "key": "sceneIntelligence.focusCamera"
+      },
+      {
+        "line": 1300,
+        "key": "sceneIntelligence.searchPlaceholder"
+      },
+      {
+        "line": 1322,
+        "key": "sceneIntelligence.filterValid"
+      },
+      {
+        "line": 1323,
+        "key": "sceneIntelligence.filterAll"
+      },
+      {
+        "line": 1324,
+        "key": "sceneIntelligence.filterMaritime"
+      },
+      {
+        "line": 1325,
+        "key": "sceneIntelligence.filterVehicles"
+      },
+      {
+        "line": 1326,
+        "key": "sceneIntelligence.filterPeople"
+      },
+      {
+        "line": 1327,
+        "key": "sceneIntelligence.filterLowConf"
+      },
+      {
+        "line": 1328,
+        "key": "sceneIntelligence.filterMoving"
+      },
+      {
+        "line": 1329,
+        "key": "sceneIntelligence.filterStatic"
+      },
+      {
+        "line": 1351,
+        "key": "sceneIntelligence.noMatchingObjects"
+      },
+      {
+        "line": 1412,
+        "key": "sceneIntelligence.spatialIntelligence"
+      },
+      {
+        "line": 1418,
+        "key": "sceneIntelligence.validViews"
+      },
+      {
+        "line": 1424,
+        "key": "sceneIntelligence.lowConfidence"
+      },
+      {
+        "line": 1431,
+        "key": "sceneIntelligence.vehiclesPeople"
+      },
+      {
+        "line": 1438,
+        "key": "sceneIntelligence.staticMoving"
+      },
+      {
+        "line": 1449,
+        "key": "sceneIntelligence.photogrammetricQuality"
+      },
+      {
+        "line": 1455,
+        "key": "sceneIntelligence.keyframeCameras"
+      },
+      {
+        "line": 1458,
+        "key": "sceneIntelligence.registered"
+      },
+      {
+        "line": 1463,
+        "key": "sceneIntelligence.sparseInliers"
+      },
+      {
+        "line": 1467,
+        "key": "sceneIntelligence.triangulated"
+      },
+      {
+        "line": 1472,
+        "key": "sceneIntelligence.meanErrorColmap"
+      },
+      {
+        "line": 1480,
+        "key": "sceneIntelligence.surfaceMesh"
+      },
+      {
+        "line": 1483,
+        "key": "sceneIntelligence.vertices"
+      },
+      {
+        "line": 1483,
+        "key": "sceneIntelligence.faces"
+      },
+      {
+        "line": 1485,
+        "key": "sceneIntelligence.availablePly"
+      },
+      {
+        "line": 1486,
+        "key": "sceneIntelligence.unavailable"
+      },
+      {
+        "line": 1490,
+        "key": "sceneIntelligence.coordinateSystem"
+      },
+      {
+        "line": 1540,
+        "key": "sceneIntelligence.videoEvidenceVerification"
+      },
+      {
+        "line": 1681,
+        "key": "sceneIntelligence.loadingFrameObservation"
+      },
+      {
+        "line": 1695,
+        "key": "sceneIntelligence.keyframe"
+      },
+      {
+        "line": 1701,
+        "key": "sceneIntelligence.timestamp"
+      },
+      {
+        "line": 1727,
+        "key": "sceneIntelligence.spatialTelemetry"
+      },
+      {
+        "line": 1739,
+        "key": "sceneIntelligence.objectId"
+      },
+      {
+        "line": 1745,
+        "key": "sceneIntelligence.class"
+      },
+      {
+        "line": 1751,
+        "key": "sceneIntelligence.projectedBbox"
+      },
+      {
+        "line": 1759,
+        "key": "sceneIntelligence.reprojError"
+      },
+      {
+        "line": 1767,
+        "key": "sceneIntelligence.worldPosition"
+      },
+      {
+        "line": 1775,
+        "key": "sceneIntelligence.cameraDistance"
+      },
+      {
+        "line": 1783,
+        "key": "sceneIntelligence.triangulatedKeyframes"
+      },
+      {
+        "line": 1785,
+        "key": "sceneIntelligence.views"
+      },
+      {
+        "line": 1802,
+        "key": "sceneIntelligence.locateIn3D"
+      },
+      {
+        "line": 1816,
+        "key": "sceneIntelligence.openFullRes"
+      }
+    ],
+    "literals": [
+      {
+        "line": 671,
+        "text": "Per-frame GPS/IMU telemetry was not provided for this mission. Trajectory rendering is disabled.",
+        "type": "title"
+      },
+      {
+        "line": 703,
+        "text": "Download GeoJSON features",
+        "type": "title"
+      },
+      {
+        "line": 771,
+        "text": "Dynamic Photogrammetric Scene Classification",
+        "type": "title"
+      },
+      {
+        "line": 800,
+        "text": "Close layers panel",
+        "type": "title"
+      },
+      {
+        "line": 889,
+        "text": "Inspect in right panel",
+        "type": "title"
+      },
+      {
+        "line": 896,
+        "text": "Deselect object",
+        "type": "title"
+      },
+      {
+        "line": 1031,
+        "text": "LOCAL_ARBITRARY",
+        "type": "tag-content"
+      },
+      {
+        "line": 1138,
+        "text": "Back to object list",
+        "type": "title"
+      },
+      {
+        "line": 1413,
+        "text": "YOLOv11 + SfM",
+        "type": "tag-content"
+      }
+    ]
+  },
+  {
+    "file": "frontend/src/pages/AuthPage.jsx",
+    "tCalls": [
+      {
+        "line": 314,
+        "key": "auth.govTab"
+      },
+      {
+        "line": 338,
+        "key": "auth.indivTab"
+      },
+      {
+        "line": 357,
+        "key": "auth.signInTab"
+      },
+      {
+        "line": 372,
+        "key": "auth.registerOrgTab"
+      },
+      {
+        "line": 372,
+        "key": "auth.registerTab"
+      },
+      {
+        "line": 407,
+        "key": "auth.officialEmail"
+      },
+      {
+        "line": 407,
+        "key": "auth.personalEmail"
+      },
+      {
+        "line": 431,
+        "key": "auth.password"
+      },
+      {
+        "line": 468,
+        "key": "common.close"
+      },
+      {
+        "line": 468,
+        "key": "common.open"
+      },
+      {
+        "line": 477,
+        "key": "auth.mfaCode"
+      },
+      {
+        "line": 478,
+        "key": "auth.mfaRequired"
+      },
+      {
+        "line": 478,
+        "key": "auth.mfaOptional"
+      },
+      {
+        "line": 524,
+        "key": "auth.loggingIn"
+      },
+      {
+        "line": 524,
+        "key": "auth.authGovBtn"
+      },
+      {
+        "line": 524,
+        "key": "auth.authIndivBtn"
+      },
+      {
+        "line": 555,
+        "key": "auth.continueWithGoogle"
+      },
+      {
+        "line": 567,
+        "key": "auth.orgName"
+      },
+      {
+        "line": 589,
+        "key": "auth.department"
+      },
+      {
+        "line": 612,
+        "key": "auth.orgRole"
+      },
+      {
+        "line": 627,
+        "key": "auth.roleAdmin"
+      },
+      {
+        "line": 628,
+        "key": "auth.roleAnalyst"
+      },
+      {
+        "line": 629,
+        "key": "auth.roleViewer"
+      },
+      {
+        "line": 637,
+        "key": "auth.fullName"
+      },
+      {
+        "line": 659,
+        "key": "auth.officialEmail"
+      },
+      {
+        "line": 683,
+        "key": "auth.password"
+      },
+      {
+        "line": 705,
+        "key": "auth.confirmPassword"
+      },
+      {
+        "line": 734,
+        "key": "auth.enforceMfa"
+      },
+      {
+        "line": 756,
+        "key": "auth.loggingIn"
+      },
+      {
+        "line": 756,
+        "key": "auth.registerGovBtn"
+      },
+      {
+        "line": 756,
+        "key": "auth.registerIndivBtn"
+      },
+      {
+        "line": 784,
+        "key": "auth.guestModeTitle"
+      },
+      {
+        "line": 787,
+        "key": "auth.guestModeSubtitle"
+      },
+      {
+        "line": 806,
+        "key": "common.loading"
+      },
+      {
+        "line": 806,
+        "key": "auth.tryGuestBtn"
+      },
+      {
+        "line": 855,
+        "key": "auth.backHome"
+      }
+    ],
+    "literals": [
+      {
+        "line": 439,
+        "text": "••••••••••••",
+        "type": "placeholder"
+      },
+      {
+        "line": 485,
+        "text": "123456",
+        "type": "placeholder"
+      },
+      {
+        "line": 574,
+        "text": "Ministry of Defence",
+        "type": "placeholder"
+      },
+      {
+        "line": 595,
+        "text": "Air Surveillance Cell",
+        "type": "placeholder"
+      },
+      {
+        "line": 643,
+        "text": "Dr. Rajesh Kumar",
+        "type": "placeholder"
+      },
+      {
+        "line": 666,
+        "text": "officer@agency.gov",
+        "type": "placeholder"
+      },
+      {
+        "line": 690,
+        "text": "••••••••••••",
+        "type": "placeholder"
+      },
+      {
+        "line": 712,
+        "text": "••••••••••••",
+        "type": "placeholder"
+      }
+    ]
+  },
+  {
+    "file": "frontend/src/components/hero/HeroCompassReconstruction.jsx",
+    "tCalls": [],
+    "literals": [
+      {
+        "line": 259,
+        "text": "AERIAL PHOTOGRAMMETRIC MESH",
+        "type": "tag-content"
+      },
+      {
+        "line": 260,
+        "text": "AUTONOMOUS 6-DoF ORBIT · REAL-TIME RECONSTRUCTION",
+        "type": "tag-content"
+      },
+      {
+        "line": 265,
+        "text": "ILLUSTRATIVE 3D SAMPLE",
+        "type": "tag-content"
+      },
+      {
+        "line": 275,
+        "text": "REPROJ ERROR (SAMPLE)",
+        "type": "tag-content"
+      },
+      {
+        "line": 279,
+        "text": "INLIER POINTS (SAMPLE)",
+        "type": "tag-content"
+      },
+      {
+        "line": 283,
+        "text": "CAMERA STATIONS",
+        "type": "tag-content"
+      },
+      {
+        "line": 287,
+        "text": "SCALE CALIBRATION",
+        "type": "tag-content"
+      }
+    ]
+  },
+  {
+    "file": "frontend/src/components/analysis/AddMarkerModal.jsx",
+    "tCalls": [],
+    "literals": [
+      {
+        "line": 61,
+        "text": "Drop Custom 3D Marker",
+        "type": "tag-content"
+      },
+      {
+        "line": 70,
+        "text": "Marker Name / Identifier *",
+        "type": "tag-content"
+      },
+      {
+        "line": 75,
+        "text": "e.g., North Entry Point, Trapped Survivor",
+        "type": "placeholder"
+      },
+      {
+        "line": 83,
+        "text": "Marker Category / Type",
+        "type": "tag-content"
+      },
+      {
+        "line": 98,
+        "text": "Marker Color",
+        "type": "tag-content"
+      },
+      {
+        "line": 141,
+        "text": "Coordinates correspond to photogrammetric local metric space.",
+        "type": "tag-content"
+      }
+    ]
+  },
+  {
+    "file": "frontend/src/pages/ProcessingProgressPage.jsx",
+    "tCalls": [
+      {
+        "line": 125,
+        "key": "nav.processing"
+      },
+      {
+        "line": 126,
+        "key": "nav.noMissionSelected"
+      },
+      {
+        "line": 127,
+        "key": "dashboard.uploadPrompt"
+      },
+      {
+        "line": 138,
+        "key": "nav.processing"
+      },
+      {
+        "line": 139,
+        "key": "nav.activeMission"
+      },
+      {
+        "line": 140,
+        "key": "processing.subtitle"
+      },
+      {
+        "line": 324,
+        "key": "processing.title"
+      },
+      {
+        "line": 339,
+        "key": "stages.COMPLETE"
+      },
+      {
+        "line": 421,
+        "key": "missionCommand.inputVideo"
+      },
+      {
+        "line": 425,
+        "key": "newMission.targetFileLabel"
+      },
+      {
+        "line": 429,
+        "key": "dashboard.duration"
+      },
+      {
+        "line": 433,
+        "key": "dashboard.frames"
+      },
+      {
+        "line": 449,
+        "key": "newMission.fileSizeLabel"
+      },
+      {
+        "line": 454,
+        "key": "newMission.awaitingFootage"
+      },
+      {
+        "line": 460,
+        "key": "missionCommand.pipelineStage"
+      },
+      {
+        "line": 463,
+        "key": "common.status"
+      },
+      {
+        "line": 467,
+        "key": "dashboard.frames"
+      },
+      {
+        "line": 471,
+        "key": "sidebar.inference"
+      },
+      {
+        "line": 475,
+        "key": "processing.stage"
+      },
+      {
+        "line": 483,
+        "key": "sceneIntelligence.title"
+      },
+      {
+        "line": 486,
+        "key": "missionCommand.uniqueTracks"
+      },
+      {
+        "line": 502,
+        "key": "reconstruction.title"
+      },
+      {
+        "line": 505,
+        "key": "reconstruction.modePointcloud"
+      },
+      {
+        "line": 509,
+        "key": "reconstruction.registeredCamerasCount"
+      },
+      {
+        "line": 513,
+        "key": "stages.MESHING"
+      },
+      {
+        "line": 517,
+        "key": "missionCommand.meanConfidence"
+      },
+      {
+        "line": 539,
+        "key": "nav.processing"
+      },
+      {
+        "line": 542,
+        "key": "missionCommand.openViewer"
+      },
+      {
+        "line": 545,
+        "key": "missionCommand.openScene"
+      },
+      {
+        "line": 548,
+        "key": "reports.title"
+      }
+    ],
+    "literals": [
+      {
+        "line": 282,
+        "text": "python -m uvicorn backend.main:app --port 8001",
+        "type": "tag-content"
+      },
+      {
+        "line": 283,
+        "text": "cloudflared tunnel --url http://localhost:8001",
+        "type": "tag-content"
+      },
+      {
+        "line": 284,
+        "text": "WORKER_URL=https://&lt;tunnel-id&gt;.trycloudflare.com",
+        "type": "tag-content"
+      },
+      {
+        "line": 437,
+        "text": "FPS",
+        "type": "tag-content"
+      },
+      {
+        "line": 441,
+        "text": "Resolution",
+        "type": "tag-content"
+      }
+    ]
+  },
+  {
+    "file": "frontend/src/components/missions/NewIncidentWorkspace.jsx",
+    "tCalls": [
+      {
+        "line": 324,
+        "key": "newMission.workspaceBadge"
+      },
+      {
+        "line": 326,
+        "key": "newMission.workspaceTitle"
+      },
+      {
+        "line": 334,
+        "key": "newMission.closeWorkspace"
+      },
+      {
+        "line": 361,
+        "key": "newMission.workerDisconnected"
+      },
+      {
+        "line": 362,
+        "key": "newMission.submissionError"
+      },
+      {
+        "line": 391,
+        "key": "newMission.retryPipelineKeepVideo"
+      },
+      {
+        "line": 410,
+        "key": "newMission.tunnelHelpTitle"
+      },
+      {
+        "line": 425,
+        "key": "newMission.incidentDetails"
+      },
+      {
+        "line": 430,
+        "key": "newMission.incidentTitle"
+      },
+      {
+        "line": 437,
+        "key": "newMission.incidentTitlePlaceholder"
+      },
+      {
+        "line": 443,
+        "key": "newMission.incidentId"
+      },
+      {
+        "line": 452,
+        "key": "newMission.systemAuto"
+      },
+      {
+        "line": 458,
+        "key": "newMission.incidentLocation"
+      },
+      {
+        "line": 459,
+        "key": "newMission.locationHint"
+      },
+      {
+        "line": 469,
+        "key": "newMission.locationPlaceholder"
+      },
+      {
+        "line": 475,
+        "key": "newMission.incidentDesc"
+      },
+      {
+        "line": 482,
+        "key": "newMission.descPlaceholder"
+      },
+      {
+        "line": 488,
+        "key": "newMission.captureDateTime"
+      },
+      {
+        "line": 498,
+        "key": "newMission.liveSyncTitle"
+      },
+      {
+        "line": 501,
+        "key": "newMission.liveSyncNow"
+      },
+      {
+        "line": 513,
+        "key": "newMission.currentRealTime"
+      },
+      {
+        "line": 532,
+        "key": "newMission.assignedOperator"
+      },
+      {
+        "line": 539,
+        "key": "newMission.operatorPlaceholder"
+      },
+      {
+        "line": 549,
+        "key": "newMission.videoIngestion"
+      },
+      {
+        "line": 577,
+        "key": "newMission.replaceFootage"
+      },
+      {
+        "line": 577,
+        "key": "newMission.dragDropFootage"
+      },
+      {
+        "line": 578,
+        "key": "newMission.supportsFormats"
+      },
+      {
+        "line": 581,
+        "key": "newMission.chooseDifferent"
+      },
+      {
+        "line": 581,
+        "key": "newMission.browseLocal"
+      },
+      {
+        "line": 611,
+        "key": "newMission.streamReady"
+      },
+      {
+        "line": 619,
+        "key": "newMission.previewPlaceholder"
+      },
+      {
+        "line": 620,
+        "key": "newMission.hardwareDecoderActive"
+      },
+      {
+        "line": 634,
+        "key": "newMission.incidentInformation"
+      },
+      {
+        "line": 639,
+        "key": "newMission.incidentIdLabel"
+      },
+      {
+        "line": 643,
+        "key": "newMission.titleLabel"
+      },
+      {
+        "line": 647,
+        "key": "newMission.locationLabel"
+      },
+      {
+        "line": 648,
+        "key": "newMission.offlineUnset"
+      },
+      {
+        "line": 651,
+        "key": "newMission.operatorLabel"
+      },
+      {
+        "line": 652,
+        "key": "newMission.anonymous"
+      },
+      {
+        "line": 655,
+        "key": "newMission.captureTimeLabel"
+      },
+      {
+        "line": 657,
+        "key": "newMission.realTime"
+      },
+      {
+        "line": 661,
+        "key": "newMission.targetFileLabel"
+      },
+      {
+        "line": 662,
+        "key": "newMission.awaitingFootage"
+      },
+      {
+        "line": 665,
+        "key": "newMission.fileSizeLabel"
+      },
+      {
+        "line": 674,
+        "key": "newMission.computeAuthorization"
+      },
+      {
+        "line": 678,
+        "key": "newMission.hardwareLabel"
+      },
+      {
+        "line": 682,
+        "key": "newMission.inferencePathLabel"
+      },
+      {
+        "line": 686,
+        "key": "newMission.estPipelineTime"
+      },
+      {
+        "line": 694,
+        "key": "newMission.etaFormulaInputs"
+      },
+      {
+        "line": 696,
+        "key": "newMission.keyframesLabel"
+      },
+      {
+        "line": 697,
+        "key": "newMission.megapixelsLabel"
+      },
+      {
+        "line": 698,
+        "key": "newMission.throughputLabel"
+      },
+      {
+        "line": 699,
+        "key": "newMission.confidenceLabel"
+      },
+      {
+        "line": 711,
+        "key": "newMission.quickActions"
+      },
+      {
+        "line": 722,
+        "key": "newMission.saveDraft"
+      },
+      {
+        "line": 732,
+        "key": "newMission.clearAll"
+      },
+      {
+        "line": 743,
+        "key": "newMission.authorizingPipeline"
+      },
+      {
+        "line": 743,
+        "key": "newMission.authorizeLaunch"
+      }
+    ],
+    "literals": [
+      {
+        "line": 412,
+        "text": "python -m uvicorn backend.main:app --port 8001",
+        "type": "tag-content"
+      },
+      {
+        "line": 412,
+        "text": "with PIPELINE_ENABLED=true",
+        "type": "tag-content"
+      },
+      {
+        "line": 413,
+        "text": "cloudflared tunnel --url http://localhost:8001",
+        "type": "tag-content"
+      },
+      {
+        "line": 414,
+        "text": "WORKER_URL=https://&lt;tunnel-id&gt;.trycloudflare.com",
+        "type": "tag-content"
+      }
+    ]
+  },
+  {
+    "file": "frontend/src/components/auth/AuthModal.jsx",
+    "tCalls": [
+      {
+        "line": 294,
+        "key": "auth.personalEmail"
+      },
+      {
+        "line": 323,
+        "key": "auth.password"
+      },
+      {
+        "line": 371,
+        "key": "auth.loggingIn"
+      },
+      {
+        "line": 371,
+        "key": "auth.submit"
+      }
+    ],
+    "literals": [
+      {
+        "line": 214,
+        "text": "ADMIN",
+        "type": "tag-content"
+      },
+      {
+        "line": 300,
+        "text": "operator@aeromesh.internal",
+        "type": "placeholder"
+      },
+      {
+        "line": 329,
+        "text": "••••••••••••",
+        "type": "placeholder"
+      }
+    ]
+  },
+  {
+    "file": "frontend/src/components/analysis/BottomStatStrip.jsx",
+    "tCalls": [
+      {
+        "line": 29,
+        "key": "dashboard.noMissionsFound"
+      },
+      {
+        "line": 37,
+        "key": "sceneIntelligence.totalPeople"
+      },
+      {
+        "line": 40,
+        "key": "sceneIntelligence.pedestriansPersonnel"
+      },
+      {
+        "line": 47,
+        "key": "sceneIntelligence.totalVehicles"
+      },
+      {
+        "line": 50,
+        "key": "sceneIntelligence.automotiveTransport"
+      },
+      {
+        "line": 57,
+        "key": "sceneIntelligence.entryExitPoints"
+      },
+      {
+        "line": 60,
+        "key": "sceneIntelligence.operatorSavedMarkings"
+      },
+      {
+        "line": 67,
+        "key": "reconstruction.title"
+      }
+    ],
+    "literals": [
+      {
+        "line": 32,
+        "text": "Incident Detection Summary",
+        "type": "aria-label"
+      }
+    ]
+  },
+  {
+    "file": "frontend/src/components/analysis/VideoFramesTab.jsx",
+    "tCalls": [
+      {
+        "line": 95,
+        "key": "videoFrames.title"
+      },
+      {
+        "line": 246,
+        "key": "videoFrames.title"
+      },
+      {
+        "line": 259,
+        "key": "videoFrames.noDetectionsOnFrame"
+      },
+      {
+        "line": 315,
+        "key": "videoFrames.inspectFrame"
+      },
+      {
+        "line": 409,
+        "key": "videoFrames.timestamp"
+      },
+      {
+        "line": 417,
+        "key": "missionCommand.totalDetections"
+      },
+      {
+        "line": 430,
+        "key": "videoFrames.minConfidence"
+      },
+      {
+        "line": 446,
+        "key": "missionCommand.byClass"
+      },
+      {
+        "line": 459,
+        "key": "videoFrames.noDetectionsOnFrame"
+      },
+      {
+        "line": 466,
+        "key": "videoFrames.title"
+      },
+      {
+        "line": 494,
+        "key": "videoFrames.noDetectionsOnFrame"
+      },
+      {
+        "line": 507,
+        "key": "missionCommand.openViewer"
+      },
+      {
+        "line": 514,
+        "key": "videoFrames.inspectFrame"
+      }
+    ],
+    "literals": [
+      {
+        "line": 98,
+        "text": "H.264 / MP4 · Local Playback",
+        "type": "tag-content"
+      }
+    ]
+  },
+  {
+    "file": "frontend/src/components/analysis/ViewFiltersSidebar.jsx",
+    "tCalls": [
+      {
+        "line": 27,
+        "key": "sceneIntelligence.viewFilters"
+      },
+      {
+        "line": 33,
+        "key": "sceneIntelligence.viewFilters"
+      },
+      {
+        "line": 40,
+        "key": "sceneIntelligence.closeFilters"
+      },
+      {
+        "line": 67,
+        "key": "sceneIntelligence.humans"
+      },
+      {
+        "line": 78,
+        "key": "sceneIntelligence.vehicles3D"
+      },
+      {
+        "line": 89,
+        "key": "sceneIntelligence.buildingsFacades"
+      },
+      {
+        "line": 90,
+        "key": "sceneIntelligence.spatialBadge"
+      },
+      {
+        "line": 100,
+        "key": "sceneIntelligence.roadRail"
+      },
+      {
+        "line": 101,
+        "key": "sceneIntelligence.corridorBadge"
+      },
+      {
+        "line": 111,
+        "key": "sceneIntelligence.vegetationCanopy"
+      },
+      {
+        "line": 112,
+        "key": "sceneIntelligence.terrainBadge"
+      },
+      {
+        "line": 122,
+        "key": "sceneIntelligence.entryExitPoints"
+      },
+      {
+        "line": 133,
+        "key": "sceneIntelligence.surfaceMesh"
+      },
+      {
+        "line": 134,
+        "key": "sceneIntelligence.activeBadge"
+      },
+      {
+        "line": 144,
+        "key": "sceneIntelligence.pointCloudOverlay"
+      },
+      {
+        "line": 145,
+        "key": "sceneIntelligence.optionalBadge"
+      },
+      {
+        "line": 157,
+        "key": "sceneIntelligence.customMarkings"
+      },
+      {
+        "line": 163,
+        "key": "sceneIntelligence.dropMarker"
+      },
+      {
+        "line": 165,
+        "key": "sceneIntelligence.dropMarker"
+      },
+      {
+        "line": 172,
+        "key": "sceneIntelligence.noCustomMarkers"
+      },
+      {
+        "line": 173,
+        "key": "sceneIntelligence.dropMarkerHint"
+      }
+    ],
+    "literals": [
+      {
+        "line": 213,
+        "text": "Delete marker from mission",
+        "type": "title"
+      }
+    ]
+  },
+  {
+    "file": "frontend/src/components/layout/Sidebar.jsx",
+    "tCalls": [
+      {
+        "line": 147,
+        "key": "app.platformSubtitle"
+      },
+      {
+        "line": 154,
+        "key": "sidebar.brandSubtitle"
+      },
+      {
+        "line": 161,
+        "key": "sidebar.activeMission"
+      },
+      {
+        "line": 163,
+        "key": "sidebar.unknownMission"
+      },
+      {
+        "line": 164,
+        "key": "sidebar.newMission"
+      },
+      {
+        "line": 175,
+        "key": "sidebar.newMission"
+      },
+      {
+        "line": 179,
+        "key": "sidebar.groupMission"
+      },
+      {
+        "line": 184,
+        "key": "sidebar.groupIntelligence"
+      },
+      {
+        "line": 189,
+        "key": "sidebar.groupOutput"
+      },
+      {
+        "line": 198,
+        "key": "sidebar.aiEngine"
+      },
+      {
+        "line": 204,
+        "key": "sidebar.checking"
+      },
+      {
+        "line": 209,
+        "key": "sidebar.detection"
+      },
+      {
+        "line": 217,
+        "key": "sidebar.loading"
+      },
+      {
+        "line": 221,
+        "key": "sidebar.sfm"
+      },
+      {
+        "line": 229,
+        "key": "sidebar.loading"
+      },
+      {
+        "line": 233,
+        "key": "sidebar.hardware"
+      },
+      {
+        "line": 241,
+        "key": "sidebar.cpuOnly"
+      },
+      {
+        "line": 245,
+        "key": "sidebar.inference"
+      },
+      {
+        "line": 253,
+        "key": "sidebar.tiled"
+      },
+      {
+        "line": 260,
+        "key": "sidebar.groupSystem"
+      }
+    ],
+    "literals": [
+      {
+        "line": 153,
+        "text": "AEROMESH",
+        "type": "tag-content"
+      }
+    ]
+  },
+  {
+    "file": "frontend/src/components/layout/UIControlsToolbar.jsx",
+    "tCalls": [
+      {
+        "line": 27,
+        "key": "language"
+      },
+      {
+        "line": 33,
+        "key": "language"
+      },
+      {
+        "line": 57,
+        "key": "unitSystem"
+      },
+      {
+        "line": 63,
+        "key": "unitSystem"
+      },
+      {
+        "line": 88,
+        "key": "lightMode"
+      },
+      {
+        "line": 88,
+        "key": "darkMode"
+      },
+      {
+        "line": 89,
+        "key": "lightMode"
+      },
+      {
+        "line": 89,
+        "key": "darkMode"
+      },
+      {
+        "line": 105,
+        "key": "darkMode"
+      },
+      {
+        "line": 105,
+        "key": "lightMode"
+      }
+    ],
+    "literals": [
+      {
+        "line": 22,
+        "text": "Interface Controls",
+        "type": "aria-label"
+      }
+    ]
+  },
+  {
+    "file": "frontend/src/pages/ProfilePage.jsx",
+    "tCalls": [],
+    "literals": [
+      {
+        "line": 209,
+        "text": "Authentication & Session Architecture",
+        "type": "tag-content"
+      }
+    ]
+  },
+  {
+    "file": "frontend/src/api/missions.js",
+    "tCalls": [],
+    "literals": []
+  },
+  {
+    "file": "frontend/src/App.jsx",
+    "tCalls": [],
+    "literals": []
+  },
+  {
+    "file": "frontend/src/components/common/ErrorBoundary.jsx",
+    "tCalls": [],
+    "literals": []
+  },
+  {
+    "file": "frontend/src/components/hero/FloatingWord.jsx",
+    "tCalls": [],
+    "literals": []
+  },
+  {
+    "file": "frontend/src/components/layout/AmbientCursorGlow.jsx",
+    "tCalls": [],
+    "literals": []
+  },
+  {
+    "file": "frontend/src/components/layout/MissionSelectorPanel.jsx",
+    "tCalls": [
+      {
+        "line": 39,
+        "key": "selector.title"
+      },
+      {
+        "line": 44,
+        "key": "selector.loading"
+      },
+      {
+        "line": 48,
+        "key": "selector.empty"
+      },
+      {
+        "line": 50,
+        "key": "selector.uploadPrompt"
+      },
+      {
+        "line": 69,
+        "key": "selector.defaultSector"
+      }
+    ],
+    "literals": []
+  },
+  {
+    "file": "frontend/src/components/layout/Topbar.jsx",
+    "tCalls": [
+      {
+        "line": 75,
+        "key": "auth.login"
+      },
+      {
+        "line": 91,
+        "key": "dashboard.allMissions"
+      },
+      {
+        "line": 92,
+        "key": "nav.dashboard"
+      },
+      {
+        "line": 98,
+        "key": "selector.title"
+      },
+      {
+        "line": 105,
+        "key": "nav.activeMission"
+      },
+      {
+        "line": 112,
+        "key": "stages.PROCESSING"
+      },
+      {
+        "line": 165,
+        "key": "auth.login"
+      }
+    ],
+    "literals": []
+  },
+  {
+    "file": "frontend/src/components/missions/CreateMissionModal.jsx",
+    "tCalls": [],
+    "literals": []
+  },
+  {
+    "file": "frontend/src/components/narrative/NarrativePipelineSequence.jsx",
+    "tCalls": [
+      {
+        "line": 464,
+        "key": "processing.narrativeBadge"
+      },
+      {
+        "line": 466,
+        "key": "processing.narrativeTitle"
+      },
+      {
+        "line": 476,
+        "key": "videoFrames.play"
+      },
+      {
+        "line": 476,
+        "key": "videoFrames.pause"
+      },
+      {
+        "line": 477,
+        "key": "videoFrames.play"
+      },
+      {
+        "line": 477,
+        "key": "videoFrames.pause"
+      },
+      {
+        "line": 480,
+        "key": "videoFrames.play"
+      },
+      {
+        "line": 480,
+        "key": "videoFrames.pause"
+      },
+      {
+        "line": 487,
+        "key": "processing.forward"
+      },
+      {
+        "line": 488,
+        "key": "processing.forward"
+      },
+      {
+        "line": 492,
+        "key": "processing.forward"
+      },
+      {
+        "line": 499,
+        "key": "processing.replay"
+      },
+      {
+        "line": 500,
+        "key": "processing.replay"
+      },
+      {
+        "line": 503,
+        "key": "processing.replay"
+      },
+      {
+        "line": 518,
+        "key": "processing.pipelineVerified"
+      },
+      {
+        "line": 519,
+        "key": "processing.pipelineVerifiedSub"
+      }
+    ],
+    "literals": []
+  },
+  {
+    "file": "frontend/src/components/reconstruction/VideoPlayer.jsx",
+    "tCalls": [],
+    "literals": []
+  },
+  {
+    "file": "frontend/src/components/ui/Icon.jsx",
+    "tCalls": [],
+    "literals": []
+  },
+  {
+    "file": "frontend/src/components/ui/UI.jsx",
+    "tCalls": [],
+    "literals": []
+  },
+  {
+    "file": "frontend/src/context/UIContext.jsx",
+    "tCalls": [],
+    "literals": []
+  },
+  {
+    "file": "frontend/src/data/missions.js",
+    "tCalls": [],
+    "literals": []
+  },
+  {
+    "file": "frontend/src/data/navigation.js",
+    "tCalls": [],
+    "literals": []
+  },
+  {
+    "file": "frontend/src/main.jsx",
+    "tCalls": [],
+    "literals": []
+  },
+  {
+    "file": "frontend/src/utils/errorUtils.js",
+    "tCalls": [],
+    "literals": []
+  },
+  {
+    "file": "frontend/src/utils/i18n.js",
+    "tCalls": [
+      {
+        "line": 44,
+        "key": "nav.dashboard"
+      },
+      {
+        "line": 45,
+        "key": "dashboard"
+      },
+      {
+        "line": 46,
+        "key": "itemCount"
+      }
+    ],
+    "literals": []
+  },
+  {
+    "file": "frontend/src/utils/threeTimerCompat.js",
+    "tCalls": [],
+    "literals": []
+  }
+]

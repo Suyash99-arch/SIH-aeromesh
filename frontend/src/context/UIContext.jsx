@@ -1,13 +1,15 @@
-import React, { createContext, useContext, useState, useEffect } from "react";
-import { TRANSLATIONS, formatDistance, formatArea, formatDateTime } from "../utils/i18n";
+import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
+import { translate, formatNumber, formatDistance, formatArea, formatDateTime } from "../utils/i18n";
 
 const UIContext = createContext();
 
 export function UIProvider({ children }) {
-  const [language, setLanguage] = useState(() => localStorage.getItem("hexaspark_lang") || "en");
+  const [language, setLanguage] = useState(() => {
+    return localStorage.getItem("hexaspark_lang") || localStorage.getItem("aeromesh_lang") || "en";
+  });
   const [unitSystem, setUnitSystem] = useState(() => localStorage.getItem("hexaspark_units") || "metric");
   const [theme, setTheme] = useState(() => {
-    const saved = localStorage.getItem("hexaspark_theme");
+    const saved = localStorage.getItem("hexaspark_theme") || localStorage.getItem("aeromesh_theme");
     if (saved) return saved;
     if (typeof window !== "undefined" && window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches) {
       return "light";
@@ -17,6 +19,7 @@ export function UIProvider({ children }) {
 
   useEffect(() => {
     localStorage.setItem("hexaspark_lang", language);
+    localStorage.setItem("aeromesh_lang", language);
     document.documentElement.setAttribute("lang", language);
   }, [language]);
 
@@ -26,6 +29,7 @@ export function UIProvider({ children }) {
 
   useEffect(() => {
     localStorage.setItem("hexaspark_theme", theme);
+    localStorage.setItem("aeromesh_theme", theme);
     document.documentElement.setAttribute("data-theme", theme);
     if (theme === "light") {
       document.documentElement.classList.add("light-theme");
@@ -38,14 +42,14 @@ export function UIProvider({ children }) {
     setTheme((prev) => (prev === "dark" ? "light" : "dark"));
   };
 
-  const t = (key) => {
-    const dict = TRANSLATIONS[language] || TRANSLATIONS.en;
-    return dict[key] || TRANSLATIONS.en[key] || key;
-  };
+  const t = useCallback((key, params, fallback) => {
+    return translate(key, params, language, fallback);
+  }, [language]);
 
-  const fmtDist = (meters) => formatDistance(meters, unitSystem, language);
-  const fmtArea = (sqMeters) => formatArea(sqMeters, unitSystem, language);
-  const fmtDate = (isoString) => formatDateTime(isoString, language);
+  const fmtNum = useCallback((num, options) => formatNumber(num, language, options), [language]);
+  const fmtDist = useCallback((meters) => formatDistance(meters, unitSystem, language), [unitSystem, language]);
+  const fmtArea = useCallback((sqMeters) => formatArea(sqMeters, unitSystem, language), [unitSystem, language]);
+  const fmtDate = useCallback((isoString) => formatDateTime(isoString, language), [language]);
 
   return (
     <UIContext.Provider
@@ -57,6 +61,7 @@ export function UIProvider({ children }) {
         theme,
         toggleTheme,
         t,
+        fmtNum,
         fmtDist,
         fmtArea,
         fmtDate,

@@ -46,66 +46,110 @@ def verify_mission_pipeline(mission_id: str):
 
     # --- STAGE B: KEYFRAMES ---
     print("\n--- STAGE B: KEYFRAMES ---")
-    kf = m_data.get("keyframes") or m_data.get("frameQuality") or {}
-    kf_count = kf.get("total_keyframes") or kf.get("selected_count") or len(m_data.get("keyframes_list", []))
-    print(f"Keyframe Count:        {kf_count}")
-    print(f"Selection Method:      Sharpness + Parallax / Optical Flow Overlap")
-    print(f"Frame Budget Config:   {os.getenv('RECONSTRUCTION_MAX_FRAMES', '60')}")
+    recon_meta_path = REPO_ROOT / "data" / "missions" / mission_id / "reconstruction" / "reconstruction_metadata.json"
+    recon_meta = {}
+    if recon_meta_path.is_file():
+        try:
+            recon_meta = json.loads(recon_meta_path.read_text(encoding="utf-8"))
+        except Exception:
+            pass
 
-    # --- STAGE C: CAMERA ---
+    frames_dir = REPO_ROOT / "data" / "missions" / mission_id / "reconstruction" / "frames"
+    frames_count = len(list(frames_dir.glob("*.jpg"))) if frames_dir.is_dir() else 0
+    if frames_count == 0:
+        frames_count = recon_meta.get("extraction_audit", {}).get("selected_count", 0) or m_data.get("reconstruction", {}).get("total_images", 0)
+    
+    print(f"Keyframe Count:        {frames_count}")
+    print(f"Selection Method:      Variance of Laplacian + Optical Flow Overlap Filtering")
+    print(f"Frame Budget Config:   {os.getenv('RECONSTRUCTION_MAX_FRAMES', '40')}")
+
+    # --- STAGE C: CAMERA INTRINSICS ---
     print("\n--- STAGE C: CAMERA INTRINSICS ---")
-    print("Intrinsics Source:     EXIF / Estimated Pin-hole Model")
-    print("Camera Model:          SINGLE_SHARED_PINHOLE (Radial distortion)")
+    v_meta = recon_meta.get("video_metadata") or m_data.get("reconstruction", {}).get("video_metadata") or {}
+    model_name = v_meta.get("intrinsics_model") or "SIMPLE_RADIAL (Single Shared Camera)"
+    source_name = v_meta.get("intrinsics_source") or "Self-Calibrated from Multi-View Geometry"
+    print(f"Intrinsics Source:     {source_name}")
+    print(f"Camera Model:          {model_name}")
 
     # --- STAGE D: PYCOLMAP / COLMAP SFM ---
     print("\n--- STAGE D: PYCOLMAP / COLMAP SFM ---")
-    recon = m_data.get("reconstruction") or {}
+    recon = m_data.get("reconstruction") or recon_meta
     reg_cams = recon.get("registered_cameras", 0)
     pts = recon.get("sparse_point_count") or recon.get("point_count", 0)
-    reproj_err = recon.get("mean_reprojection_error", "N/A")
-    device = "CUDA (GPU)" if os.environ.get("CUDA_VISIBLE_DEVICES") != "-1" else "CPU"
-    print(f"Execution Device:      {device}")
-    print(f"Matcher Used:          EXHAUSTIVE / GUIDED_SEQUENTIAL")
+    reproj_err = recon.get("mean_reprojection_error")
+    reproj_str = f"{reproj_err:.3f} px" if isinstance(reproj_err, (int, float)) else "N/A"
+    
+    # Real device check
+    try:
+        import pycolmap
+        has_cuda = getattr(pycolmap, "has_cuda", False)
+        device_str = "CUDA (GPU)" if has_cuda else "CPU (Standard Multi-Threading)"
+    except Exception:
+        device_str = "CPU"
+    
+    attempts = recon.get("sfm_attempts") or []
+    first_att = attempts[0] if attempts else {}
+    matcher_str = first_att.get("name") or ("Exhaustive Pairing (<= 40 frames)" if frames_count <= 40 else "Sequential Corridor Matching")
+    engine_str = recon.get("engine") or recon.get("stages", {}).get("sparse_sfm", {}).get("engine") or "COLMAP Incremental SfM"
+
+    print(f"Reconstruction Engine: {engine_str}")
+    print(f"Execution Device:      {device_str}")
+    print(f"Matcher Used:          {matcher_str}")
     print(f"Registered Cameras:    {reg_cams}")
     print(f"Sparse Points:         {pts}")
-    print(f"Mean Reproj Error:     {reproj_err} px")
-    print(f"Reconstruction Status: {'SUCCESS (>= 3 cameras)' if reg_cams >= 3 else 'RECONSTRUCTION_FAILED (< 3 cameras)'}")
+    print(f"Mean Reproj Error:     {reproj_str}")
+    print(f"Reconstruction Status: {'SUCCESS (>= 3 cameras)' if reg_cams >= 3 else ('MONOCULAR_DEPTH_FALLBACK' if pts > 0 else 'RECONSTRUCTION_FAILED')}")
 
-    # --- STAGE E: SFM -> MESH ---
+    # --- STAGE E: SFM TO MESH ---
     print("\n--- STAGE E: SFM TO MESH ---")
     data_dir = REPO_ROOT / "data" / "missions" / mission_id
-    mesh_url = recon.get("mesh_url") or (data_dir / "mesh.ply" if data_dir.is_dir() else None)
-    mesh_exists = False
-    if isinstance(mesh_url, str):
-        if mesh_url.startswith("/"):
-            mesh_exists = (REPO_ROOT / mesh_url.lstrip("/")).is_file()
-        else:
-            mesh_exists = Path(mesh_url).is_file()
-    elif isinstance(mesh_url, Path):
-        mesh_exists = mesh_url.is_file()
-    print(f"Mesh File Status:      {'EXISTS' if mesh_exists else 'NOT_FOUND'}")
-    print(f"Mesh Built From:       Pipeline Points Only")
+    mesh_path_str = (recon.get("mesh") or {}).get("mesh_path")
+    candidate_mesh_paths = [
+        Path(mesh_path_str) if mesh_path_str else None,
+        data_dir / "reconstruction" / "model" / "mesh.ply",
+        data_dir / "reconstruction" / "mesh.ply",
+        data_dir / "mesh.ply",
+        REPO_ROOT / "data" / "objects" / "missions" / mission_id / "reconstruction" / "mesh.ply",
+    ]
+    mesh_file = next((p for p in candidate_mesh_paths if p is not None and p.is_file()), None)
+    mesh_exists = mesh_file is not None
+    v_count = (recon.get("mesh") or {}).get("vertex_count", 0)
+    f_count = (recon.get("mesh") or {}).get("face_count", 0)
+    print(f"Mesh File Status:      {'EXISTS' if mesh_exists else 'NOT_FOUND'}" + (f" ({v_count} vertices, {f_count} faces)" if mesh_exists and v_count > 0 else ""))
+    print(f"Mesh Built From:       {'Camera-Aware Poisson Surface Reconstruction' if mesh_exists else 'N/A'}")
     print(f"Scale Label:           relative (uncalibrated monocular depth aligned to SfM)")
 
     # --- STAGE F: YOLO DETECTION & TRACKING ---
     print("\n--- STAGE F: YOLO DETECTION & TRACKING ---")
     weights_path = REPO_ROOT / os.getenv("YOLO_MODEL_PATH", "backend/models/aeromesh_yolo.pt")
     sha256 = "N/A"
+    classes_list = []
     if weights_path.is_file():
         sha256 = hashlib.sha256(weights_path.read_bytes()).hexdigest()[:16]
+        try:
+            from ultralytics import YOLO
+            ym = YOLO(str(weights_path))
+            classes_list = list(ym.names.values()) if hasattr(ym, "names") else []
+        except Exception:
+            pass
+    if not classes_list:
+        classes_list = ['car', 'van', 'truck', 'bus', 'person', 'bicycle', 'motorcycle', 'tricycle']
+
     det = m_data.get("detections") or {}
     trk = m_data.get("tracking") or {}
     print(f"Weights Path:          {weights_path}")
     print(f"Model SHA256 (head):   {sha256}")
-    print(f"Classes (model.names): ['car', 'van', 'truck', 'bus', 'person', 'bicycle', 'motorcycle', 'tricycle']")
-    print(f"Total Detections:      {det.get('total_detections') or det.get('count') or 0}")
-    print(f"Unique Tracks:         {trk.get('unique_tracks') or trk.get('count') or 0}")
+    print(f"Classes (model.names): {classes_list}")
+    print(f"Total Detections:      {det.get('total_detections') or det.get('count') or len(det.get('observations', []))}")
+    print(f"Unique Tracks:         {trk.get('unique_tracks') or trk.get('count') or len(m_data.get('tracks', []))}")
 
     # --- STAGE G: SPATIAL FUSION ---
     print("\n--- STAGE G: SPATIAL FUSION ---")
     fusion = m_data.get("spatial_fusion") or {}
     fused_objs = fusion.get("fused_objects") or m_data.get("objects_3d") or []
-    print(f"Fused 3D Objects:      {len(fused_objs)}")
+    valid_fused = sum(1 for obj in fused_objs if (obj.get("association_status") in ("VALID", "CONFIRMED", "LOCALIZED") or obj.get("position_3d") is not None))
+    print(f"Tracked Objects:       {len(fused_objs)}")
+    print(f"Localized in 3D:       {valid_fused}")
     print(f"Reproj Threshold:      {os.getenv('SPATIAL_FUSION_REPROJ_THRESHOLD', '25.0')} px")
 
     # --- STAGE H: SUMMARY & REPORT PDF ---
@@ -115,7 +159,7 @@ def verify_mission_pipeline(mission_id: str):
     print(f"Canonical Status:      {summary.get('status')}")
     print(f"Summary Detections:    {summary.get('detection', {}).get('total_detections')}")
     print(f"Summary Tracks:        {summary.get('tracking', {}).get('unique_tracks')}")
-    print(f"Summary Fused Objects: {len(summary.get('spatial_fusion', {}).get('fused_objects', []))}")
+    print(f"Summary 3D Objects:    {len(summary.get('spatial_fusion', {}).get('fused_objects', []))}")
     print("=" * 70)
 
 if __name__ == "__main__":

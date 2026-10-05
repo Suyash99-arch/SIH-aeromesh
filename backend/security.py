@@ -39,7 +39,12 @@ try:
 except ImportError:
     pass
 
-SECRET_KEY = os.getenv("SECRET_KEY") or "aeromesh-dev-insecure-secret-key-change-in-env"
+DEV_INSECURE_SECRET = "aeromesh-dev-insecure-secret-key-change-in-env"
+SECRET_KEY = os.getenv("SECRET_KEY") or DEV_INSECURE_SECRET
+is_prod_env = os.getenv("ENVIRONMENT", "").lower() in ("production", "prod") or os.getenv("ENV", "").lower() in ("production", "prod") or os.getenv("RENDER", "").lower() in ("true", "1")
+if is_prod_env and (not os.getenv("SECRET_KEY") or os.getenv("SECRET_KEY") == DEV_INSECURE_SECRET):
+    raise RuntimeError("PRODUCTION STARTUP HALTED: A secure, unique SECRET_KEY environment variable is required in production mode.")
+
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 JWT_EXPIRATION_MINUTES = int(os.getenv("JWT_EXPIRATION_MINUTES", "720"))  # 12 hours (operational shift duration)
 MAX_UPLOAD_SIZE_BYTES = int(os.getenv("MAX_UPLOAD_SIZE_BYTES", str(1024 * 1024 * 1024)))  # 1 GB
@@ -102,21 +107,22 @@ def load_invite_codes() -> Dict[str, Dict[str, Any]]:
                 invites = json.load(f)
         except Exception:
             pass
-    # Seed default active invite code if empty
-    default_code = os.getenv("ORG_INVITE_TOKEN", "GOV-SECRET-2026")
-    default_hash = hashlib.sha256(default_code.strip().encode()).hexdigest()
-    if default_hash not in invites:
-        invites[default_hash] = {
-            "code_hash": default_hash,
-            "created_by": "admin@aeromesh.internal",
-            "department": "Strategic Aerial Reconnaissance",
-            "org_name": "Ministry of Defence",
-            "created_at": "2026-01-01T00:00:00Z",
-            "expires_at": "2030-01-01T00:00:00Z",
-            "is_used": False,
-            "used_by": None,
-            "used_at": None,
-        }
+    # Only load from explicit environment variable if provided by administrator
+    env_token = os.getenv("ORG_INVITE_TOKEN", "").strip()
+    if env_token:
+        default_hash = hashlib.sha256(env_token.encode()).hexdigest()
+        if default_hash not in invites:
+            invites[default_hash] = {
+                "code_hash": default_hash,
+                "created_by": "admin@aeromesh.internal",
+                "department": "Strategic Aerial Reconnaissance",
+                "org_name": "Ministry of Defence",
+                "created_at": "2026-01-01T00:00:00Z",
+                "expires_at": "2030-01-01T00:00:00Z",
+                "is_used": False,
+                "used_by": None,
+                "used_at": None,
+            }
     return invites
 
 
