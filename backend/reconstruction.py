@@ -614,8 +614,10 @@ def _run_pycolmap_sfm(
     extraction_options.max_image_size = RECONSTRUCTION_MAX_IMAGE_DIM
     extraction_options.num_threads = max(1, os.cpu_count() or 4)
     if hasattr(extraction_options, "sift"):
-        extraction_options.sift.peak_threshold = 0.004
-        extraction_options.sift.max_num_features = int(os.getenv("SFM_MAX_FEATURES", "4096"))
+        extraction_options.sift.peak_threshold = float(os.getenv("SFM_PEAK_THRESHOLD", "0.002"))
+        extraction_options.sift.max_num_features = int(os.getenv("SFM_MAX_FEATURES", "8192"))
+        if hasattr(extraction_options.sift, "first_octave"):
+            extraction_options.sift.first_octave = -1
 
     try:
         pycolmap.extract_features(
@@ -646,11 +648,13 @@ def _run_pycolmap_sfm(
 
     matching_options = pycolmap.FeatureMatchingOptions()
     matching_options.num_threads = max(1, os.cpu_count() or 4)
+    if hasattr(matching_options, "guided_matching"):
+        matching_options.guided_matching = True
 
     try:
         is_mock_seq = hasattr(pycolmap.match_sequential, "mock_calls") or type(pycolmap.match_sequential).__name__ == "MagicMock"
         matcher_type = os.getenv("COLMAP_MATCHER", "sequential").strip().lower()
-        overlap_val = int(os.getenv("COLMAP_OVERLAP", "10"))
+        overlap_val = int(os.getenv("COLMAP_OVERLAP", "15"))
         if is_mock_seq:
             pycolmap.match_sequential(
                 database_path=str(database_path),
@@ -724,10 +728,15 @@ def _run_pycolmap_sfm(
             inc_options.mapper.abs_pose_min_num_inliers = cfg["abs_pose_min_inliers"]
             inc_options.mapper.abs_pose_min_inlier_ratio = 0.08
             inc_options.mapper.abs_pose_max_error = cfg["abs_pose_max_error"]
+            inc_options.mapper.filter_max_reproj_error = float(os.getenv("SFM_MAX_REPROJ_ERROR", "2.0"))
             inc_options.mapper.min_focal_length_ratio = 0.1
             inc_options.mapper.max_focal_length_ratio = 10.0
             inc_options.mapper.ba_local_min_tri_angle = min(cfg["init_min_tri_angle"], 2.0)
             inc_options.mapper.filter_min_tri_angle = 0.2
+            if hasattr(inc_options.mapper, "ba_refine_focal_length"):
+                inc_options.mapper.ba_refine_focal_length = True
+            if hasattr(inc_options.mapper, "ba_refine_extra_params"):
+                inc_options.mapper.ba_refine_extra_params = True
 
         reconstructions = None
         try:
@@ -1310,12 +1319,12 @@ def camera_poisson_trimmed(
         search_radius = max(avg_d * 3.0, 1.2)
 
         pcd.estimate_normals(
-            search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=search_radius, max_nn=45)
+            search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=search_radius, max_nn=60)
         )
         pcd.orient_normals_towards_camera_location(camera_location=cam_mean)
 
-        # 4. Poisson surface reconstruction with linear fit (depth 9 for sharp structural geometry)
-        poisson_depth = 10 if len(pts) >= 3000 else 9
+        # 4. Poisson surface reconstruction with linear fit (depth 10-11 for high detail urban/terrain structure)
+        poisson_depth = 11 if len(pts) >= 4000 else (10 if len(pts) >= 1200 else 9)
         mesh_raw, densities = o3d.geometry.TriangleMesh.create_from_point_cloud_poisson(
             pcd, depth=poisson_depth, linear_fit=True
         )
@@ -1349,6 +1358,14 @@ def camera_poisson_trimmed(
                 valid_clusters = [np.argmax(num_triangles)]
             mesh_clean.remove_triangles_by_mask(~np.isin(triangle_clusters, valid_clusters))
             mesh_clean.remove_unreferenced_vertices()
+
+        # Apply subtle Laplacian smoothing to regularize surface without eroding architectural edges
+        try:
+            if len(mesh_clean.vertices) > 20:
+                mesh_clean = mesh_clean.filter_smooth_laplacian(number_of_iterations=2)
+                mesh_clean.compute_vertex_normals()
+        except Exception:
+            pass
 
         # 7. Transfer photogrammetric colors and apply multi-view camera frame projection
         v_final = np.asarray(mesh_clean.vertices)

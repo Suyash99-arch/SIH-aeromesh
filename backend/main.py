@@ -3845,35 +3845,48 @@ async def delete_mission(
 ):
     """Delete a mission, its video, and 3D reconstruction artifacts with authorization check and audit trail."""
     mission = MissionData(mission_id)
-    if not mission.data:
+    m_dir = MISSIONS_DIR / mission_id
+    obj_dir = DATA_DIR / "objects" / "missions" / mission_id
+    manifest_file = MISSIONS_DIR / f"{mission_id}.json"
+    obj_manifest = DATA_DIR / "objects" / "missions" / f"{mission_id}.json"
+
+    if not mission.data and not m_dir.exists() and not obj_dir.exists() and not manifest_file.exists() and not obj_manifest.exists():
         raise HTTPException(status_code=404, detail="Mission not found")
 
-    check_mission_access(mission_id, current_user, mission.data.get("created_by") or mission.data.get("operator"))
+    if mission.data:
+        check_mission_access(mission_id, current_user, mission.data.get("created_by") or mission.data.get("operator"))
 
     if current_user and current_user.role not in (ROLE_ADMIN, ROLE_OPERATOR):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only operators and administrators can delete missions")
 
-    m_dir = MISSIONS_DIR / mission_id
     if m_dir.exists():
         shutil.rmtree(m_dir, ignore_errors=True)
 
-    obj_dir = DATA_DIR / "objects" / "missions" / mission_id
     if obj_dir.exists():
         shutil.rmtree(obj_dir, ignore_errors=True)
 
     database_engine = get_configured_engine()
     if database_engine is not None and check_database(database_engine):
         with session_scope(database_engine) as session:
-            MissionRepository(session).delete(mission_id)
+            try:
+                MissionRepository(session).delete(mission_id)
+            except Exception as e_repo:
+                logger.warning("Repository delete notice for %s: %s", mission_id, e_repo)
 
-    manifest_file = MISSIONS_DIR / f"{mission_id}.json"
     if manifest_file.exists():
         manifest_file.unlink(missing_ok=True)
+    if obj_manifest.exists():
+        obj_manifest.unlink(missing_ok=True)
+
+    # Invalidate in-memory cached missions list
+    _missions_list_cache["timestamp"] = 0.0
+    _missions_list_cache["data"] = []
 
     if current_user:
         _record_audit_event("mission.deleted", current_user.id, current_user.email, current_user.organization_name, {"mission_id": mission_id})
 
     return {"success": True, "message": f"Mission '{mission_id}' deleted successfully"}
+
 
 
 def run_full_pipeline_task(
