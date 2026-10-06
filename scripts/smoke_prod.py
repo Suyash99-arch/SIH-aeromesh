@@ -58,7 +58,7 @@ def run_smoke_tests(base_url: str) -> bool:
     try:
         r = client.get(f"{base}/docs")
         latency = (time.time() - t0) * 1000
-        if r.status_code == 200 and ("Hexa Spark API" in r.text or "Swagger UI" in r.text):
+        if r.status_code == 200 and ("AEROMESH API" in r.text or "Hexa Spark API" in r.text or "Swagger UI" in r.text):
             results.append(("GET /docs", "PASS", latency, "Swagger documentation title verified"))
         else:
             all_passed = False

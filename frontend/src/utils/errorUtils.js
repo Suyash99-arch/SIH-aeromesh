@@ -71,7 +71,7 @@ export function formatApiError(err) {
 
   // 5. Network errors
   if (err.name === "TypeError" && (err.message?.includes("fetch") || err.message?.includes("network"))) {
-    return "Network error: unable to connect to the Hexa Spark server. Please verify the backend is running.";
+    return "Network error: unable to connect to the AEROMESH server. Please verify the backend is running.";
   }
 
   return "Operation failed. Please verify your inputs and try again.";

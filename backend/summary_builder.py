@@ -27,8 +27,8 @@ from .telemetry_parser import parse_mission_telemetry
 
 logger = logging.getLogger(__name__)
 
-BRAND_NAME = "Hexa Spark"
-BRAND_SUITE = "Hexa Spark Aerial Intelligence Suite"
+BRAND_NAME = "AEROMESH"
+BRAND_SUITE = "AEROMESH Aerial Intelligence Suite"
 
 
 def build_canonical_mission_summary(

@@ -115,7 +115,33 @@ The script will:
 6. Launch the Vite frontend on `http://localhost:5173`.
 7. Launch your default browser to the web portal.
 
+### Local demo startup (Vercel + ngrok Tunnel)
+
+To connect the live Vercel frontend (`https://sih-aeromesh-blond.vercel.app`) to your local FastAPI backend:
+
+1. **Activate virtual environment** (PowerShell):
+   ```powershell
+   .\.venv311\Scripts\Activate.ps1
+   ```
+2. **Run one-command backend + tunnel runner**:
+   ```powershell
+   .\scripts\tunnel.ps1
+   ```
+   *Or start manually in two terminals:*
+   - Terminal 1 (Backend):
+     ```powershell
+     uvicorn backend.main:app --host 127.0.0.1 --port 8000
+     ```
+   - Terminal 2 (ngrok with traffic policy):
+     ```powershell
+     ngrok http 127.0.0.1:8000 --url=closable-ducky-unsuited.ngrok-free.dev --traffic-policy-file ngrok-policy.yml
+     ```
+3. **Open the live application**:
+   - Web App: [https://sih-aeromesh-blond.vercel.app](https://sih-aeromesh-blond.vercel.app)
+   - The status badge will display **ONLINE**.
+
 ### Manual Launch
+
 
 **Backend**:
 ```bash

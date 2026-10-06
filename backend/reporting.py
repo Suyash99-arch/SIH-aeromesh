@@ -35,8 +35,8 @@ MISSIONS_DIR = DATA_DIR / "missions"
 OBJECTS_MISSIONS_DIR = DATA_DIR / "objects" / "missions"
 
 # Brand name — read from env so it can be overridden without code changes
-BRAND_NAME = os.getenv("BRAND_NAME", "Hexa Spark")
-BRAND_SUITE = os.getenv("BRAND_SUITE", "Hexa Spark Aerial Intelligence Platform")
+BRAND_NAME = os.getenv("BRAND_NAME", "AEROMESH")
+BRAND_SUITE = os.getenv("BRAND_SUITE", "AEROMESH Aerial Intelligence Platform")
 
 
 class NumberedCanvas(canvas.Canvas):

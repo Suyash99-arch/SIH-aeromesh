@@ -15,14 +15,17 @@ export default function VideoPlayer({
   // Prevent the frame→time effect from firing during timeupdate-driven frame updates
   const timeUpdateActiveRef = useRef(false);
 
-  const [videoReady, setVideoReady] = useState(() =>
-    Boolean(mission?.video?.url || (mission?.video?.filename && mission?.video?.status !== "pending"))
-  );
+  const [videoReady, setVideoReady] = useState(() => {
+    if (!mission || mission.status === "PARTIAL" || mission.status === "pending" || mission.status === "uploading") {
+      return false;
+    }
+    return Boolean(mission?.video?.url || (mission?.video?.filename && mission?.video?.status !== "pending"));
+  });
   const [artifactReason, setArtifactReason] = useState("");
 
   useEffect(() => {
     let active = true;
-    if (mission?.id) {
+    if (mission?.id && mission?.status !== "PARTIAL") {
       fetchArtifactsStatus(mission.id).then((res) => {
         if (active) {
           const vArt = res?.artifacts?.video;
@@ -30,12 +33,14 @@ export default function VideoPlayer({
           setVideoReady(isReady);
           if (vArt?.reason) setArtifactReason(vArt.reason);
         }
+      }).catch(() => {
+        if (active) setVideoReady(false);
       });
     } else {
       setVideoReady(false);
     }
     return () => { active = false; };
-  }, [mission?.id, mission?.video?.filename, mission?.video?.url]);
+  }, [mission?.id, mission?.status, mission?.video?.filename, mission?.video?.url]);
 
   // Prefer the browser-friendly proxy URL; fall back to original
   const rawVideoSrc = videoReady
@@ -43,7 +48,9 @@ export default function VideoPlayer({
        mission?.assets?.video ||
        mission?.video?.proxy_url ||
        mission?.video?.url ||
-       (mission?.id ? `/api/v1/missions/${mission.id}/video/proxy` : ""))
+       (mission?.id && mission?.status !== "PARTIAL" && mission?.status !== "pending"
+         ? `/api/v1/missions/${mission.id}/video/proxy`
+         : ""))
     : "";
   const videoSrc = useMemo(() => (rawVideoSrc ? resolveAssetUrl(rawVideoSrc) : ""), [rawVideoSrc]);
   const hasVideoAsset = Boolean(videoSrc && videoReady);

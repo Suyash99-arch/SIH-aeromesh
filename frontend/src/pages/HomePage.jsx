@@ -180,7 +180,7 @@ const WORKFLOW_STAGES = [
     subtitle:
       "Resolves monocular Structure-from-Motion scale ambiguity to convert arbitrary coordinates into certified metric meters.",
     technicalExplanation:
-      "Pure monocular photogrammetry is inherently scale-ambiguous. By specifying a known physical reference distance (e.g. 10m road lane or survey marker), HEXA SPARK computes the exact metric scaling tensor S, upgrading unreferenced coordinates into certified meters with formal uncertainty bounds.",
+      "Pure monocular photogrammetry is inherently scale-ambiguous. By specifying a known physical reference distance (e.g. 10m road lane or survey marker), AEROMESH computes the exact metric scaling tensor S, upgrading unreferenced coordinates into certified meters with formal uncertainty bounds.",
     mathSpecs: "Scale Factor: S = d_{known} / ||P_A - P_B||₂ · Metric Distance: D = S · ||P_1 - P_2||₂",
     inputsOutputs: "Input: Known Baseline Distance · Output: Metric Calibrated Spatial Geometry (m)",
     tech: ["Baseline Calibration", "Scale Ambiguity Solver", "Certified Meters", "Uncertainty Bounds"],
@@ -1143,7 +1143,7 @@ function StageVisualCanvas({ stageIndex }) {
             fontSize="9"
             fontFamily="monospace"
           >
-            HEXA SPARK CERTIFIED
+            AEROMESH CERTIFIED
           </text>
           <text
             x="110"
@@ -1265,7 +1265,7 @@ export default function HomePage({ onNavigateDashboard, onStartMission, currentU
             <Icon name="Radar" size={18} />
           </div>
           <div className="logo-text">
-            <strong>HEXA SPARK</strong>
+            <strong>AEROMESH</strong>
             <small>{language === "hi" ? "एरियल 3D इंटेलिजेंस" : "AERIAL 3D INTELLIGENCE"}</small>
           </div>
         </div>
@@ -1390,8 +1390,8 @@ export default function HomePage({ onNavigateDashboard, onStartMission, currentU
 
             {/* Glowing AEROMESH Wordmark with Shimmer Sweep */}
             <div className="hero-wordmark-container">
-              <h1 className="hero-wordmark-title" data-text="HEXA SPARK">
-                <FloatingWord sparkColor="cyan">HEXA SPARK</FloatingWord>
+              <h1 className="hero-wordmark-title" data-text="AEROMESH">
+                <FloatingWord sparkColor="cyan">AEROMESH</FloatingWord>
               </h1>
               <div className="hero-wordmark-tagline">
                 {t("hero.taglinePrefix")} <FloatingWord sparkColor="violet"><span>{t("hero.taglineSuffix")}</span></FloatingWord>
@@ -1553,7 +1553,7 @@ export default function HomePage({ onNavigateDashboard, onStartMission, currentU
         ref={workflowRef}
       >
         <div className="section-header-center">
-          <span className="eyebrow">HEXA SPARK MISSION LIFECYCLE</span>
+          <span className="eyebrow">AEROMESH MISSION LIFECYCLE</span>
           <h2>The 11-Stage Aerial Intelligence Pipeline</h2>
           <p>
             From drone video ingestion to survey-grade 3D environment
@@ -1812,7 +1812,7 @@ export default function HomePage({ onNavigateDashboard, onStartMission, currentU
       {/* 6. CALL TO ACTION BANNER */}
       <section className="cta-banner" id="architecture">
         <div className="cta-banner-content">
-          <span className="hero-badge">HEXA SPARK DEPLOYMENT READY</span>
+          <span className="hero-badge">AEROMESH DEPLOYMENT READY</span>
           <h2>Transform Aerial Footage into 3D Intelligence</h2>
           <p>
             Experience the complete end-to-end pipeline: video ingestion, neural
@@ -1842,7 +1842,7 @@ export default function HomePage({ onNavigateDashboard, onStartMission, currentU
       <footer className="homepage-footer">
         <div>
           <strong style={{ color: "#ffffff", letterSpacing: "0.08em" }}>
-            HEXA SPARK
+            AEROMESH
           </strong>
           <span style={{ marginLeft: "8px", color: "#64748b" }}>
             Single-Pass Drone Video to 3D Reconstruction Platform

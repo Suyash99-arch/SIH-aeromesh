@@ -54,6 +54,7 @@ from pydantic import BaseModel, Field, field_validator
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.exceptions import HTTPException as StarletteHTTPException
 import uvicorn
 from backend.database import check_database, get_configured_engine, get_database_url, init_database, mask_database_url, session_scope, validate_production_database_url
 from backend.repository import MissionRepository
@@ -222,7 +223,7 @@ else:
 # ============================================================
 
 app = FastAPI(
-    title="Hexa Spark API",
+    title="AEROMESH API",
     description="Single-Pass Drone Video to 3D Reconstruction",
     version="1.0.0",
 )
@@ -261,7 +262,7 @@ if cors_origins_env:
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins_list,
-    allow_origin_regex=None if is_prod_cors else r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$",
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$|^https://.*\.vercel\.app$",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -305,10 +306,26 @@ app.include_router(scenes_router, prefix="/scenes")
 
 
 
+@app.exception_handler(StarletteHTTPException)
+async def starlette_http_exception_handler(request: Request, exc: StarletteHTTPException):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"error": "HTTP_EXCEPTION", "detail": exc.detail},
+        headers=getattr(exc, "headers", None) or {},
+    )
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    return JSONResponse(
+        status_code=exc.status_code,
+        content={"error": "HTTP_EXCEPTION", "detail": exc.detail},
+        headers=getattr(exc, "headers", None) or {},
+    )
+
 @app.exception_handler(Exception)
 async def production_exception_handler(request: Request, exc: Exception):
     """Sanitized production error response that preserves diagnostics in logs without leaking stack traces."""
-    if isinstance(exc, HTTPException):
+    if isinstance(exc, (HTTPException, StarletteHTTPException)):
         return JSONResponse(
             status_code=exc.status_code,
             content={"error": "HTTP_EXCEPTION", "detail": exc.detail},
@@ -881,7 +898,7 @@ def build_scene_analysis(detections: Optional[dict], tracks: Optional[list] = No
 @app.get("/")
 async def root():
     return {
-        "system": "Hexa Spark Backend",
+        "system": "AEROMESH Backend",
         "status": "online",
         "service": "Single-Pass 3D Reconstruction",
         "version": "1.0.0",
@@ -1291,6 +1308,7 @@ async def health():
 
     return {
         "status": "healthy",
+        "ok": True,
         "version": app.version,
         "git_commit": git_commit,
         "db": db_status,

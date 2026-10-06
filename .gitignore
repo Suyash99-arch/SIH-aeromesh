@@ -32,6 +32,8 @@ frontend/test-results/
 *.crt
 credentials*
 *.credentials
+ngrok.yml
+*ngrok*.json
 
 # User credentials / test users
 data/users.json
@@ -39,6 +41,7 @@ data/users.json
 # Data directory and artifacts
 data/
 backend/data/
+input/
 datasets/
 SinglePass3D/
 samples/

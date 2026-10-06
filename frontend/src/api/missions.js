@@ -8,10 +8,13 @@ import { formatApiError } from "../utils/errorUtils.js";
 export { formatApiError };
 
 export function getApiBase() {
+  const isDev = Boolean(
+    typeof import.meta !== "undefined" && import.meta.env?.DEV
+  );
   const envUrl =
     (typeof import.meta !== "undefined" &&
       (import.meta.env?.VITE_API_BASE_URL || import.meta.env?.VITE_API_URL)) ||
-    (typeof window !== "undefined" ? "/api/v1" : "http://localhost:8000/api/v1");
+    (isDev ? "http://127.0.0.1:8000/api/v1" : "/api/v1");
   const clean = String(envUrl).replace(/\/+$/, "");
   if (clean.endsWith("/api/v1")) {
     return clean;
@@ -21,6 +24,7 @@ export function getApiBase() {
   }
   return `${clean}/api/v1`;
 }
+
 
 export const API_BASE = getApiBase();
 export const BACKEND_URL = API_BASE.replace(/\/api(\/v1)?$/, "");
@@ -470,6 +474,20 @@ export async function uploadVideoChunk(missionId, file, onProgress, signal) {
 
     const url = `${API_BASE}/missions/${missionId}/upload/chunk?chunk_index=${i}&total_chunks=${totalChunks}&upload_id=${uploadId}&filename=${encodeURIComponent(file.name)}`;
 
+    const elapsedBefore = (Date.now() - startTime) / 1000;
+    const speedMBpsCalc = elapsedBefore > 0 ? ((start) / (1024 * 1024)) / elapsedBefore : 0;
+    if (onProgress && i === totalChunks - 1) {
+      onProgress({
+        progress: Math.round((start / file.size) * 100),
+        uploadedBytes: start,
+        totalBytes: file.size,
+        speedMBps: speedMBpsCalc.toFixed(2),
+        chunkIndex: totalChunks,
+        totalChunks,
+        isFinalizing: true,
+      });
+    }
+
     const response = await fetch(url, {
       method: "POST",
       headers: getAuthHeaders(),
@@ -494,6 +512,7 @@ export async function uploadVideoChunk(missionId, file, onProgress, signal) {
         speedMBps: speedMBps.toFixed(2),
         chunkIndex: i + 1,
         totalChunks,
+        isFinalizing: i === totalChunks - 1,
       });
     }
 

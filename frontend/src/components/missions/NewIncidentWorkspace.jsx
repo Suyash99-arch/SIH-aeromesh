@@ -270,12 +270,20 @@ export default function NewIncidentWorkspace({ onClose, onMissionCreated, curren
           (info) => {
             setUploadProgress(info.progress);
             setUploadSpeed(info.speedMBps);
-            setStatusMessage(`Uploading chunk ${info.chunkIndex}/${info.totalChunks} (${info.progress}% @ ${info.speedMBps} MB/s)...`);
+            if (info.isFinalizing || info.chunkIndex === info.totalChunks) {
+              setStatusMessage(`Assembling footage & validating codecs on server (${info.progress}%)...`);
+            } else {
+              setStatusMessage(`Uploading chunk ${info.chunkIndex}/${info.totalChunks} (${info.progress}% @ ${info.speedMBps} MB/s)...`);
+            }
           },
           abortControllerRef.current.signal
         );
       } catch (chunkErr) {
-        // Fallback to single upload if chunk fails
+        if (chunkErr.name === "AbortError" || chunkErr.message?.includes("cancelled")) {
+          throw chunkErr;
+        }
+        console.warn("Chunked upload failed, falling back to direct upload:", chunkErr);
+        setStatusMessage("Chunk upload interrupted; falling back to direct upload...");
         await uploadVideo(missionId, videoFile);
       }
 
