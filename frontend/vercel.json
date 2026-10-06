@@ -1,9 +1,18 @@
 {
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "vite",
   "rewrites": [
-    { "source": "/api/:path*", "destination": "https://closable-ducky-unsuited.ngrok-free.dev/api/:path*" },
-    { "source": "/health", "destination": "https://closable-ducky-unsuited.ngrok-free.dev/health" },
-    { "source": "/(.*)", "destination": "/index.html" }
+    {
+      "source": "/api/:path*",
+      "destination": "https://closable-ducky-unsuited.ngrok-free.dev/api/:path*"
+    },
+    {
+      "source": "/health",
+      "destination": "https://closable-ducky-unsuited.ngrok-free.dev/health"
+    },
+    {
+      "source": "/(.*)",
+      "destination": "/index.html"
+    }
   ]
 }
-
-
