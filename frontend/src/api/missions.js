@@ -1123,7 +1123,10 @@ export function setStoredUser(user) {
 }
 
 export function getAuthHeaders(customHeaders = {}) {
-  const headers = { ...customHeaders };
+  const headers = {
+    "ngrok-skip-browser-warning": "true",
+    ...customHeaders,
+  };
   const token = getAuthToken();
   if (token) {
     headers["Authorization"] = `Bearer ${token}`;

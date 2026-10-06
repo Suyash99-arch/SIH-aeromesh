@@ -4,7 +4,7 @@ import Icon from "../components/ui/Icon";
 import HeroCompassReconstruction from "../components/hero/HeroCompassReconstruction";
 import FloatingWord from "../components/hero/FloatingWord";
 import NarrativePipelineSequence from "../components/narrative/NarrativePipelineSequence";
-import { BACKEND_URL, loginGuest } from "../api/missions";
+import { API_BASE, BACKEND_URL, loginGuest } from "../api/missions";
 import { useUI } from "../context/UIContext";
 import UIControlsToolbar from "../components/layout/UIControlsToolbar";
 import "../styles/homepage.css";
@@ -1207,14 +1207,16 @@ export default function HomePage({ onNavigateDashboard, onStartMission, currentU
   useEffect(() => {
     let active = true;
 
-    fetch(`${BACKEND_URL}/health`)
+    fetch(`${API_BASE}/health`, {
+      headers: { "ngrok-skip-browser-warning": "true" },
+    })
       .then((res) => res.json())
       .then((data) => {
         if (!active) return;
         setSystemHealth({
-          online: data.status === "healthy" || data.backend === "ready",
+          online: data.status === "healthy" || data.ok === true || data.backend === "ready",
           status:
-            data.status === "healthy" ? "All Systems Operational" : "Degraded",
+            data.status === "healthy" || data.ok === true ? "All Systems Operational" : "Degraded",
         });
       })
       .catch(() => {
@@ -1225,7 +1227,9 @@ export default function HomePage({ onNavigateDashboard, onStartMission, currentU
           });
       });
 
-    fetch(`${BACKEND_URL}/api/v1/missions`)
+    fetch(`${API_BASE}/missions`, {
+      headers: { "ngrok-skip-browser-warning": "true" },
+    })
       .then((res) => res.json())
       .then((data) => {
         if (active && Array.isArray(data)) {
