@@ -1,8 +1,23 @@
 {
+  "services": {
+    "frontend": {
+      "root": "frontend",
+      "framework": "vite"
+    }
+  },
   "rewrites": [
-    { "source": "/api/:path*", "destination": "https://closable-ducky-unsuited.ngrok-free.dev/api/:path*" },
-    { "source": "/health", "destination": "https://closable-ducky-unsuited.ngrok-free.dev/health" },
-    { "source": "/(.*)", "destination": "/index.html" }
+    {
+      "source": "/api/:path*",
+      "destination": "https://closable-ducky-unsuited.ngrok-free.dev/api/:path*"
+    },
+    {
+      "source": "/(.*)",
+      "destination": {
+        "type": "service",
+        "service": "frontend"
+      }
+    }
   ]
 }
+
 
