@@ -184,6 +184,8 @@ MISSIONS_DIR.mkdir(parents=True, exist_ok=True)
 def is_production_mode() -> bool:
     if os.getenv("SPACE_ID") or os.getenv("SPACE_HOST") or os.getenv("ALLOW_SQLITE", "0").lower() in ("1", "true"):
         return False
+    if not os.getenv("DATABASE_URL", "").strip():
+        return False
     return os.getenv("ENVIRONMENT", "").strip().lower() in ("production", "prod") or os.getenv("ENV", "").strip().lower() in ("production", "prod") or os.getenv("RENDER", "").strip().lower() in ("true", "1")
 
 is_production = is_production_mode()
@@ -3181,8 +3183,11 @@ async def get_mission_artifacts_status(mission_id: str):
 
 
 @app.get("/api/v1/missions/{mission_id}/video")
+@app.head("/api/v1/missions/{mission_id}/video")
 @app.get("/api/missions/{mission_id}/video")
+@app.head("/api/missions/{mission_id}/video")
 @app.get("/missions/{mission_id}/video")
+@app.head("/missions/{mission_id}/video")
 async def get_mission_video(mission_id: str, request: Request):
     """
     Serve the video for any mission via storage abstraction.
@@ -3269,7 +3274,9 @@ async def get_mission_video(mission_id: str, request: Request):
 
 
 @app.get("/api/v1/missions/{mission_id}/video/proxy")
+@app.head("/api/v1/missions/{mission_id}/video/proxy")
 @app.get("/api/missions/{mission_id}/video/proxy")
+@app.head("/api/missions/{mission_id}/video/proxy")
 async def get_mission_video_proxy(mission_id: str, request: Request):
     """
     Serve a browser-playback-optimised proxy version of the mission video.

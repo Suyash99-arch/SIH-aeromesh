@@ -1086,7 +1086,7 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
                     <circle cx="11" cy="11" r="8" />
                     <line x1="21" y1="21" x2="16.65" y2="16.65" />
                   </svg>
-                  {t("sceneIntelligence.exploreDetections", `Explore ${analytics.valid > 0 ? analytics.valid : objects.length} 3D Detections`, { count: analytics.valid > 0 ? analytics.valid : objects.length })}
+                  {t("sceneIntelligence.exploreDetections", { count: analytics.valid > 0 ? analytics.valid : objects.length }, `Explore ${analytics.valid > 0 ? analytics.valid : objects.length} 3D Detections`)}
                 </button>
               </div>
             </>

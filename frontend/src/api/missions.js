@@ -105,7 +105,9 @@ export function resolveAssetUrl(url) {
 export async function fetchArtifactsStatus(missionId) {
   if (!missionId) return null;
   try {
-    const res = await fetch(`${API_BASE}/missions/${missionId}/artifacts`);
+    const res = await fetch(`${API_BASE}/missions/${missionId}/artifacts`, {
+      headers: getAuthHeaders(),
+    });
     if (!res.ok) return null;
     return await res.json();
   } catch {
@@ -116,7 +118,15 @@ export async function fetchArtifactsStatus(missionId) {
 function normalizeMission(rawMission = {}) {
   const mId = rawMission.id || rawMission.mission_id || "";
   const baseDefaults = fallbackMission;
-  const videoUrl = rawMission.video?.url || rawMission.videoUrl || "";
+  const videoUrl =
+    rawMission.video?.url ||
+    rawMission.video?.original_url ||
+    rawMission.video?.proxy_url ||
+    rawMission.videoUrl ||
+    rawMission.assets?.video ||
+    (mId && rawMission.status !== "PARTIAL" && rawMission.status !== "pending" && rawMission.status !== "uploading"
+      ? `/api/v1/missions/${mId}/video`
+      : "");
 
   let duration = rawMission.duration;
   const durationSec =
@@ -139,9 +149,18 @@ function normalizeMission(rawMission = {}) {
     rawMission.video?.totalFrames ||
     0;
 
-  let objectsObj = { ...baseDefaults.objects, ...(rawMission.objects || {}) };
-  const detByClass = rawMission.detection?.detections_by_class || rawMission.det_by_class || rawMission.detections_by_class || {};
-  if ((!objectsObj.total || objectsObj.total === 0) && Object.keys(detByClass).length > 0) {
+  let objectsObj = {
+    ...baseDefaults.objects,
+    ...(rawMission.canonical_summary?.objects || {}),
+    ...(rawMission.objects || {}),
+  };
+  const detByClass =
+    rawMission.detection?.detections_by_class ||
+    rawMission.tracking?.tracks_by_class ||
+    rawMission.det_by_class ||
+    rawMission.detections_by_class ||
+    {};
+  if ((!objectsObj.total || objectsObj.total === 0 || (!objectsObj.people && !objectsObj.vehicles)) && Object.keys(detByClass).length > 0) {
     const peopleCount = Object.entries(detByClass).reduce((acc, [k, v]) => ["person", "pedestrian", "people", "human"].includes(k.toLowerCase()) ? acc + Number(v) : acc, 0);
     const vehicleClasses = ["car", "van", "truck", "bus", "tricycle", "motorcycle", "bicycle", "vehicle", "automobile"];
     const vehiclesCount = Object.entries(detByClass).reduce((acc, [k, v]) => vehicleClasses.some(vc => k.toLowerCase().includes(vc)) ? acc + Number(v) : acc, 0);
@@ -149,11 +168,11 @@ function normalizeMission(rawMission = {}) {
     const hazardsCount = Object.entries(detByClass).reduce((acc, [k, v]) => ["hazard", "fire", "smoke", "debris", "flood"].some(hc => k.toLowerCase().includes(hc)) ? acc + Number(v) : acc, 0);
     const totalCount = Object.values(detByClass).reduce((acc, v) => acc + Number(v), 0);
     objectsObj = {
-      total: totalCount,
-      people: peopleCount,
-      vehicles: vehiclesCount,
-      structures: structuresCount,
-      hazards: hazardsCount,
+      total: totalCount || objectsObj.total,
+      people: peopleCount || objectsObj.people,
+      vehicles: vehiclesCount || objectsObj.vehicles,
+      structures: structuresCount || objectsObj.structures,
+      hazards: hazardsCount || objectsObj.hazards,
     };
   }
 
@@ -163,6 +182,12 @@ function normalizeMission(rawMission = {}) {
     id: mId,
     frames,
     duration,
+    video: {
+      ...(rawMission.video || {}),
+      url: resolveAssetUrl(videoUrl),
+      proxy_url: resolveAssetUrl(rawMission.video?.proxy_url || (mId ? `/api/v1/missions/${mId}/video/proxy` : "")),
+      original_url: resolveAssetUrl(rawMission.video?.original_url || videoUrl),
+    },
     objects: objectsObj,
     telemetry: (rawMission.telemetry && Object.keys(rawMission.telemetry).length > 0)
       ? rawMission.telemetry
@@ -203,6 +228,7 @@ function normalizeMission(rawMission = {}) {
       ...(baseDefaults.assets || {}),
       ...(rawMission.assets || {}),
       video: resolveAssetUrl(videoUrl || rawMission.assets?.video || ""),
+      video_proxy: resolveAssetUrl(rawMission.assets?.video_proxy || (mId ? `/api/v1/missions/${mId}/video/proxy` : "")),
       pointCloud: resolveAssetUrl(
         rawMission.reconstruction?.point_cloud_url ||
           rawMission.assets?.pointCloud ||

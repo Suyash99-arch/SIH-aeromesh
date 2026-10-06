@@ -13,7 +13,7 @@ import * as THREE from "three";
 import { PLYLoader } from "three/examples/jsm/loaders/PLYLoader.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
-import { resolveAssetUrl, fetchArtifactsStatus } from "../../api/missions.js";
+import { resolveAssetUrl, fetchArtifactsStatus, getAuthHeaders } from "../../api/missions.js";
 import ErrorBoundary from "../common/ErrorBoundary";
 import { useUI } from "../../context/UIContext";
 
@@ -208,10 +208,15 @@ function RealPointCloud({ url, onBoundsComputed, pointSize = 0.22 }) {
           cachedBounds = cached.bounds;
         } else {
           const fetchUrl = url.includes("?") ? `${url}&_t=${Date.now()}` : `${url}?_t=${Date.now()}`;
-          const res = await fetch(fetchUrl, { cache: "no-store" });
+          const res = await fetch(fetchUrl, { headers: getAuthHeaders(), cache: "no-store" });
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
           buffer = await res.arrayBuffer();
           if (!active) return;
+        }
+
+        const headCheck = new TextDecoder().decode(new Uint8Array(buffer, 0, Math.min(64, buffer.byteLength)));
+        if (headCheck.includes("<!DOCTYPE") || headCheck.includes("<html") || buffer.byteLength < 16) {
+          throw new Error("Invalid point cloud payload (HTML received)");
         }
 
         const loader = new PLYLoader();
@@ -336,12 +341,17 @@ function RealMesh({ url, mode, onBoundsComputed, onError }) {
           cachedBounds = cached.bounds;
         } else {
           const fetchUrl = url.includes("?") ? `${url}&_t=${Date.now()}` : `${url}?_t=${Date.now()}`;
-          const res = await fetch(fetchUrl, { cache: "no-store" });
+          const res = await fetch(fetchUrl, { headers: getAuthHeaders(), cache: "no-store" });
           if (!res.ok) {
             throw new Error(`HTTP ${res.status} fetching mesh`);
           }
           buffer = await res.arrayBuffer();
           if (!active) return;
+        }
+
+        const headMesh = new TextDecoder().decode(new Uint8Array(buffer, 0, Math.min(64, buffer.byteLength)));
+        if (headMesh.includes("<!DOCTYPE") || headMesh.includes("<html") || buffer.byteLength < 16) {
+          throw new Error("Invalid 3D mesh payload (HTML received)");
         }
 
         // Inspect header bytes

@@ -23,6 +23,7 @@ import {
   getExportJsonUrl,
   getExportPackageUrl,
   fetchGeoJsonStatus,
+  fetchSemanticScene,
 } from "../api/missions";
 import ErrorBoundary from "../components/common/ErrorBoundary";
 
@@ -1857,14 +1858,102 @@ export function IntelligencePage({ kind, mission, navigate, notice }) {
     );
   }
 
-  if (kind === "analytics" || kind === "scene") {
-    const safeObjects = mission?.objects || {};
-    const totalObjs = mission?.tracking?.unique_tracks ?? mission?.detections?.uniqueTracks ?? safeObjects.all_candidates ?? safeObjects.total ?? 0;
-    const peopleObjs = safeObjects.people ?? 0;
-    const vehiclesObjs = safeObjects.vehicles ?? 0;
-    const structuresObjs = safeObjects.structures ?? 0;
-    const hazardsObjs = safeObjects.hazards ?? 0;
+  const [sceneObjects, setSceneObjects] = useState(() => mission?.objects_3d || []);
 
+  useEffect(() => {
+    let active = true;
+    if (mission?.id) {
+      if (Array.isArray(mission.objects_3d) && mission.objects_3d.length > 0) {
+        setSceneObjects(mission.objects_3d);
+      } else {
+        fetchSemanticScene(mission.id).then((res) => {
+          if (active && res?.semantic_scene?.objects) {
+            setSceneObjects(res.semantic_scene.objects);
+          }
+        }).catch(() => {});
+      }
+    }
+    return () => { active = false; };
+  }, [mission?.id, mission?.objects_3d]);
+
+  const peopleCount = useMemo(() => {
+    if (sceneObjects.length > 0) {
+      return sceneObjects.filter((o) => {
+        const cls = (o.class || o.class_name || "").toLowerCase();
+        return ["person", "pedestrian", "people", "human"].includes(cls);
+      }).length;
+    }
+    return (
+      mission?.objects?.people ||
+      mission?.canonical_summary?.objects?.people ||
+      mission?.tracking?.tracks_by_class?.pedestrian ||
+      0
+    );
+  }, [sceneObjects, mission]);
+
+  const vehiclesCount = useMemo(() => {
+    if (sceneObjects.length > 0) {
+      return sceneObjects.filter((o) => {
+        const cls = (o.class || o.class_name || "").toLowerCase();
+        return ["car", "van", "truck", "bus", "tricycle", "motorcycle", "bicycle", "vehicle"].some((vc) => cls.includes(vc));
+      }).length;
+    }
+    const tr = mission?.tracking?.tracks_by_class || {};
+    const sumTr = (tr.van || 0) + (tr.bus || 0) + (tr.tricycle || 0) + (tr.car || 0) + (tr.truck || 0);
+    return (
+      mission?.objects?.vehicles ||
+      mission?.canonical_summary?.objects?.vehicles ||
+      sumTr ||
+      0
+    );
+  }, [sceneObjects, mission]);
+
+  const structuresCount = useMemo(() => {
+    if (sceneObjects.length > 0) {
+      return sceneObjects.filter((o) => {
+        const cls = (o.class || o.class_name || "").toLowerCase();
+        return ["building", "structure", "house", "tower", "bridge", "roof"].some((sc) => cls.includes(sc));
+      }).length;
+    }
+    return mission?.objects?.structures || mission?.canonical_summary?.objects?.structures || 0;
+  }, [sceneObjects, mission]);
+
+  const hazardsCount = useMemo(() => {
+    if (sceneObjects.length > 0) {
+      return sceneObjects.filter((o) => {
+        const cls = (o.class || o.class_name || "").toLowerCase();
+        return ["hazard", "fire", "smoke", "debris", "flood"].some((hc) => cls.includes(hc));
+      }).length;
+    }
+    return mission?.objects?.hazards || mission?.canonical_summary?.objects?.hazards || 0;
+  }, [sceneObjects, mission]);
+
+  const totalCount = useMemo(() => {
+    return (
+      sceneObjects.length ||
+      mission?.objects?.total ||
+      mission?.canonical_summary?.objects?.total ||
+      mission?.tracking?.unique_tracks ||
+      (peopleCount + vehiclesCount + structuresCount + hazardsCount) ||
+      0
+    );
+  }, [sceneObjects, mission, peopleCount, vehiclesCount, structuresCount, hazardsCount]);
+
+  const confidenceItems = useMemo(() => {
+    if (Array.isArray(mission?.findings) && mission.findings.length > 0) {
+      return mission.findings;
+    }
+    if (sceneObjects.length > 0) {
+      return sceneObjects.slice(0, 10).map((obj) => ({
+        id: obj.object_id || obj.track_id,
+        title: `${obj.track_id || obj.object_id} · ${obj.class || obj.class_name || "object"} (${obj.motion_state || "STATIC"})`,
+        confidence: Math.round((obj.association_confidence || 0.85) * 100),
+      }));
+    }
+    return [];
+  }, [mission?.findings, sceneObjects]);
+
+  if (kind === "analytics" || kind === "scene") {
     return (
       <>
         <Header kicker={cfg[0]} title={cfg[1]} copy={cfg[2]} />
@@ -1874,35 +1963,35 @@ export function IntelligencePage({ kind, mission, navigate, notice }) {
             <div className="object-stats">
               <Stat
                 label={t("dashboard.total", "Total")}
-                value={totalObjs}
+                value={totalCount}
                 tone="confidence"
                 icon="Grid3x3"
                 loading={!mission}
               />
               <Stat
                 label={t("sceneIntelligence.people", "People")}
-                value={peopleObjs}
+                value={peopleCount}
                 tone="people"
                 icon="Users"
                 loading={!mission}
               />
               <Stat
                 label={t("sceneIntelligence.vehicles", "Vehicles")}
-                value={vehiclesObjs}
+                value={vehiclesCount}
                 tone="vehicles"
                 icon="Truck"
                 loading={!mission}
               />
               <Stat
                 label={t("sceneIntelligence.buildingsFacades", "Structures")}
-                value={structuresObjs}
+                value={structuresCount}
                 tone="structures"
                 icon="Building2"
                 loading={!mission}
               />
               <Stat
                 label={t("sceneIntelligence.terrainBadge", "Hazards")}
-                value={hazardsObjs}
+                value={hazardsCount}
                 tone="hazards"
                 icon="AlertTriangle"
                 loading={!mission}
@@ -1915,18 +2004,18 @@ export function IntelligencePage({ kind, mission, navigate, notice }) {
             <div className="classification">
               <div className="class-item">
                 <span>{t("sceneIntelligence.motionStatic", "Static Objects")}</span>
-                <b>{structuresObjs + hazardsObjs}</b>
+                <b>{structuresCount + hazardsCount || (totalCount - (peopleCount + vehiclesCount) >= 0 ? totalCount - (peopleCount + vehiclesCount) : 0)}</b>
               </div>
               <div className="class-item">
                 <span>{t("geospatial.dynamicObjects", "Dynamic Objects")}</span>
-                <b>{peopleObjs + vehiclesObjs}</b>
+                <b>{peopleCount + vehiclesCount}</b>
               </div>
             </div>
           </Panel>
 
           <Panel>
             <span className="eyebrow">{t("geospatial.confidenceDistribution", "CONFIDENCE DISTRIBUTION")}</span>
-            {(mission?.findings || []).map((f, idx) => (
+            {confidenceItems.map((f, idx) => (
               <div key={f.id || f.object_id || `conf-${idx}`} className="confidence-bar">
                 <span>{f.title}</span>
                 <Progress value={f.confidence} />

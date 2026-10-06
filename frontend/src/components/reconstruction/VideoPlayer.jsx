@@ -15,11 +15,21 @@ export default function VideoPlayer({
   // Prevent the frame→time effect from firing during timeupdate-driven frame updates
   const timeUpdateActiveRef = useRef(false);
 
+  const candidateUrl =
+    mission?.assets?.video_proxy ||
+    mission?.assets?.video ||
+    mission?.video?.proxy_url ||
+    mission?.video?.original_url ||
+    mission?.video?.url ||
+    (mission?.id && mission?.status !== "PARTIAL" && mission?.status !== "pending" && mission?.status !== "uploading"
+      ? `/api/v1/missions/${mission.id}/video`
+      : "");
+
   const [videoReady, setVideoReady] = useState(() => {
     if (!mission || mission.status === "PARTIAL" || mission.status === "pending" || mission.status === "uploading") {
       return false;
     }
-    return Boolean(mission?.video?.url || (mission?.video?.filename && mission?.video?.status !== "pending"));
+    return Boolean(candidateUrl || mission?.video?.url || (mission?.video?.filename && mission?.video?.status !== "pending"));
   });
   const [artifactReason, setArtifactReason] = useState("");
 
@@ -29,31 +39,27 @@ export default function VideoPlayer({
       fetchArtifactsStatus(mission.id).then((res) => {
         if (active) {
           const vArt = res?.artifacts?.video;
-          const isReady = vArt?.status === "ready" || Boolean(mission?.video?.url);
-          setVideoReady(isReady);
-          if (vArt?.reason) setArtifactReason(vArt.reason);
+          if (vArt) {
+            const isReady = vArt.ready === true || vArt.status === "ready";
+            setVideoReady(isReady || Boolean(candidateUrl));
+            if (vArt?.reason) setArtifactReason(vArt.reason);
+          } else {
+            setVideoReady(Boolean(candidateUrl));
+          }
         }
       }).catch(() => {
-        if (active) setVideoReady(false);
+        if (active) setVideoReady(Boolean(candidateUrl));
       });
     } else {
       setVideoReady(false);
     }
     return () => { active = false; };
-  }, [mission?.id, mission?.status, mission?.video?.filename, mission?.video?.url]);
+  }, [mission?.id, mission?.status, candidateUrl]);
 
   // Prefer the browser-friendly proxy URL; fall back to original
-  const rawVideoSrc = videoReady
-    ? (mission?.assets?.video_proxy ||
-       mission?.assets?.video ||
-       mission?.video?.proxy_url ||
-       mission?.video?.url ||
-       (mission?.id && mission?.status !== "PARTIAL" && mission?.status !== "pending"
-         ? `/api/v1/missions/${mission.id}/video/proxy`
-         : ""))
-    : "";
+  const rawVideoSrc = (videoReady || candidateUrl) ? candidateUrl : "";
   const videoSrc = useMemo(() => (rawVideoSrc ? resolveAssetUrl(rawVideoSrc) : ""), [rawVideoSrc]);
-  const hasVideoAsset = Boolean(videoSrc && videoReady);
+  const hasVideoAsset = Boolean(videoSrc);
 
   const [failed, setFailed] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
