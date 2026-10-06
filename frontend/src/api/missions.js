@@ -29,6 +29,19 @@ export function getApiBase() {
 export const API_BASE = getApiBase();
 export const BACKEND_URL = API_BASE.replace(/\/api(\/v1)?$/, "");
 
+export function getUploadBase() {
+  const envUpload = typeof import.meta !== "undefined" && import.meta.env?.VITE_UPLOAD_BASE_URL;
+  if (envUpload) {
+    const clean = String(envUpload).replace(/\/+$/, "");
+    return clean.endsWith("/api/v1") ? clean : `${clean}/api/v1`;
+  }
+  if (typeof window !== "undefined" && window.location.hostname.includes("vercel.app")) {
+    return "https://closable-ducky-unsuited.ngrok-free.dev/api/v1";
+  }
+  return API_BASE;
+}
+export const UPLOAD_BASE = getUploadBase();
+
 const fallbackMission = {
   id: "",
   name: "Untitled mission",
@@ -429,7 +442,8 @@ export async function uploadVideo(missionId, file) {
     const formData = new FormData();
     formData.append("file", file);
 
-    const response = await fetch(`${API_BASE}/missions/${missionId}/upload`, {
+    const uploadBase = getUploadBase();
+    const response = await fetch(`${uploadBase}/missions/${missionId}/upload`, {
       method: "POST",
       headers: getAuthHeaders(),
       body: formData,
@@ -472,7 +486,8 @@ export async function uploadVideoChunk(missionId, file, onProgress, signal) {
     const formData = new FormData();
     formData.append("chunk", chunkBlob, file.name);
 
-    const url = `${API_BASE}/missions/${missionId}/upload/chunk?chunk_index=${i}&total_chunks=${totalChunks}&upload_id=${uploadId}&filename=${encodeURIComponent(file.name)}`;
+    const uploadBase = getUploadBase();
+    const url = `${uploadBase}/missions/${missionId}/upload/chunk?chunk_index=${i}&total_chunks=${totalChunks}&upload_id=${uploadId}&filename=${encodeURIComponent(file.name)}`;
 
     const elapsedBefore = (Date.now() - startTime) / 1000;
     const speedMBpsCalc = elapsedBefore > 0 ? ((start) / (1024 * 1024)) / elapsedBefore : 0;

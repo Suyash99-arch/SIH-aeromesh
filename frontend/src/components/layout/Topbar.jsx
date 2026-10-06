@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import AuthModal from "../auth/AuthModal";
-import { getStoredUser, fetchCurrentUser } from "../../api/missions";
+import { API_BASE, getAuthHeaders, getStoredUser, fetchCurrentUser } from "../../api/missions";
 import UIControlsToolbar from "./UIControlsToolbar";
 import { useUI } from "../../context/UIContext";
 
@@ -12,11 +12,14 @@ function useHealthStatus(language) {
     let cancelled = false;
     const check = async () => {
       try {
-        const res = await fetch("/api/v1/health", { method: "GET" });
+        const res = await fetch(`${API_BASE}/health`, {
+          method: "GET",
+          headers: getAuthHeaders(),
+        });
         if (cancelled) return;
         if (res.ok) {
           const json = await res.json();
-          const isHealthy = json?.status === "healthy";
+          const isHealthy = json?.status === "healthy" || json?.ok === true || json?.backend === "ready";
           const label = language === "hi"
             ? (isHealthy ? "सिस्टम सक्रिय" : "सिस्टम बाधित")
             : (isHealthy ? "SYSTEMS OPERATIONAL" : `SYSTEMS ${json?.status?.toUpperCase() || "DEGRADED"}`);

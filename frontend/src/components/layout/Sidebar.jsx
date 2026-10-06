@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import Icon from "../ui/Icon";
 import MissionSelectorPanel from "./MissionSelectorPanel";
 import { useUI } from "../../context/UIContext";
+import { API_BASE, getAuthHeaders } from "../../api/missions";
 import {
   missionNavigation,
   intelligenceNavigation,
@@ -24,12 +25,14 @@ function useEngineStatus() {
     let cancelled = false;
     const check = async () => {
       try {
-        const res = await fetch("/api/v1/ai-engine/status");
+        const res = await fetch(`${API_BASE}/ai-engine/status`, {
+          headers: getAuthHeaders(),
+        });
         if (cancelled) return;
         if (res.ok) {
           const json = await res.json();
-          const detReady = json?.detector?.status === "READY";
-          const reconReady = json?.reconstruction?.status === "READY";
+          const detReady = Boolean(json?.detector?.ready || json?.detector?.status === "READY" || json?.detector?.status === "LOADED");
+          const reconReady = Boolean(json?.reconstruction?.ready || json?.reconstruction?.status === "READY" || json?.reconstruction?.status === "AVAILABLE");
           const overall = (detReady && reconReady) ? "ONLINE" : (detReady || reconReady) ? "PARTIAL" : "DEGRADED";
           setStatus({
             detector: json?.detector?.label || (detReady ? "YOLO Ready" : "Detector: not loaded"),
