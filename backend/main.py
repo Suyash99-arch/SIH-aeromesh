@@ -1238,22 +1238,37 @@ async def get_system_compute_device():
     }
 
 
+@app.get("/api/v1/system/estimate-eta")
+@app.get("/api/system/estimate-eta", deprecated=True)
 @app.post("/api/v1/system/estimate-eta")
 @app.post("/api/system/estimate-eta", deprecated=True)
-async def estimate_system_eta(payload: Optional[EtaEstimationRequest] = Body(default=None)):
+async def estimate_system_eta(
+    payload: Optional[EtaEstimationRequest] = Body(default=None),
+    width: Optional[int] = Query(None),
+    height: Optional[int] = Query(None),
+    fps: Optional[float] = Query(None),
+    duration_seconds: Optional[float] = Query(None),
+    frame_sampling: Optional[float] = Query(None),
+    size_bytes: Optional[int] = Query(None),
+):
     """Compute mathematically grounded reconstruction ETA from file params and hardware."""
     from backend.eta_engine import estimate_pipeline_eta
     req = payload or EtaEstimationRequest()
+    eff_width = req.width or width or 1920
+    eff_height = req.height or height or 1080
+    eff_fps = req.fps or fps or 30.0
+    eff_duration = req.duration_seconds or duration_seconds or 10.0
+    eff_sampling = req.frame_sampling or frame_sampling or 2.0
+    eff_size = req.size_bytes or size_bytes or 0
+
     hw_prof = detect_compute_device()
-    fps = req.fps or 30.0
-    duration = req.duration_seconds or 10.0
-    total_frames = int(fps * duration)
+    total_frames = int(eff_fps * eff_duration)
     meta = {
-        "resolution": {"width": req.width or 1920, "height": req.height or 1080},
+        "resolution": {"width": eff_width, "height": eff_height},
         "total_frames": total_frames,
-        "fps": fps,
-        "frame_sampling": req.frame_sampling or 2.0,
-        "size_bytes": req.size_bytes or 0,
+        "fps": eff_fps,
+        "frame_sampling": eff_sampling,
+        "size_bytes": eff_size,
     }
     eta_result = estimate_pipeline_eta(meta, hardware_profile=hw_prof)
     return {
