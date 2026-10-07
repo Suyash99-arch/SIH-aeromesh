@@ -117,7 +117,7 @@ export default function VideoPlayer({
   // ------------------------------------------------------------------
   // Video Upload Handlers
   // ------------------------------------------------------------------
-  const handleFileSelect = (file) => {
+  const handleFileSelect = (file, autoStart = true) => {
     if (!file) return;
     if (!file.name.match(/\.(mp4|mov|mkv|avi|webm)$/i)) {
       setUploadError("Please select a valid video file (.mp4, .mov, .mkv, .avi, .webm)");
@@ -125,6 +125,9 @@ export default function VideoPlayer({
     }
     setSelectedFile(file);
     setUploadError("");
+    if (autoStart) {
+      handleStartUpload(file);
+    }
   };
 
   const handleStartUpload = async (fileToUpload) => {
@@ -256,7 +259,7 @@ export default function VideoPlayer({
     e.preventDefault();
     setIsDragging(false);
     if (e.dataTransfer?.files?.[0]) {
-      handleFileSelect(e.dataTransfer.files[0]);
+      handleFileSelect(e.dataTransfer.files[0], true);
     }
   };
 
@@ -293,7 +296,7 @@ export default function VideoPlayer({
                 accept="video/mp4,video/quicktime,video/x-matroska,video/avi"
                 style={{ display: "none" }}
                 onChange={(e) => {
-                  if (e.target.files?.[0]) handleFileSelect(e.target.files[0]);
+                  if (e.target.files?.[0]) handleFileSelect(e.target.files[0], true);
                 }}
               />
 
@@ -400,8 +403,7 @@ export default function VideoPlayer({
         style={{ display: "none" }}
         onChange={(e) => {
           if (e.target.files?.[0]) {
-            handleFileSelect(e.target.files[0]);
-            setShowReplaceModal(true);
+            handleFileSelect(e.target.files[0], true);
           }
         }}
       />
@@ -411,13 +413,13 @@ export default function VideoPlayer({
         <button
           className="btn-player-reupload"
           onClick={() => {
-            setShowReplaceModal(true);
             replaceFileInputRef.current?.click();
           }}
+          disabled={isUploading}
           title="Re-upload or replace video footage for this mission"
         >
           <Icon name="Upload" size={12} />
-          <span>Replace Video</span>
+          <span>{isUploading ? "Uploading..." : "Replace Video"}</span>
         </button>
       </div>
 
@@ -444,6 +446,59 @@ export default function VideoPlayer({
         onSeeked={() => { userSeekingRef.current = false; setBuffering(false); }}
         onError={handleVideoError}
       />
+
+      {/* Real-time In-Player Uploading Overlay */}
+      {isUploading && (
+        <div
+          className="video-upload-overlay"
+          style={{
+            position: "absolute",
+            inset: 0,
+            background: "rgba(10, 15, 25, 0.88)",
+            backdropFilter: "blur(6px)",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            zIndex: 40,
+            padding: "24px",
+          }}
+        >
+          <div style={{ maxWidth: 440, width: "100%", textAlign: "center" }}>
+            <div style={{ fontSize: "14px", fontWeight: 600, color: "#38bdf8", marginBottom: "6px", letterSpacing: "0.04em" }}>
+              INGESTING NEW MISSION FOOTAGE
+            </div>
+            <div style={{ fontSize: "12px", color: "rgba(255,255,255,0.7)", marginBottom: "16px" }}>
+              {selectedFile?.name || "Video file"} ({(Number(selectedFile?.size || 0) / (1024 * 1024)).toFixed(1)} MB)
+            </div>
+            <div
+              style={{
+                width: "100%",
+                height: 8,
+                background: "rgba(255,255,255,0.12)",
+                borderRadius: 4,
+                overflow: "hidden",
+                marginBottom: 10,
+              }}
+            >
+              <div
+                style={{
+                  width: `${Math.round(Number(uploadProgress?.progress ?? uploadProgress ?? 0))}%`,
+                  height: "100%",
+                  background: "linear-gradient(90deg, #38bdf8, #818cf8)",
+                  transition: "width 0.2s ease",
+                }}
+              />
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px", color: "rgba(255,255,255,0.6)" }}>
+              <span>{uploadStatusMsg || "Uploading chunks..."}</span>
+              <span style={{ fontWeight: 600, color: "#38bdf8" }}>
+                {Math.round(Number(uploadProgress?.progress ?? uploadProgress ?? 0))}%
+              </span>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Buffering overlay */}
       {buffering && !ended && (

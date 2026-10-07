@@ -35,9 +35,6 @@ export function getUploadBase() {
     const clean = String(envUpload).replace(/\/+$/, "");
     return clean.endsWith("/api/v1") ? clean : `${clean}/api/v1`;
   }
-  if (typeof window !== "undefined" && window.location.hostname.includes("vercel.app")) {
-    return "https://closable-ducky-unsuited.ngrok-free.dev/api/v1";
-  }
   return API_BASE;
 }
 export const UPLOAD_BASE = getUploadBase();
@@ -485,7 +482,14 @@ export async function uploadVideo(missionId, file) {
       body: formData,
     });
 
-    const data = await response.json();
+    let data;
+    try {
+      data = await response.json();
+    } catch {
+      const text = await response.text().catch(() => "");
+      throw new Error(text || `Server returned HTTP ${response.status} ${response.statusText}`);
+    }
+
     if (data.success) {
       console.log(
         `[Upload] Video uploaded successfully for mission ${missionId}`,
@@ -546,7 +550,14 @@ export async function uploadVideoChunk(missionId, file, onProgress, signal) {
       signal,
     });
 
-    const data = await response.json();
+    let data;
+    try {
+      data = await response.json();
+    } catch {
+      const text = await response.text().catch(() => "");
+      throw new Error(text || `Chunk ${i + 1} failed: HTTP ${response.status} ${response.statusText}`);
+    }
+
     if (!response.ok || !data.success) {
       throw new Error(formatApiError(data) || `Chunk ${i + 1} upload failed`);
     }
