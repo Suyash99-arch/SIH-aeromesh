@@ -171,6 +171,7 @@ except Exception:  # pragma: no cover
 BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = BASE_DIR / "data"
 MISSIONS_DIR = DATA_DIR / "missions"
+MAX_VIDEO_DURATION_SECONDS = min(180.0, max(1.0, float(os.getenv("MAX_VIDEO_DURATION_SECONDS", "180"))))
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -183,8 +184,6 @@ MISSIONS_DIR.mkdir(parents=True, exist_ok=True)
 
 def is_production_mode() -> bool:
     if os.getenv("SPACE_ID") or os.getenv("SPACE_HOST") or os.getenv("ALLOW_SQLITE", "0").lower() in ("1", "true"):
-        return False
-    if not os.getenv("DATABASE_URL", "").strip():
         return False
     return os.getenv("ENVIRONMENT", "").strip().lower() in ("production", "prod") or os.getenv("ENV", "").strip().lower() in ("production", "prod") or os.getenv("RENDER", "").strip().lower() in ("true", "1")
 
@@ -1307,6 +1306,16 @@ async def health():
         storage_status = "unavailable"
 
     pipeline_on = is_pipeline_enabled()
+    render_mode = "light" if os.getenv("RENDER", "").lower() in ("1", "true", "yes") else "heavy"
+    pipeline_mode = os.getenv("PIPELINE_MODE", render_mode).strip().lower()
+    if pipeline_mode not in ("heavy", "light"):
+        pipeline_mode = "heavy"
+    try:
+        from backend.reconstruction import has_pycolmap as colmap_available
+        if not colmap_available:
+            pipeline_mode = "light"
+    except Exception:
+        pipeline_mode = "light"
     git_commit = get_git_commit()
 
     # Mounted route prefixes calculation
@@ -1331,6 +1340,7 @@ async def health():
         "db": db_status,
         "storage": storage_status,
         "pipeline_enabled": pipeline_on,
+        "pipeline_mode": pipeline_mode,
         "mounted_route_prefixes": mounted_prefixes,
         # Backward-compatible fields
         "backend": "ready",
@@ -2641,6 +2651,15 @@ def _process_and_validate_video_file(video_path: Path, safe_name: str, mission_i
     probe_info = probe_video(video_path)
     cv2_ok, cv2_err = check_cv2_decodable(video_path)
 
+    duration_hint = probe_info.get("duration_seconds") or probe_info.get("duration")
+    if duration_hint is not None and float(duration_hint) > MAX_VIDEO_DURATION_SECONDS:
+        video_path.unlink(missing_ok=True)
+        try:
+            get_storage(DATA_DIR / "objects").delete(storage_metadata.key)
+        except Exception:
+            pass
+        raise HTTPException(status_code=413, detail="Video duration exceeds the 3 minute limit. Trim the video and upload it again.")
+
     if probe_info.get("is_corrupt") and not cv2_ok:
         try:
             video_path.unlink(missing_ok=True)
@@ -2653,13 +2672,6 @@ def _process_and_validate_video_file(video_path: Path, safe_name: str, mission_i
 
     mission_dir = MISSIONS_DIR / mission_id
     mission_dir.mkdir(parents=True, exist_ok=True)
-
-    # Save untouched original video copy
-    original_copy_path = mission_dir / f"original_{safe_name}"
-    try:
-        shutil.copy2(video_path, original_copy_path)
-    except Exception:
-        pass
 
     needs_transcode, transcode_reason = should_transcode(probe_info, cv2_ok)
     active_video_path = video_path
@@ -2688,6 +2700,16 @@ def _process_and_validate_video_file(video_path: Path, safe_name: str, mission_i
     if width < 32 or height < 32 or total_frames < 1:
         cap.release()
         raise HTTPException(status_code=400, detail=f"Invalid video dimensions or frame count: {width}x{height}, {total_frames} frames.")
+
+    duration_seconds = total_frames / fps if fps > 0 else 0
+    if duration_seconds > MAX_VIDEO_DURATION_SECONDS:
+        cap.release()
+        video_path.unlink(missing_ok=True)
+        try:
+            get_storage(DATA_DIR / "objects").delete(storage_metadata.key)
+        except Exception:
+            pass
+        raise HTTPException(status_code=413, detail="Video duration exceeds the 3 minute limit. Trim the video and upload it again.")
 
     # Generate preview thumbnails across timeline
     thumb_dir = mission_dir / "thumbnails"
@@ -2800,8 +2822,12 @@ async def upload_video(
     if Path(safe_name).suffix.lower() not in allowed:
         raise HTTPException(status_code=400, detail=f"Unsupported format: {Path(safe_name).suffix}")
 
-    content = await file.read()
-    valid, error_reason = validate_uploaded_file(safe_name, content)
+    file.file.seek(0, os.SEEK_END)
+    upload_size = file.file.tell()
+    file.file.seek(0)
+    signature = file.file.read(64)
+    file.file.seek(0)
+    valid, error_reason = validate_uploaded_file(safe_name, signature, size_bytes=upload_size)
     if not valid:
         raise HTTPException(status_code=400, detail=error_reason)
 
@@ -2815,7 +2841,7 @@ async def upload_video(
     storage_key = mission_object_key(mission_id, safe_name)
     storage_metadata = storage.upload(
         storage_key,
-        io.BytesIO(content),
+        file.file,
         safe_name,
         file.content_type,
     )
@@ -2925,6 +2951,60 @@ async def get_mission_thumbnail(mission_id: str, filename: str):
     if not thumb_path.exists():
         raise HTTPException(status_code=404, detail="Thumbnail not found")
     return FileResponse(thumb_path, media_type="image/jpeg", headers={"Cache-Control": "public, max-age=86400"})
+
+
+@app.get("/api/v1/storage")
+async def get_storage_usage(current_user: Optional[UserRecord] = Depends(get_current_user_optional)):
+    """Return measured local mission artifact usage for the dashboard budget meter."""
+    budget_mb = max(1, int(os.getenv("STORAGE_BUDGET_MB", "300")))
+    roots = [DATA_DIR / "missions", DATA_DIR / "objects" / "missions"]
+    mission_sizes: Dict[str, int] = {}
+    for root in roots:
+        if not root.exists():
+            continue
+        for child in root.iterdir():
+            try:
+                if child.is_dir():
+                    size = sum(p.stat().st_size for p in child.rglob("*") if p.is_file())
+                    mission = MissionData(child.name)
+                    if mission.data:
+                        try:
+                            check_mission_access(
+                                child.name, current_user,
+                                mission.data.get("created_by") or mission.data.get("owner_id") or mission.data.get("operator"),
+                                mission.data.get("organization_name"),
+                            )
+                        except HTTPException:
+                            continue
+                    elif current_user and current_user.role != ROLE_ADMIN:
+                        continue
+                    mission_sizes[child.name] = mission_sizes.get(child.name, 0) + size
+                elif child.is_file() and child.suffix.lower() == ".json":
+                    mission = MissionData(child.stem)
+                    if mission.data:
+                        try:
+                            check_mission_access(
+                                child.stem, current_user,
+                                mission.data.get("created_by") or mission.data.get("owner_id") or mission.data.get("operator"),
+                                mission.data.get("organization_name"),
+                            )
+                        except HTTPException:
+                            continue
+                    elif current_user and current_user.role != ROLE_ADMIN:
+                        continue
+                    mission_sizes[child.stem] = mission_sizes.get(child.stem, 0) + child.stat().st_size
+            except (OSError, PermissionError):
+                continue
+    used_bytes = sum(mission_sizes.values())
+    return {
+        "used_mb": round(used_bytes / (1024 * 1024), 2),
+        "budget_mb": budget_mb,
+        "within_budget": used_bytes <= budget_mb * 1024 * 1024,
+        "missions": {
+            mission_id: {"size_mb": round(size / (1024 * 1024), 2), "size_bytes": size}
+            for mission_id, size in sorted(mission_sizes.items())
+        },
+    }
 
 
 @app.get("/api/v1/storage/{storage_key:path}")
@@ -3932,6 +4012,41 @@ async def delete_mission(
 
 
 
+def _compact_reconstruction_artifacts(mission_id: str) -> None:
+    """Keep viewer outputs and a small keyframe set; drop COLMAP working data."""
+    recon_dir = MISSIONS_DIR / mission_id / "reconstruction"
+    if not recon_dir.exists():
+        return
+    for path in recon_dir.rglob("database.db"):
+        path.unlink(missing_ok=True)
+    for dirname in ("dense", "undistorted", "masks"):
+        target = recon_dir / dirname
+        if target.exists():
+            shutil.rmtree(target, ignore_errors=True)
+    model_dir = recon_dir / "model"
+    sparse_model = model_dir / "0"
+    if sparse_model.exists():
+        shutil.rmtree(sparse_model, ignore_errors=True)
+    frame_dir = recon_dir / "frames"
+    frame_paths = sorted(frame_dir.glob("*.jpg")) if frame_dir.exists() else []
+    if len(frame_paths) > 40:
+        keep_indices = set(np.linspace(0, len(frame_paths) - 1, 40, dtype=int).tolist())
+        for index, path in enumerate(frame_paths):
+            if index not in keep_indices:
+                path.unlink(missing_ok=True)
+        frame_paths = [path for index, path in enumerate(frame_paths) if index in keep_indices]
+    if cv2:
+        for path in frame_paths:
+            image = cv2.imread(str(path))
+            if image is None:
+                continue
+            height, width = image.shape[:2]
+            scale = min(1.0, 480.0 / max(height, width))
+            if scale < 1.0:
+                image = cv2.resize(image, (max(1, int(width * scale)), max(1, int(height * scale))), interpolation=cv2.INTER_AREA)
+            cv2.imwrite(str(path), image, [cv2.IMWRITE_JPEG_QUALITY, 75])
+
+
 def run_full_pipeline_task(
     job_id: str,
     mission_id: str,
@@ -3953,8 +4068,27 @@ def run_full_pipeline_task(
     stage_timings: Dict[str, float] = {}
     wall_start = time.perf_counter()
     mission = MissionData(mission_id)
+    processing_proxy: Optional[Path] = None
 
     try:
+        # Process an ephemeral 1280 px proxy on constrained hosts while preserving
+        # the uploaded original for playback and later download.
+        cap = cv2.VideoCapture(str(video_path)) if cv2 else None
+        if cap and cap.isOpened():
+            source_w = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH) or 0)
+            source_h = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT) or 0)
+            cap.release()
+            if max(source_w, source_h) > 1280:
+                processing_proxy = DATA_DIR / "processing" / mission_id / "pipeline_1280.mp4"
+                try:
+                    from backend.video_ingest import create_browser_proxy
+                    create_browser_proxy(video_path, processing_proxy, max_width=1280)
+                    video_path = processing_proxy
+                    logger.info("Mission %s processing from 1280 px proxy", mission_id)
+                except Exception as proxy_exc:
+                    processing_proxy = None
+                    logger.warning("Mission %s proxy downscale unavailable; processing source resolution: %s", mission_id, proxy_exc)
+
         # ============================================================
         # STAGE 1: Video Validation & Container Inspection
         # ============================================================
@@ -4313,6 +4447,11 @@ def run_full_pipeline_task(
         except Exception as rep_err:
             logger.warning("Report deliverable compilation note: %s", rep_err)
 
+        try:
+            _compact_reconstruction_artifacts(mission_id)
+        except Exception as cleanup_exc:
+            logger.warning("Mission artifact compaction skipped for %s: %s", mission_id, cleanup_exc)
+
         completed_stages.append("report")
         update_job(
             job_id,
@@ -4323,6 +4462,8 @@ def run_full_pipeline_task(
             progress_percent=100,
             message="Mission processing completed successfully",
         )
+        if processing_proxy:
+            processing_proxy.unlink(missing_ok=True)
         return {
             "success": True,
             "job_id": job_id,
@@ -4337,6 +4478,8 @@ def run_full_pipeline_task(
         }
 
     except Exception as e:
+        if processing_proxy:
+            processing_proxy.unlink(missing_ok=True)
         logger.error("Pipeline failure for mission %s at %s: %s", mission_id, current_stage_id, e, exc_info=True)
         update_job(
             job_id,

@@ -47,7 +47,10 @@ if is_prod_env and (not os.getenv("SECRET_KEY") or os.getenv("SECRET_KEY") == DE
 
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 JWT_EXPIRATION_MINUTES = int(os.getenv("JWT_EXPIRATION_MINUTES", "720"))  # 12 hours (operational shift duration)
-MAX_UPLOAD_SIZE_BYTES = int(os.getenv("MAX_UPLOAD_SIZE_BYTES", str(1024 * 1024 * 1024)))  # 1 GB
+MAX_UPLOAD_SIZE_BYTES = min(
+    int(os.getenv("MAX_UPLOAD_SIZE_BYTES", str(150 * 1024 * 1024))),
+    150 * 1024 * 1024,
+)  # Render-friendly hard cap: 150 MB
 
 RATE_LIMIT_PER_MINUTE = int(os.getenv("RATE_LIMIT_PER_MINUTE", "120"))
 AUTH_OPTIONAL_MODE = os.getenv("AEROMESH_AUTH_OPTIONAL", "0").lower() in ("1", "true", "yes")
@@ -577,13 +580,18 @@ def check_mission_access(
     - Government/Org users can access any mission shared within their organization.
     - Individual and Guest users can access their own missions.
     """
-    if AUTH_OPTIONAL_MODE or os.environ.get("AEROMESH_DISABLE_AUTH") == "1":
+    if os.environ.get("AEROMESH_DISABLE_AUTH") == "1":
+        return True
+
+    # Demo mode may admit anonymous visitors, but an authenticated account must
+    # still be scoped to its own missions and organization.
+    if AUTH_OPTIONAL_MODE and user is None:
         return True
 
     if user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
 
-    if user.role in (ROLE_ADMIN, ROLE_OPERATOR):
+    if user.role == ROLE_ADMIN:
         return True
 
     # Government/Org portal sharing
@@ -639,14 +647,20 @@ def sanitize_filename(filename: str) -> str:
     return clean_name
 
 
-def validate_uploaded_file(filename: str, content: bytes, max_size_bytes: int = MAX_UPLOAD_SIZE_BYTES) -> Tuple[bool, Optional[str]]:
+def validate_uploaded_file(
+    filename: str,
+    content: bytes,
+    max_size_bytes: int = MAX_UPLOAD_SIZE_BYTES,
+    size_bytes: Optional[int] = None,
+) -> Tuple[bool, Optional[str]]:
     """Inspect file name, size, extension, and binary signature (magic bytes)."""
+    measured_size = len(content) if size_bytes is None else int(size_bytes)
     # 1. Size check
-    if len(content) == 0:
+    if measured_size == 0:
         return False, "Uploaded file is empty"
-    if len(content) > max_size_bytes:
+    if measured_size > max_size_bytes:
         max_mb = max_size_bytes // (1024 * 1024)
-        return False, f"File size ({len(content) // (1024 * 1024)} MB) exceeds maximum allowed size ({max_mb} MB)"
+        return False, f"File size ({measured_size // (1024 * 1024)} MB) exceeds maximum allowed size ({max_mb} MB)"
 
     # 2. Extension check
     ext = Path(filename).suffix.lower()
