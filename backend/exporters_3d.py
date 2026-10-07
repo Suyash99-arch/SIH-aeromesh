@@ -192,6 +192,12 @@ def export_mesh_to_glb(ply_path: Path, output_glb_path: Path) -> bool:
 
         v_buf = vert_bytes.getvalue()
         i_buf = idx_bytes.getvalue()
+        color_bytes = io.BytesIO()
+        has_colors = mesh.has_vertex_colors() and len(mesh.vertex_colors) == len(verts)
+        if has_colors:
+            for color in mesh.vertex_colors:
+                color_bytes.write(struct.pack("<fff", *(float(max(0.0, min(1.0, c))) for c in color)))
+        c_buf = color_bytes.getvalue()
 
         # Align buffer to 4 bytes
         v_pad = (4 - (len(v_buf) % 4)) % 4
@@ -199,7 +205,7 @@ def export_mesh_to_glb(ply_path: Path, output_glb_path: Path) -> bool:
         i_pad = (4 - (len(i_buf) % 4)) % 4
         i_buf += b"\x00" * i_pad
 
-        bin_buffer = v_buf + i_buf
+        bin_buffer = v_buf + i_buf + c_buf
 
         gltf_dict: Dict[str, Any] = {
             "asset": {"version": "2.0", "generator": "AeroMesh Hexa Spark 3D Engine"},
@@ -210,7 +216,7 @@ def export_mesh_to_glb(ply_path: Path, output_glb_path: Path) -> bool:
                 {
                     "primitives": [
                         {
-                            "attributes": {"POSITION": 0},
+                            "attributes": {"POSITION": 0, **({"COLOR_0": 2 if len(triangles) > 0 else 1} if has_colors else {})},
                             "indices": 1 if len(triangles) > 0 else None,
                             "mode": 4 if len(triangles) > 0 else 0,  # 4: TRIANGLES, 0: POINTS
                         }
@@ -257,6 +263,17 @@ def export_mesh_to_glb(ply_path: Path, output_glb_path: Path) -> bool:
             })
         else:
             gltf_dict["meshes"][0]["primitives"][0].pop("indices", None)
+
+        if has_colors:
+            color_view_index = len(gltf_dict["bufferViews"])
+            gltf_dict["bufferViews"].append({
+                "buffer": 0, "byteOffset": len(v_buf) + len(i_buf),
+                "byteLength": len(c_buf), "target": 34962,
+            })
+            gltf_dict["accessors"].append({
+                "bufferView": color_view_index, "byteOffset": 0, "componentType": 5126,
+                "count": len(verts), "type": "VEC3",
+            })
 
         json_bytes = json.dumps(gltf_dict, separators=(",", ":")).encode("utf-8")
         # Pad json to 4 bytes with spaces

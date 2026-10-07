@@ -54,6 +54,38 @@ def _ensure_dir(path: Path) -> Path:
     return path
 
 
+def _available_memory_mb() -> float:
+    """Return memory available to this process, respecting Linux container limits."""
+    try:
+        import psutil
+        available = float(psutil.virtual_memory().available) / (1024 * 1024)
+    except Exception:
+        available = 384.0
+    low_resource_mode = os.getenv("PIPELINE_MODE", "").strip().lower() == "light"
+    on_render = os.getenv("RENDER", "").lower() in ("1", "true", "yes")
+    render_default = "512" if (on_render or low_resource_mode) else None
+    configured_budget = os.getenv("RECONSTRUCTION_MEMORY_BUDGET_MB", render_default)
+    if configured_budget:
+        try:
+            available = min(available, max(128.0, float(configured_budget)))
+        except ValueError:
+            logger.warning("Ignoring invalid RECONSTRUCTION_MEMORY_BUDGET_MB=%r", configured_budget)
+    for limit_path, usage_path in (
+        (Path("/sys/fs/cgroup/memory.max"), Path("/sys/fs/cgroup/memory.current")),
+        (Path("/sys/fs/cgroup/memory/memory.limit_in_bytes"), Path("/sys/fs/cgroup/memory/memory.usage_in_bytes")),
+    ):
+        try:
+            raw_limit = limit_path.read_text().strip()
+            limit = float(raw_limit)
+            if raw_limit != "max" and limit < 1e15:
+                used = float(usage_path.read_text().strip())
+                available = min(available, max(0.0, (limit - used) / (1024 * 1024)))
+                break
+        except (OSError, ValueError):
+            continue
+    return available
+
+
 # ============================================================
 # CONFIGURABLE RECONSTRUCTION PARAMETERS (ENV-BACKED)
 # ============================================================
@@ -67,7 +99,7 @@ FRAME_QUALITY_MIN_FEATURES = int(os.getenv("FRAME_QUALITY_MIN_FEATURES", "15"))
 FRAME_QUALITY_DIFF_THRESHOLD = float(os.getenv("FRAME_QUALITY_DIFF_THRESHOLD", "2.0"))
 KEYFRAME_MIN_FRAMES = int(os.getenv("KEYFRAME_MIN_FRAMES", "12"))
 KEYFRAME_TARGET_FRAMES = int(os.getenv("KEYFRAME_TARGET_FRAMES", "35"))
-KEYFRAME_MAX_FRAMES = int(os.getenv("RECONSTRUCTION_MAX_FRAMES", os.getenv("KEYFRAME_MAX_FRAMES", "40")))
+KEYFRAME_MAX_FRAMES = int(os.getenv("RECONSTRUCTION_MAX_FRAMES", os.getenv("KEYFRAME_MAX_FRAMES", "120")))
 
 
 # ============================================================
@@ -170,6 +202,9 @@ def extract_frames_with_quality(
     """
     mission_dir = _ensure_dir(MISSIONS_DIR / mission_id / "reconstruction")
     frames_dir = _ensure_dir(mission_dir / "frames")
+    # Never mix a prior upload's keyframes into a new reconstruction.
+    for stale_frame in list(frames_dir.glob("frame_*.jpg")) + list(frames_dir.glob("frame_*.png")):
+        stale_frame.unlink(missing_ok=True)
 
     cap = cv2.VideoCapture(str(video_path))
     if not cap.isOpened():
@@ -190,6 +225,13 @@ def extract_frames_with_quality(
             "frames_dir": str(frames_dir),
             "selected_frames": [],
         }
+
+    duration_seconds = total_frames / fps
+    effective_max_frames = max_frames
+    if max_frames >= 40:
+        ram_mb = _available_memory_mb()
+        ram_frame_cap = 40 if ram_mb < 768 else (60 if ram_mb < 1536 else 120)
+        effective_max_frames = min(max_frames, ram_frame_cap, max(40, min(120, int(round(duration_seconds * 2.5)))))
 
     # 1. Video statistics pre-flight: compute clip median sharpness from sample frames
     sample_scores: list[float] = []
@@ -223,7 +265,12 @@ def extract_frames_with_quality(
     frames_since_last_keyframe = 0
 
     # Dynamic stride: evaluate every 2-3 frames to balance CPU time with motion accuracy
-    eval_stride = 1 if total_frames <= 150 else (2 if total_frames <= 600 else 3)
+    if os.getenv("PIPELINE_MODE", "").strip().lower() == "light":
+        eval_stride = 10
+    elif _available_memory_mb() < 768:
+        eval_stride = 6
+    else:
+        eval_stride = 1 if total_frames <= 150 else (2 if total_frames <= 600 else 3)
 
     while frame_index < total_frames:
         if frame_index % eval_stride != 0 and frame_index != 0:
@@ -310,7 +357,7 @@ def extract_frames_with_quality(
             prev_accepted_gray = curr_gray_small.copy()
             frames_since_last_keyframe = 0
 
-            if len(selected_frames) >= max_frames:
+            if len(selected_frames) >= effective_max_frames:
                 break
         frame_index += 1
 
@@ -318,8 +365,8 @@ def extract_frames_with_quality(
     fallback_used = False
     if len(selected_frames) < KEYFRAME_MIN_FRAMES and len(frame_scores) > 0:
         fallback_used = True
-        target_count = min(KEYFRAME_TARGET_FRAMES, len(frame_scores))
-        chunk_size = max(1, len(frame_scores) // target_count)
+        target_count = min(effective_max_frames, max(40, KEYFRAME_TARGET_FRAMES), len(frame_scores))
+        chunk_size = max(1, int(np.ceil(len(frame_scores) / target_count)))
         
         # Clear frames directory to rewrite clean fallback sequence
         for existing in frames_dir.glob("frame_*.jpg"):
@@ -356,7 +403,7 @@ def extract_frames_with_quality(
                 "path": str(frame_path),
                 "quality": q,
             })
-            if len(selected_frames) >= max_frames:
+            if len(selected_frames) >= effective_max_frames:
                 break
 
     cap.release()
@@ -610,13 +657,23 @@ def _run_pycolmap_sfm(
     if has_masks and masks_dir.exists():
         reader_options.mask_path = masks_dir
 
-    colmap_threads = max(1, min((os.cpu_count() or 4) - 1, 4))
+    colmap_threads = 1 if _available_memory_mb() < 1024 else max(1, min((os.cpu_count() or 4) - 1, 4))
     extraction_options = pycolmap.FeatureExtractionOptions()
     extraction_options.max_image_size = RECONSTRUCTION_MAX_IMAGE_DIM
     extraction_options.num_threads = colmap_threads
     if hasattr(extraction_options, "sift"):
         extraction_options.sift.peak_threshold = float(os.getenv("SFM_PEAK_THRESHOLD", "0.0033"))
-        extraction_options.sift.max_num_features = int(os.getenv("SFM_MAX_FEATURES", "8192"))
+        # COLMAP's feature database and matching stages dominate memory on small hosts.
+        # Reserve a conservative budget for the Render 512 MB class and only raise it
+        # when the process can actually afford the descriptors.
+        try:
+            import psutil
+            available_mb = _available_memory_mb()
+        except Exception:
+            available_mb = 384
+        feature_limit = 8192 if available_mb >= 2048 else (4096 if available_mb >= 768 else 1024)
+        configured_features = int(os.getenv("SFM_MAX_FEATURES", str(feature_limit)))
+        extraction_options.sift.max_num_features = min(configured_features, feature_limit)
         if hasattr(extraction_options.sift, "first_octave"):
             extraction_options.sift.first_octave = -1
         if hasattr(extraction_options.sift, "edge_threshold"):
@@ -654,8 +711,14 @@ def _run_pycolmap_sfm(
 
     try:
         is_mock_seq = hasattr(pycolmap.match_sequential, "mock_calls") or type(pycolmap.match_sequential).__name__ == "MagicMock"
-        matcher_type = os.getenv("COLMAP_MATCHER", "exhaustive").strip().lower()
+        matcher_type = os.getenv("COLMAP_MATCHER", "auto").strip().lower()
         overlap_val = int(os.getenv("COLMAP_OVERLAP", "15"))
+        # Exhaustive matching grows quadratically and can exhaust small instances.
+        # Even an explicit config cannot select it above the safe frame threshold.
+        if total_input_frames > 40:
+            matcher_type = "sequential"
+        elif matcher_type == "auto":
+            matcher_type = "exhaustive"
         if is_mock_seq:
             pycolmap.match_sequential(
                 database_path=str(database_path),
@@ -672,13 +735,21 @@ def _run_pycolmap_sfm(
                 pairing_options=seq_opts,
                 device=pycolmap.Device.cpu,
             )
-        else:
+        elif matcher_type == "exhaustive":
             ex_pairing = pycolmap.ExhaustivePairingOptions()
             pycolmap.match_exhaustive(
                 database_path=str(database_path),
                 matching_options=matching_options,
                 pairing_options=ex_pairing,
                 device=pycolmap.Device.cpu,
+            )
+        else:
+            seq_opts = pycolmap.SequentialPairingOptions()
+            seq_opts.overlap = overlap_val
+            seq_opts.loop_detection = total_input_frames >= 20
+            pycolmap.match_sequential(
+                database_path=str(database_path), matching_options=matching_options,
+                pairing_options=seq_opts, device=pycolmap.Device.cpu,
             )
     except Exception as exc:
         logger.warning("Feature matching error: %s", exc)
@@ -1281,6 +1352,89 @@ def camera_poisson_trimmed(
                 pts = np.asarray(pcd.points)
                 colors = np.asarray(pcd.colors)
 
+        # Aerial scenes are surfaces. Fit the dominant plane, make it horizontal,
+        # then rasterize robust heights on XZ. Poisson closes sparse samples into
+        # a volume and is the source of the familiar floating balloon/blob.
+        try:
+            plane, inliers = pcd.segment_plane(
+                distance_threshold=max(float(np.linalg.norm(np.ptp(pts, axis=0))) * 0.008, 0.03),
+                ransac_n=3, num_iterations=500,
+            )
+            normal = np.asarray(plane[:3], dtype=np.float64)
+            normal /= max(np.linalg.norm(normal), 1e-9)
+            extent = np.ptp(pts, axis=0)
+            if len(inliers) >= max(30, int(len(pts) * 0.12)) and np.max(extent) > 0:
+                target_up = np.array([0.0, 1.0, 0.0])
+                if float(np.dot(normal, target_up)) < 0:
+                    normal = -normal
+                cross = np.cross(normal, target_up)
+                sine = float(np.linalg.norm(cross))
+                cosine = float(np.clip(np.dot(normal, target_up), -1.0, 1.0))
+                if sine > 1e-8:
+                    axis = cross / sine
+                    skew = np.array([[0, -axis[2], axis[1]], [axis[2], 0, -axis[0]], [-axis[1], axis[0], 0]])
+                    rotation = np.eye(3) + skew * sine + (skew @ skew) * (1.0 - cosine)
+                else:
+                    rotation = np.eye(3)
+                origin = np.median(pts, axis=0)
+                aligned = (pts - origin) @ rotation.T
+                xz_extent = np.ptp(aligned[:, [0, 2]], axis=0)
+                # Near nadir/oblique survey coverage tends to be broad and shallow.
+                if max(xz_extent) > 0 and np.ptp(aligned[:, 1]) / max(xz_extent) < 0.8:
+                    target_cells = int(np.clip(np.sqrt(len(pts)) * 2.0, 32, 180))
+                    cell = max(float(np.max(xz_extent)) / target_cells, 1e-4)
+                    x0, z0 = aligned[:, 0].min(), aligned[:, 2].min()
+                    nx = max(2, min(256, int(np.ceil(xz_extent[0] / cell)) + 1))
+                    nz = max(2, min(256, int(np.ceil(xz_extent[1] / cell)) + 1))
+                    buckets: Dict[Tuple[int, int], List[int]] = {}
+                    for index, point in enumerate(aligned):
+                        key = (min(nx - 1, int((point[0] - x0) / cell)), min(nz - 1, int((point[2] - z0) / cell)))
+                        buckets.setdefault(key, []).append(index)
+                    heights: Dict[Tuple[int, int], float] = {}
+                    cell_colors: Dict[Tuple[int, int], np.ndarray] = {}
+                    for key, indices in buckets.items():
+                        heights[key] = float(np.median(aligned[indices, 1]))
+                        cell_colors[key] = np.median(colors[indices], axis=0)
+                    # Fill only single-cell holes surrounded by observed cells.
+                    for key in list(heights):
+                        for dx, dz in ((1, 0), (-1, 0), (0, 1), (0, -1)):
+                            neighbor = (key[0] + dx, key[1] + dz)
+                            if neighbor not in heights:
+                                adjacent = [heights[(neighbor[0] + ox, neighbor[1] + oz)] for ox, oz in ((1,0),(-1,0),(0,1),(0,-1)) if (neighbor[0] + ox, neighbor[1] + oz) in heights]
+                                if len(adjacent) >= 3:
+                                    heights[neighbor] = float(np.median(adjacent))
+                                    cell_colors[neighbor] = np.median([cell_colors[(neighbor[0] + ox, neighbor[1] + oz)] for ox, oz in ((1,0),(-1,0),(0,1),(0,-1)) if (neighbor[0] + ox, neighbor[1] + oz) in cell_colors], axis=0)
+                    mesh = o3d.geometry.TriangleMesh()
+                    vertices, vertex_colors, faces, vertex_map = [], [], [], {}
+                    for (ix, iz), height in heights.items():
+                        for dx, dz in ((0,0),(1,0),(1,1),(0,1)):
+                            key = (ix + dx, iz + dz)
+                            if key not in vertex_map:
+                                vertex_map[key] = len(vertices)
+                                vertices.append([x0 + key[0] * cell, height, z0 + key[1] * cell])
+                                vertex_colors.append(cell_colors[(ix, iz)])
+                        quad = [vertex_map[(ix, iz)], vertex_map[(ix + 1, iz)], vertex_map[(ix + 1, iz + 1)], vertex_map[(ix, iz + 1)]]
+                        faces.extend(([quad[0], quad[1], quad[2]], [quad[0], quad[2], quad[3]]))
+                    if len(faces) >= 4:
+                        mesh.vertices = o3d.utility.Vector3dVector(np.asarray(vertices))
+                        mesh.triangles = o3d.utility.Vector3iVector(np.asarray(faces, dtype=np.int32))
+                        mesh.vertex_colors = o3d.utility.Vector3dVector(np.clip(vertex_colors, 0, 1))
+                        aligned_vertices = np.asarray(mesh.vertices)
+                        bounds_min, bounds_max = aligned_vertices.min(axis=0), aligned_vertices.max(axis=0)
+                        scale = max(float(np.max(bounds_max - bounds_min)), 1e-9)
+                        mesh.vertices = o3d.utility.Vector3dVector((aligned_vertices - (bounds_min + bounds_max) * 0.5) / scale)
+                        mesh = mesh.filter_smooth_laplacian(number_of_iterations=3, lambda_filter=0.35)
+                        mesh.compute_vertex_normals()
+                        _write_float32_ply_mesh(mesh_ply_path, mesh)
+                        return {
+                            "status": "AVAILABLE", "mesh_path": str(mesh_ply_path),
+                            "vertex_count": len(mesh.vertices), "face_count": len(mesh.triangles),
+                            "method": "ransac_aligned_heightfield", "scale_status": "RELATIVE_SCALE",
+                            "ground_plane_inliers": len(inliers), "bounding_box": _compute_mesh_bounding_box(mesh_ply_path),
+                        }
+        except Exception as plane_exc:
+            logger.info("Height-field meshing not applicable; retaining 3D fallback: %s", plane_exc)
+
         # 2. Extract camera center poses if available
         cam_mean = None
         if best_recon is not None and hasattr(best_recon, "images"):
@@ -1325,7 +1479,8 @@ def camera_poisson_trimmed(
         pcd.orient_normals_towards_camera_location(camera_location=cam_mean)
 
         # 4. Poisson surface reconstruction with linear fit (depth 10-12 for high detail urban/terrain structure)
-        poisson_depth = 12 if len(pts) >= 6000 else (11 if len(pts) >= 2000 else (10 if len(pts) >= 800 else 9))
+        low_memory = _available_memory_mb() < 768 or os.getenv("PIPELINE_MODE", "").strip().lower() == "light"
+        poisson_depth = 8 if low_memory else (10 if len(pts) >= 2000 else 9)
         mesh_raw, densities = o3d.geometry.TriangleMesh.create_from_point_cloud_poisson(
             pcd, depth=poisson_depth, linear_fit=True, width=0
         )
@@ -1372,6 +1527,14 @@ def camera_poisson_trimmed(
                     mesh_clean.compute_vertex_normals()
             except Exception:
                 pass
+
+        try:
+            face_budget = max(1000, int(os.getenv("RECONSTRUCTION_MAX_MESH_FACES", "150000")))
+            if len(mesh_clean.triangles) > face_budget:
+                mesh_clean = mesh_clean.simplify_quadric_decimation(target_number_of_triangles=face_budget)
+                mesh_clean.compute_vertex_normals()
+        except Exception as decimate_exc:
+            logger.info("Mesh face budget decimation skipped: %s", decimate_exc)
 
         # 7. Transfer photogrammetric colors and apply multi-view camera frame projection
         v_final = np.asarray(mesh_clean.vertices)
@@ -1563,11 +1726,13 @@ def generate_depth_anything_dense_reconstruction(
         progress_cb(f"Depth-Anything-V2 dense depth estimation on {len(selected_frames)} keyframes", 65)
 
     runner = None
-    try:
-        from backend.depth_anything import DepthAnythingV2Runner
-        runner = DepthAnythingV2Runner()
-    except Exception as exc:
-        logger.warning("DepthAnythingV2Runner notice: %s. Using heuristic_vertical_gradient_depth prior.", exc)
+    light_mode = os.getenv("PIPELINE_MODE", "").strip().lower() == "light"
+    if not light_mode:
+        try:
+            from backend.depth_anything import DepthAnythingV2Runner
+            runner = DepthAnythingV2Runner()
+        except Exception as exc:
+            logger.warning("DepthAnythingV2Runner notice: %s. Using heuristic_vertical_gradient_depth prior.", exc)
 
     # 1. Camera poses from real telemetry if available; otherwise None and UNAVAILABLE_NO_TELEMETRY
     camera_poses, pose_status = _load_mission_telemetry_poses(resolved_mission_id, selected_frames)
@@ -1863,7 +2028,7 @@ def _run_dense_and_meshing(
             has_normals = _export_point_cloud_with_normals(best_recon, normals_ply)
             if has_normals:
                 options = pycolmap.PoissonMeshingOptions()
-                options.depth = 11
+                options.depth = 9
                 options.point_weight = 1.0
                 options.color = 32.0
                 options.trim = 4.0
@@ -1938,7 +2103,35 @@ def run_reconstruction_pipeline(
             "processing_time_s": round(time.time() - started, 2),
         }
 
-    # Execute SfM
+    # Light mode avoids COLMAP's database and matcher, using the bounded
+    # monocular/heuristic surface path instead. The result remains marked relative.
+    default_mode = "light" if os.getenv("RENDER", "").lower() in ("1", "true", "yes") else "heavy"
+    force_light = os.getenv("PIPELINE_MODE", default_mode).strip().lower() == "light"
+    if force_light or not has_pycolmap:
+        light_result = generate_depth_anything_dense_reconstruction(
+            frames_dir=frames_dir, output_dir=output_dir,
+            max_keyframes=min(8 if force_light else 12, len(frame_files)), progress_cb=progress_cb,
+            mission_id=mission_id,
+        )
+        if light_result.get("success"):
+            light_result["engine"] = "lightweight_monocular_surface"
+            light_result["method"] = "lightweight_monocular_surface"
+            light_result["registered_cameras"] = 0
+            light_result["total_images"] = len(frame_files)
+            light_result["sparse_point_count"] = 0
+            light_result["scale"] = evaluate_scale_and_georeference(False)
+            light_result["pipeline_mode"] = "light"
+            return light_result
+        return {
+            "success": False, "status": ReconstructionStatus.FAILED.value,
+            "error": light_result.get("error") or "Lightweight reconstruction could not produce a surface.",
+            "sparse_point_count": 0, "registered_cameras": 0,
+            "total_images": len(frame_files), "pipeline_mode": "light",
+            "scale": evaluate_scale_and_georeference(False),
+            "processing_time_s": round(time.time() - started, 2),
+        }
+
+    # Execute full COLMAP SfM when enabled and available.
     if has_pycolmap:
         sfm_res = _run_pycolmap_sfm(database_path, frames_dir, output_dir, progress_cb, detections=detections)
     else:
@@ -2173,6 +2366,21 @@ def run_reconstruction_for_mission(
                 with mesh_path.open("rb") as f:
                     storage.upload(mesh_storage_key, f, "mesh.ply", "application/octet-stream")
                 recon_result["mesh"]["storage_key"] = mesh_storage_key
+
+                # GLB is the compact browser delivery format. The exporter keeps
+                # vertex colors when available; the PLY remains the local source.
+                try:
+                    from backend.exporters_3d import export_mesh_to_glb
+                    glb_path = mesh_path.with_suffix(".glb")
+                    if export_mesh_to_glb(mesh_path, glb_path):
+                        glb_key = f"missions/{mission_id}/reconstruction/model.glb"
+                        with glb_path.open("rb") as glb_file:
+                            glb_metadata = storage.upload(glb_key, glb_file, "model.glb", "model/gltf-binary")
+                        recon_result["mesh"]["glb_path"] = str(glb_path)
+                        recon_result["mesh"]["glb_storage_key"] = glb_key
+                        recon_result["mesh"]["glb_size_bytes"] = glb_metadata.size
+                except Exception as glb_exc:
+                    logger.warning("GLB export skipped for %s: %s", mission_id, glb_exc)
 
         # 3. Database persistence if configured
         from backend.database import get_configured_engine, check_database, session_scope

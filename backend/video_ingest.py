@@ -239,7 +239,8 @@ def create_browser_proxy(
     gop = max(1, round(fps))  # keyframe interval ~1 second
 
     # Scale filter: cap width at max_width, keep aspect ratio, ensure even dimensions
-    vf = f"scale='min({max_width},iw):-2'"
+    vf = f"scale='min({max_width},iw)':'min({max_width},ih)':force_original_aspect_ratio=decrease"
+    proxy_threads = max(1, min(int(os.getenv("VIDEO_PROXY_THREADS", "1")), 2))
 
     cmd = [
         ffmpeg_bin,
@@ -248,7 +249,7 @@ def create_browser_proxy(
         "-c:v", "libx264",
         "-pix_fmt", "yuv420p",
         "-preset", "veryfast",
-        "-threads", str(max(1, min((os.cpu_count() or 4) - 1, 4))),
+        "-threads", str(proxy_threads),
         "-crf", "24",
         "-vf", vf,
         "-g", str(gop),                 # keyframe interval
@@ -310,4 +311,3 @@ def get_or_create_browser_proxy(
     except Exception as exc:
         logger.error("Failed to create browser proxy for %s: %s", original_path, exc)
         return None
-
