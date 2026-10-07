@@ -9,8 +9,11 @@ export default function VideoPlayer({
   playing,
   setPlaying,
   speed,
+  detections: propDetections,
+  semanticObjects: propSemanticObjects,
 }) {
   const videoRef = useRef(null);
+  const canvasRef = useRef(null);
   const fileInputRef = useRef(null);
   const replaceFileInputRef = useRef(null);
 
@@ -104,11 +107,9 @@ export default function VideoPlayer({
     setPlaying(false);
 
     if (attemptIndex === 0 && directUrl && directUrl !== proxyUrl) {
-      // First fallback: proxy failed, seamlessly switch to direct video
       console.warn(`[VideoPlayer] Proxy stream failed for mission ${mission?.id}. Falling back to direct video URL.`);
       setAttemptIndex(1);
     } else {
-      // Both proxy and direct failed or no alternate source available
       setFailed(true);
       setErrorMessage("Flight video stream asset could not be loaded or is offline.");
     }
@@ -140,7 +141,6 @@ export default function VideoPlayer({
     setUploadStatusMsg("Starting video ingestion...");
 
     try {
-      // Attempt chunked upload with progress tracking
       let result;
       try {
         result = await uploadVideoChunk(mission.id, file, (info) => {
@@ -163,7 +163,6 @@ export default function VideoPlayer({
       setUploadProgress(100);
       setUploadStatusMsg("Video uploaded successfully! Initializing player...");
 
-      // Update video URL with cache buster to force immediate reload
       const newUrl = `/api/v1/missions/${mission.id}/video?t=${Date.now()}`;
       setCustomOverrideUrl(newUrl);
       setFailed(false);
@@ -171,7 +170,6 @@ export default function VideoPlayer({
       setShowReplaceModal(false);
       setSelectedFile(null);
 
-      // Trigger mission reload in background
       try {
         await getMission(mission.id, true);
         window.dispatchEvent(new CustomEvent("aeromesh:mission_updated", { detail: { id: mission.id } }));
@@ -246,15 +244,164 @@ export default function VideoPlayer({
   }, [setPlaying]);
 
   // ------------------------------------------------------------------
+  // Object Detection Overlay — per-frame bounding box index
+  // ------------------------------------------------------------------
+  const detectionsByFrame = useMemo(() => {
+    const map = {};
+    const sources = [
+      propDetections,
+      propSemanticObjects,
+      mission?.semantic_scene?.observations,
+      mission?.semantic_scene?.objects,
+      mission?.detections,
+      mission?.objects_3d,
+    ];
+    for (const src of sources) {
+      if (!Array.isArray(src)) continue;
+      for (const det of src) {
+        const observations = det.observations || (det.bbox ? [det] : []);
+        for (const obs of observations) {
+          const fi = obs.frame_index ?? obs.frame_id ?? obs.frame ?? det.frame_index ?? det.frame_id;
+          if (fi == null) continue;
+          const bbox = obs.bbox || obs.bounding_box || det.bbox || det.bounding_box;
+          if (!bbox || bbox.length < 4) continue;
+          const entry = {
+            bbox,
+            cls: obs.class || obs.class_name || det.class || det.class_name || det.category || "object",
+            track_id: obs.track_id || det.track_id || det.object_id || "",
+            confidence: obs.confidence ?? det.confidence ?? det.mean_confidence ?? null,
+          };
+          const key = Number(fi);
+          if (!map[key]) map[key] = [];
+          map[key].push(entry);
+        }
+      }
+    }
+    return map;
+  }, [propDetections, propSemanticObjects, mission]);
+
+  // Draw detection bounding boxes on overlay canvas
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const video = videoRef.current;
+    if (!canvas || !video) return;
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const rect = video.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    canvas.style.width = `${rect.width}px`;
+    canvas.style.height = `${rect.height}px`;
+    ctx.scale(dpr, dpr);
+    ctx.clearRect(0, 0, rect.width, rect.height);
+
+    const dets = detectionsByFrame[frame] || detectionsByFrame[frame - 1] || detectionsByFrame[frame + 1] || [];
+    if (dets.length === 0) return;
+
+    const vw = video.videoWidth || rect.width;
+    const vh = video.videoHeight || rect.height;
+
+    const CLASS_COLORS = {
+      car: "#22d3ee", truck: "#f59e0b", bus: "#a78bfa", van: "#34d399",
+      motorcycle: "#fb923c", bicycle: "#818cf8", tricycle: "#06b6d4",
+      "awning-tricycle": "#06b6d4",
+      person: "#f43f5e", pedestrian: "#f43f5e", people: "#f43f5e", human: "#f43f5e",
+      vehicle: "#22d3ee", automobile: "#22d3ee",
+      boat: "#3b82f6", ship: "#3b82f6", vessel: "#3b82f6",
+      fire: "#ef4444", smoke: "#9ca3af", damage: "#dc2626",
+      building: "#a3e635", infrastructure: "#facc15",
+    };
+
+    for (const det of dets) {
+      let [x1, y1, x2, y2] = det.bbox;
+
+      if (x1 <= 1.0 && y1 <= 1.0 && x2 <= 1.0 && y2 <= 1.0) {
+        x1 *= rect.width; y1 *= rect.height; x2 *= rect.width; y2 *= rect.height;
+      } else {
+        x1 = (x1 / vw) * rect.width; y1 = (y1 / vh) * rect.height;
+        x2 = (x2 / vw) * rect.width; y2 = (y2 / vh) * rect.height;
+      }
+
+      const w = x2 - x1;
+      const h = y2 - y1;
+      if (w < 2 || h < 2) continue;
+
+      const clsKey = (det.cls || "object").toLowerCase();
+      const color = CLASS_COLORS[clsKey] || "#38bdf8";
+      const confStr = det.confidence != null ? ` ${Math.round(det.confidence * (det.confidence <= 1 ? 100 : 1))}%` : "";
+      const label = `${(det.cls || "OBJ").toUpperCase()}${det.track_id ? ` (${det.track_id})` : ""}${confStr}`;
+
+      // Semi-transparent fill
+      ctx.fillStyle = color + "12";
+      ctx.fillRect(x1, y1, w, h);
+
+      // Box border
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([]);
+      ctx.strokeRect(x1, y1, w, h);
+
+      // Corner accents
+      const cornerLen = Math.min(14, w / 3.5, h / 3.5);
+      ctx.lineWidth = 2.5;
+      ctx.strokeStyle = color;
+      ctx.beginPath(); ctx.moveTo(x1, y1 + cornerLen); ctx.lineTo(x1, y1); ctx.lineTo(x1 + cornerLen, y1); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x2 - cornerLen, y1); ctx.lineTo(x2, y1); ctx.lineTo(x2, y1 + cornerLen); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x1, y2 - cornerLen); ctx.lineTo(x1, y2); ctx.lineTo(x1 + cornerLen, y2); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(x2 - cornerLen, y2); ctx.lineTo(x2, y2); ctx.lineTo(x2, y2 - cornerLen); ctx.stroke();
+
+      // Label background pill
+      ctx.font = "bold 11px 'Inter', 'Segoe UI', sans-serif";
+      const metrics = ctx.measureText(label);
+      const labelW = metrics.width + 12;
+      const labelH = 18;
+      const labelY = y1 > labelH + 4 ? y1 - labelH - 2 : y1 + 2;
+
+      const lx = x1;
+      const ly = labelY;
+      const lr = 3;
+      ctx.fillStyle = color + "dd";
+      ctx.beginPath();
+      ctx.moveTo(lx + lr, ly);
+      ctx.lineTo(lx + labelW - lr, ly);
+      ctx.quadraticCurveTo(lx + labelW, ly, lx + labelW, ly + lr);
+      ctx.lineTo(lx + labelW, ly + labelH - lr);
+      ctx.quadraticCurveTo(lx + labelW, ly + labelH, lx + labelW - lr, ly + labelH);
+      ctx.lineTo(lx + lr, ly + labelH);
+      ctx.quadraticCurveTo(lx, ly + labelH, lx, ly + labelH - lr);
+      ctx.lineTo(lx, ly + lr);
+      ctx.quadraticCurveTo(lx, ly, lx + lr, ly);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.fillStyle = "#000000";
+      ctx.fillText(label, x1 + 6, labelY + 13);
+    }
+  }, [frame, detectionsByFrame]);
+
+  // Resize overlay canvas when video element resizes
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video) return;
+    const ro = new ResizeObserver(() => {
+      const canvas = canvasRef.current;
+      if (!canvas || !video) return;
+      const rect = video.getBoundingClientRect();
+      canvas.style.width = `${rect.width}px`;
+      canvas.style.height = `${rect.height}px`;
+    });
+    ro.observe(video);
+    return () => ro.disconnect();
+  }, []);
+
+  // ------------------------------------------------------------------
   // Drag & drop handlers
   // ------------------------------------------------------------------
-  const handleDragOver = (e) => {
-    e.preventDefault();
-    setIsDragging(true);
-  };
-  const handleDragLeave = () => {
-    setIsDragging(false);
-  };
+  const handleDragOver = (e) => { e.preventDefault(); setIsDragging(true); };
+  const handleDragLeave = () => { setIsDragging(false); };
   const handleDrop = (e) => {
     e.preventDefault();
     setIsDragging(false);
@@ -262,6 +409,9 @@ export default function VideoPlayer({
       handleFileSelect(e.dataTransfer.files[0], true);
     }
   };
+
+  const currentFrameDetections = detectionsByFrame[frame] || detectionsByFrame[frame - 1] || [];
+  const detectionCount = currentFrameDetections.length;
 
   // ------------------------------------------------------------------
   // RENDER: Unavailable / Error State with In-Player Re-Upload UI
@@ -288,7 +438,6 @@ export default function VideoPlayer({
               {errorMessage || `Flight video stream asset could not be loaded for mission "${mission?.name || mission?.id}".`}
             </div>
 
-            {/* Re-Upload Dropzone / Action Panel */}
             <div className="video-reupload-box">
               <input
                 ref={fileInputRef}
@@ -310,7 +459,7 @@ export default function VideoPlayer({
                     <Icon name="Upload" size={16} />
                     <span>Upload / Re-Upload Video</span>
                   </button>
-                  <span className="upload-drag-hint">or drag & drop MP4/MOV file here</span>
+                  <span className="upload-drag-hint">or drag &amp; drop MP4/MOV file here</span>
                 </div>
               ) : (
                 <div className="upload-selected-file-card">
@@ -339,18 +488,12 @@ export default function VideoPlayer({
                     </div>
                   ) : (
                     <div className="upload-confirm-buttons">
-                      <button
-                        className="btn-cancel-file"
-                        onClick={() => setSelectedFile(null)}
-                      >
+                      <button className="btn-cancel-file" onClick={() => setSelectedFile(null)}>
                         Change File
                       </button>
-                      <button
-                        className="btn-submit-upload"
-                        onClick={() => handleStartUpload()}
-                      >
+                      <button className="btn-submit-upload" onClick={() => handleStartUpload()}>
                         <Icon name="UploadCloud" size={15} />
-                        Attach & Launch Video
+                        Attach &amp; Launch Video
                       </button>
                     </div>
                   )}
@@ -365,7 +508,6 @@ export default function VideoPlayer({
               )}
             </div>
 
-            {/* Endpoint / Retry Diagnostics */}
             <div className="video-diagnostics-row">
               <button
                 className="btn-retry-stream"
@@ -391,30 +533,24 @@ export default function VideoPlayer({
   }
 
   // ------------------------------------------------------------------
-  // RENDER: Active Video Player
+  // RENDER: Active Video Player with Detection Overlay
   // ------------------------------------------------------------------
   return (
     <div className="video-player-container" style={{ position: "relative" }}>
-      {/* Hidden file input for header re-upload */}
       <input
         ref={replaceFileInputRef}
         type="file"
         accept="video/mp4,video/quicktime,video/x-matroska,video/avi"
         style={{ display: "none" }}
         onChange={(e) => {
-          if (e.target.files?.[0]) {
-            handleFileSelect(e.target.files[0], true);
-          }
+          if (e.target.files?.[0]) handleFileSelect(e.target.files[0], true);
         }}
       />
 
-      {/* Quick In-Player Re-upload / Replace Button */}
       <div className="video-player-top-actions">
         <button
           className="btn-player-reupload"
-          onClick={() => {
-            replaceFileInputRef.current?.click();
-          }}
+          onClick={() => replaceFileInputRef.current?.click()}
           disabled={isUploading}
           title="Re-upload or replace video footage for this mission"
         >
@@ -432,10 +568,7 @@ export default function VideoPlayer({
         playsInline
         muted
         onCanPlay={() => { setLoading(false); setBuffering(false); }}
-        onLoadedMetadata={(e) => {
-          setDuration(e.currentTarget.duration);
-          setLoading(false);
-        }}
+        onLoadedMetadata={(e) => { setDuration(e.currentTarget.duration); setLoading(false); }}
         onWaiting={() => setBuffering(true)}
         onPlaying={() => setBuffering(false)}
         onTimeUpdate={handleTimeUpdate}
@@ -447,21 +580,58 @@ export default function VideoPlayer({
         onError={handleVideoError}
       />
 
-      {/* Real-time In-Player Uploading Overlay */}
+      {/* Object Detection Bounding Box Overlay Canvas */}
+      <canvas
+        ref={canvasRef}
+        style={{
+          position: "absolute",
+          top: 0,
+          left: 0,
+          width: "100%",
+          height: "100%",
+          pointerEvents: "none",
+          zIndex: 5,
+        }}
+      />
+
+      {/* Detection Count HUD Badge */}
+      {detectionCount > 0 && (
+        <div
+          style={{
+            position: "absolute",
+            top: "8px",
+            left: "8px",
+            background: "rgba(6, 16, 23, 0.88)",
+            backdropFilter: "blur(8px)",
+            border: "1px solid rgba(56, 189, 248, 0.3)",
+            borderRadius: "6px",
+            padding: "4px 10px",
+            display: "flex",
+            alignItems: "center",
+            gap: "6px",
+            zIndex: 15,
+            fontSize: "11px",
+            fontWeight: 600,
+            color: "#38bdf8",
+            letterSpacing: "0.04em",
+          }}
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="#22d3ee" strokeWidth="2.5">
+            <rect x="1" y="1" width="22" height="22" rx="3" />
+            <circle cx="12" cy="12" r="3" fill="#22d3ee" />
+          </svg>
+          {detectionCount} DETECTION{detectionCount !== 1 ? "S" : ""} · F{frame}
+        </div>
+      )}
+
       {isUploading && (
         <div
           className="video-upload-overlay"
           style={{
-            position: "absolute",
-            inset: 0,
-            background: "rgba(10, 15, 25, 0.88)",
-            backdropFilter: "blur(6px)",
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "center",
-            justifyContent: "center",
-            zIndex: 40,
-            padding: "24px",
+            position: "absolute", inset: 0,
+            background: "rgba(10, 15, 25, 0.88)", backdropFilter: "blur(6px)",
+            display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+            zIndex: 40, padding: "24px",
           }}
         >
           <div style={{ maxWidth: 440, width: "100%", textAlign: "center" }}>
@@ -471,24 +641,11 @@ export default function VideoPlayer({
             <div style={{ fontSize: "12px", color: "rgba(255,255,255,0.7)", marginBottom: "16px" }}>
               {selectedFile?.name || "Video file"} ({(Number(selectedFile?.size || 0) / (1024 * 1024)).toFixed(1)} MB)
             </div>
-            <div
-              style={{
-                width: "100%",
-                height: 8,
-                background: "rgba(255,255,255,0.12)",
-                borderRadius: 4,
-                overflow: "hidden",
-                marginBottom: 10,
-              }}
-            >
-              <div
-                style={{
-                  width: `${Math.round(Number(uploadProgress?.progress ?? uploadProgress ?? 0))}%`,
-                  height: "100%",
-                  background: "linear-gradient(90deg, #38bdf8, #818cf8)",
-                  transition: "width 0.2s ease",
-                }}
-              />
+            <div style={{ width: "100%", height: 8, background: "rgba(255,255,255,0.12)", borderRadius: 4, overflow: "hidden", marginBottom: 10 }}>
+              <div style={{
+                width: `${Math.round(Number(uploadProgress?.progress ?? uploadProgress ?? 0))}%`,
+                height: "100%", background: "linear-gradient(90deg, #38bdf8, #818cf8)", transition: "width 0.2s ease",
+              }} />
             </div>
             <div style={{ display: "flex", justifyContent: "space-between", fontSize: "12px", color: "rgba(255,255,255,0.6)" }}>
               <span>{uploadStatusMsg || "Uploading chunks..."}</span>
@@ -500,26 +657,16 @@ export default function VideoPlayer({
         </div>
       )}
 
-      {/* Buffering overlay */}
       {buffering && !ended && (
         <div className="video-buffering-overlay" aria-live="polite">
-          <div className="buffering-text">
-            ◌ BUFFERING STREAM…
-          </div>
+          <div className="buffering-text">◌ BUFFERING STREAM…</div>
         </div>
       )}
 
-      {/* Ended overlay with Replay button */}
       {ended && (
         <div className="video-ended-overlay">
-          <div className="ended-title">
-            MISSION FOOTAGE COMPLETE
-          </div>
-          <button
-            id="video-replay-btn"
-            className="btn-video-replay"
-            onClick={handleReplay}
-          >
+          <div className="ended-title">MISSION FOOTAGE COMPLETE</div>
+          <button id="video-replay-btn" className="btn-video-replay" onClick={handleReplay}>
             ↺ REPLAY
           </button>
         </div>

@@ -615,10 +615,12 @@ def _run_pycolmap_sfm(
     extraction_options.max_image_size = RECONSTRUCTION_MAX_IMAGE_DIM
     extraction_options.num_threads = colmap_threads
     if hasattr(extraction_options, "sift"):
-        extraction_options.sift.peak_threshold = float(os.getenv("SFM_PEAK_THRESHOLD", "0.005"))
-        extraction_options.sift.max_num_features = int(os.getenv("SFM_MAX_FEATURES", "4096"))
+        extraction_options.sift.peak_threshold = float(os.getenv("SFM_PEAK_THRESHOLD", "0.0033"))
+        extraction_options.sift.max_num_features = int(os.getenv("SFM_MAX_FEATURES", "8192"))
         if hasattr(extraction_options.sift, "first_octave"):
-            extraction_options.sift.first_octave = 0
+            extraction_options.sift.first_octave = -1
+        if hasattr(extraction_options.sift, "edge_threshold"):
+            extraction_options.sift.edge_threshold = 10.0
 
     try:
         pycolmap.extract_features(
@@ -652,30 +654,30 @@ def _run_pycolmap_sfm(
 
     try:
         is_mock_seq = hasattr(pycolmap.match_sequential, "mock_calls") or type(pycolmap.match_sequential).__name__ == "MagicMock"
-        matcher_type = os.getenv("COLMAP_MATCHER", "sequential").strip().lower()
-        overlap_val = int(os.getenv("COLMAP_OVERLAP", "10"))
+        matcher_type = os.getenv("COLMAP_MATCHER", "exhaustive").strip().lower()
+        overlap_val = int(os.getenv("COLMAP_OVERLAP", "15"))
         if is_mock_seq:
             pycolmap.match_sequential(
                 database_path=str(database_path),
                 matching_options=matching_options,
                 device=pycolmap.Device.cpu,
             )
-        elif matcher_type == "exhaustive":
+        elif matcher_type == "sequential":
+            seq_opts = pycolmap.SequentialPairingOptions()
+            seq_opts.overlap = overlap_val
+            seq_opts.loop_detection = total_input_frames >= 20
+            pycolmap.match_sequential(
+                database_path=str(database_path),
+                matching_options=matching_options,
+                pairing_options=seq_opts,
+                device=pycolmap.Device.cpu,
+            )
+        else:
             ex_pairing = pycolmap.ExhaustivePairingOptions()
             pycolmap.match_exhaustive(
                 database_path=str(database_path),
                 matching_options=matching_options,
                 pairing_options=ex_pairing,
-                device=pycolmap.Device.cpu,
-            )
-        else:
-            seq_opts = pycolmap.SequentialPairingOptions()
-            seq_opts.overlap = overlap_val
-            seq_opts.loop_detection = False
-            pycolmap.match_sequential(
-                database_path=str(database_path),
-                matching_options=matching_options,
-                pairing_options=seq_opts,
                 device=pycolmap.Device.cpu,
             )
     except Exception as exc:
@@ -1180,8 +1182,8 @@ def _project_camera_textures_to_mesh(
         assigned = np.zeros(n_verts, dtype=bool)
         best_weights = np.zeros(n_verts, dtype=np.float64) - 1.0
 
-        step = max(1, len(cam_data) // 20)
-        selected_cams = cam_data[::step][:20]
+        step = max(1, len(cam_data) // 30)
+        selected_cams = cam_data[::step][:30]
 
         for c in selected_cams:
             img_bgr = cv2.imread(str(c["path"]))
@@ -1322,10 +1324,10 @@ def camera_poisson_trimmed(
         )
         pcd.orient_normals_towards_camera_location(camera_location=cam_mean)
 
-        # 4. Poisson surface reconstruction with linear fit (depth 10-11 for high detail urban/terrain structure)
-        poisson_depth = 11 if len(pts) >= 4000 else (10 if len(pts) >= 1200 else 9)
+        # 4. Poisson surface reconstruction with linear fit (depth 10-12 for high detail urban/terrain structure)
+        poisson_depth = 12 if len(pts) >= 6000 else (11 if len(pts) >= 2000 else (10 if len(pts) >= 800 else 9))
         mesh_raw, densities = o3d.geometry.TriangleMesh.create_from_point_cloud_poisson(
-            pcd, depth=poisson_depth, linear_fit=True
+            pcd, depth=poisson_depth, linear_fit=True, width=0
         )
         d = np.asarray(densities)
 
@@ -1339,7 +1341,7 @@ def camera_poisson_trimmed(
             _, idx, d2 = kdtree.search_knn_vector_3d(v, 1)
             keep_dist.append(np.sqrt(d2[0]) <= max_dist)
         keep_dist = np.array(keep_dist)
-        density_thresh = np.percentile(d, 15) if len(d) > 0 else 0.0
+        density_thresh = np.percentile(d, 8) if len(d) > 0 else 0.0
         keep_mask = keep_dist & (d > density_thresh)
 
         mesh_clean = o3d.geometry.TriangleMesh(mesh_raw)
@@ -1361,10 +1363,15 @@ def camera_poisson_trimmed(
         # Apply subtle Laplacian smoothing to regularize surface without eroding architectural edges
         try:
             if len(mesh_clean.vertices) > 20:
-                mesh_clean = mesh_clean.filter_smooth_laplacian(number_of_iterations=2)
+                mesh_clean = mesh_clean.filter_smooth_laplacian(number_of_iterations=3, lambda_filter=0.5)
                 mesh_clean.compute_vertex_normals()
         except Exception:
-            pass
+            try:
+                if len(mesh_clean.vertices) > 20:
+                    mesh_clean = mesh_clean.filter_smooth_laplacian(number_of_iterations=3)
+                    mesh_clean.compute_vertex_normals()
+            except Exception:
+                pass
 
         # 7. Transfer photogrammetric colors and apply multi-view camera frame projection
         v_final = np.asarray(mesh_clean.vertices)
