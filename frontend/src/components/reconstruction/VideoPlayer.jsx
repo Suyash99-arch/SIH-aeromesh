@@ -132,9 +132,16 @@ export default function VideoPlayer({
       // Attempt chunked upload with progress tracking
       let result;
       try {
-        result = await uploadVideoChunk(mission.id, file, (pct) => {
-          setUploadProgress(pct);
-          setUploadStatusMsg(`Uploading: ${pct}%`);
+        result = await uploadVideoChunk(mission.id, file, (info) => {
+          const num = typeof info === "object" ? Number(info.progress ?? 0) : Number(info ?? 0);
+          setUploadProgress(num);
+          const chunkStr = typeof info === "object" && info.chunkIndex && info.totalChunks
+            ? `chunk ${info.chunkIndex}/${info.totalChunks} `
+            : "";
+          const speedStr = typeof info === "object" && info.speedMBps
+            ? ` @ ${info.speedMBps} MB/s`
+            : "";
+          setUploadStatusMsg(`Uploading ${chunkStr}(${num}%${speedStr})`);
         });
       } catch (chunkErr) {
         console.warn("[VideoPlayer] Chunked upload failed, falling back to direct upload:", chunkErr);
@@ -311,12 +318,12 @@ export default function VideoPlayer({
                       <div className="upload-progress-bar">
                         <div
                           className="upload-progress-fill"
-                          style={{ width: `${uploadProgress}%` }}
+                          style={{ width: `${Math.round(Number(uploadProgress?.progress ?? uploadProgress ?? 0))}%` }}
                         />
                       </div>
                       <div className="upload-progress-text">
-                        <span>{uploadStatusMsg}</span>
-                        <span>{uploadProgress}%</span>
+                        <span>{String(uploadStatusMsg || "")}</span>
+                        <span>{Math.round(Number(uploadProgress?.progress ?? uploadProgress ?? 0))}%</span>
                       </div>
                     </div>
                   ) : (

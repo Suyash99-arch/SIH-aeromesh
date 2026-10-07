@@ -614,10 +614,10 @@ def _run_pycolmap_sfm(
     extraction_options.max_image_size = RECONSTRUCTION_MAX_IMAGE_DIM
     extraction_options.num_threads = max(1, os.cpu_count() or 4)
     if hasattr(extraction_options, "sift"):
-        extraction_options.sift.peak_threshold = float(os.getenv("SFM_PEAK_THRESHOLD", "0.002"))
-        extraction_options.sift.max_num_features = int(os.getenv("SFM_MAX_FEATURES", "8192"))
+        extraction_options.sift.peak_threshold = float(os.getenv("SFM_PEAK_THRESHOLD", "0.005"))
+        extraction_options.sift.max_num_features = int(os.getenv("SFM_MAX_FEATURES", "4096"))
         if hasattr(extraction_options.sift, "first_octave"):
-            extraction_options.sift.first_octave = -1
+            extraction_options.sift.first_octave = 0
 
     try:
         pycolmap.extract_features(
@@ -648,13 +648,11 @@ def _run_pycolmap_sfm(
 
     matching_options = pycolmap.FeatureMatchingOptions()
     matching_options.num_threads = max(1, os.cpu_count() or 4)
-    if hasattr(matching_options, "guided_matching"):
-        matching_options.guided_matching = True
 
     try:
         is_mock_seq = hasattr(pycolmap.match_sequential, "mock_calls") or type(pycolmap.match_sequential).__name__ == "MagicMock"
         matcher_type = os.getenv("COLMAP_MATCHER", "sequential").strip().lower()
-        overlap_val = int(os.getenv("COLMAP_OVERLAP", "15"))
+        overlap_val = int(os.getenv("COLMAP_OVERLAP", "10"))
         if is_mock_seq:
             pycolmap.match_sequential(
                 database_path=str(database_path),

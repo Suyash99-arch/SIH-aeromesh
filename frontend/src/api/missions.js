@@ -176,12 +176,22 @@ function normalizeMission(rawMission = {}) {
     };
   }
 
+  let normalizedProgress = 0;
+  if (typeof rawMission.progress === "number") {
+    normalizedProgress = rawMission.progress;
+  } else if (typeof rawMission.progress === "object" && rawMission.progress !== null) {
+    normalizedProgress = typeof rawMission.progress.progress === "number" ? rawMission.progress.progress : 0;
+  } else if (typeof rawMission.progress === "string") {
+    normalizedProgress = parseFloat(rawMission.progress) || 0;
+  }
+
   const mission = {
     ...baseDefaults,
     ...rawMission,
     id: mId,
     frames,
     duration,
+    progress: normalizedProgress,
     video: {
       ...(rawMission.video || {}),
       url: resolveAssetUrl(videoUrl),
