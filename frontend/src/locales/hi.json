@@ -670,7 +670,9 @@
     "statSamplePoints": "नमूना विरल बिंदु",
     "statNeuralDetections": "न्यूरल पहचान",
     "statDetector": "बहु-वर्ग डिटेक्टर",
-    "statEngine": "हार्डवेयर इंजन"
+    "statEngine": "हार्डवेयर इंजन",
+    "lightPipeline": "हल्का पुनर्निर्माण मोड",
+    "heavyPipeline": "पूर्ण पुनर्निर्माण मोड"
   },
   "fallback": {
     "notAvailable": "डेटा उपलब्ध नहीं",

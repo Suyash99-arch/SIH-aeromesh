@@ -173,7 +173,9 @@ export default function VideoPlayer({
       try {
         await getMission(mission.id, true);
         window.dispatchEvent(new CustomEvent("aeromesh:mission_updated", { detail: { id: mission.id } }));
-      } catch (_) {}
+      } catch (refreshError) {
+        console.debug("Mission refresh after video upload was unavailable:", refreshError);
+      }
 
       setTimeout(() => {
         setIsUploading(false);

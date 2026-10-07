@@ -1168,6 +1168,7 @@ export default function HomePage({ onNavigateDashboard, onStartMission, currentU
   const [systemHealth, setSystemHealth] = useState({
     online: true,
     status: "All Systems Operational",
+    mode: "heavy",
   });
   const timerRef = useRef(null);
   const workflowRef = useRef(null);
@@ -1217,6 +1218,7 @@ export default function HomePage({ onNavigateDashboard, onStartMission, currentU
           online: data.status === "healthy" || data.ok === true || data.backend === "ready",
           status:
             data.status === "healthy" || data.ok === true ? "All Systems Operational" : "Degraded",
+          mode: data.pipeline_mode === "light" ? "light" : "heavy",
         });
       })
       .catch(() => {
@@ -1224,6 +1226,7 @@ export default function HomePage({ onNavigateDashboard, onStartMission, currentU
           setSystemHealth({
             online: false,
             status: "Offline Mode (Local Fallback)",
+            mode: "light",
           });
       });
 
@@ -1480,7 +1483,9 @@ export default function HomePage({ onNavigateDashboard, onStartMission, currentU
                 >
                   {systemHealth.online ? "ONLINE" : "OFFLINE"}
                 </span>
-                <span className="hero-stat-label">{t("hero.statEngine")}</span>
+                <span className="hero-stat-label">
+                  {systemHealth.mode === "light" ? t("hero.lightPipeline") : t("hero.heavyPipeline")}
+                </span>
               </div>
             </div>
           </div>

@@ -556,6 +556,7 @@ export function MissionsPage({ mission, setMission, navigate, notice, onCreateMi
   const [statusFilter, setStatusFilter] = useState("all");
   const [sortBy, setSortBy] = useState("newest");
   const [missionsList, setMissionsList] = useState([]);
+  const [storageUsage, setStorageUsage] = useState(null);
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState(null);
 
@@ -564,6 +565,12 @@ export function MissionsPage({ mission, setMission, navigate, notice, onCreateMi
       setLoading(true);
       const backendItems = await listMissions();
       setMissionsList(backendItems || []);
+      try {
+        const response = await fetch("/api/v1/storage");
+        if (response.ok) setStorageUsage(await response.json());
+      } catch (storageError) {
+        console.warn("[MissionsPage] Storage usage is unavailable:", storageError);
+      }
     } catch (err) {
       console.warn("[MissionsPage] Failed to fetch missions list:", err);
     } finally {
@@ -639,7 +646,12 @@ export function MissionsPage({ mission, setMission, navigate, notice, onCreateMi
           </div>
           <div>
             <div style={{ fontSize: "11px", color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em" }}>{t("dashboard.storageUsed")}</div>
-            <div style={{ fontSize: "18px", fontWeight: 700, color: "#f8fafc" }}>{totalStorageMB} MB</div>
+            <div style={{ fontSize: "18px", fontWeight: 700, color: "#f8fafc" }}>
+              {storageUsage ? `${storageUsage.used_mb} / ${storageUsage.budget_mb} MB` : `${totalStorageMB} MB`}
+            </div>
+            {storageUsage && <div role="progressbar" aria-label="Storage budget usage" aria-valuenow={storageUsage.used_mb} aria-valuemin={0} aria-valuemax={storageUsage.budget_mb} style={{ width: 150, height: 4, marginTop: 7, borderRadius: 4, background: "rgba(148,163,184,.25)" }}>
+              <div style={{ height: "100%", width: `${Math.min(100, storageUsage.used_mb / storageUsage.budget_mb * 100)}%`, borderRadius: 4, background: storageUsage.within_budget ? "#38bdf8" : "#fb7185" }} />
+            </div>}
           </div>
         </Panel>
 

@@ -670,7 +670,9 @@
     "statSamplePoints": "Sample Sparse Points",
     "statNeuralDetections": "Neural Detections",
     "statDetector": "Multi-Class Detector",
-    "statEngine": "Hardware Engine"
+    "statEngine": "Hardware Engine",
+    "lightPipeline": "Light reconstruction mode",
+    "heavyPipeline": "Full reconstruction mode"
   },
   "fallback": {
     "notAvailable": "Data unavailable",
