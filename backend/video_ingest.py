@@ -247,8 +247,9 @@ def create_browser_proxy(
         "-i", str(input_path),
         "-c:v", "libx264",
         "-pix_fmt", "yuv420p",
-        "-preset", "fast",
-        "-crf", "23",
+        "-preset", "veryfast",
+        "-threads", str(max(1, min((os.cpu_count() or 4) - 1, 4))),
+        "-crf", "24",
         "-vf", vf,
         "-g", str(gop),                 # keyframe interval
         "-keyint_min", str(gop),

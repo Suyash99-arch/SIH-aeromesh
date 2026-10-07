@@ -3273,6 +3273,8 @@ async def get_mission_video(mission_id: str, request: Request):
     return get_artifact_status_response(mission, "video")
 
 
+_pending_proxy_generation: set[str] = set()
+
 @app.get("/api/v1/missions/{mission_id}/video/proxy")
 @app.head("/api/v1/missions/{mission_id}/video/proxy")
 @app.get("/api/missions/{mission_id}/video/proxy")
@@ -3284,7 +3286,7 @@ async def get_mission_video_proxy(mission_id: str, request: Request):
     works immediately without downloading the entire file.
 
     Proxy creation is lazy: the first request triggers ffmpeg in a background thread.
-    Subsequent requests hit the cached file.  Falls back to the original if proxy
+    Subsequent requests hit the cached file. Falls back to the original if proxy
     creation fails or ffmpeg is unavailable.
     """
     if any(sep in mission_id for sep in ("..", "/", "\\")):
@@ -3369,19 +3371,26 @@ async def get_mission_video_proxy(mission_id: str, request: Request):
     if proxy_path.exists() and proxy_path.stat().st_size > 10_000:
         return ranged_file_response(proxy_path, request, content_type="video/mp4")
 
-    # Try to create the proxy synchronously (blocking on first request)
-    try:
-        from backend.video_ingest import get_or_create_browser_proxy
-        result = await asyncio.get_event_loop().run_in_executor(
-            None,
-            lambda: get_or_create_browser_proxy(original_path, mission_dir, max_width=1280),
-        )
-        if result and result.is_file() and result.stat().st_size > 10_000:
-            return ranged_file_response(result, request, content_type="video/mp4")
-    except Exception as exc:
-        logger.warning("Proxy creation failed for mission %s, falling back to original: %s", mission_id, exc)
+    # If proxy is not ready yet, trigger generation asynchronously in background
+    # and IMMEDIATELY stream the original video so the browser video player starts with 0 delay.
+    if mission_id not in _pending_proxy_generation:
+        _pending_proxy_generation.add(mission_id)
 
-    # Fallback: serve original (may have moov-at-end limitation)
+        async def _run_bg_proxy(mid: str, orig: Path, mdir: Path):
+            try:
+                from backend.video_ingest import get_or_create_browser_proxy
+                await asyncio.get_event_loop().run_in_executor(
+                    None,
+                    lambda: get_or_create_browser_proxy(orig, mdir, max_width=1280),
+                )
+            except Exception as exc:
+                logger.warning("Background proxy creation failed for mission %s: %s", mid, exc)
+            finally:
+                _pending_proxy_generation.discard(mid)
+
+        asyncio.create_task(_run_bg_proxy(mission_id, original_path, mission_dir))
+
+    # Fast immediate response: serve original (supported by ranged_file_response partial content)
     return ranged_file_response(original_path, request, content_type="video/mp4")
 
 
