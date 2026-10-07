@@ -51,14 +51,21 @@ export default function VideoPlayer({
   const [buffering, setBuffering] = useState(false);
   const [ended, setEnded] = useState(false);
   const [duration, setDuration] = useState(0);
+  const [retryCount, setRetryCount] = useState(0);
 
   // Compute active candidate URL based on attempt index
   const activeCandidateUrl = useMemo(() => {
-    if (customOverrideUrl) return customOverrideUrl;
-    if (attemptIndex === 0) return proxyUrl || directUrl;
-    if (attemptIndex === 1) return directUrl;
-    return "";
-  }, [customOverrideUrl, attemptIndex, proxyUrl, directUrl]);
+    let base = "";
+    if (customOverrideUrl) base = customOverrideUrl;
+    else if (attemptIndex === 0) base = proxyUrl || directUrl;
+    else if (attemptIndex === 1) base = directUrl;
+    if (!base) return "";
+    if (retryCount > 0) {
+      const sep = base.includes("?") ? "&" : "?";
+      return `${base}${sep}_r=${retryCount}`;
+    }
+    return base;
+  }, [customOverrideUrl, attemptIndex, proxyUrl, directUrl, retryCount]);
 
   const videoSrc = useMemo(() => {
     return activeCandidateUrl ? resolveAssetUrl(activeCandidateUrl) : "";
@@ -67,6 +74,7 @@ export default function VideoPlayer({
   // Reset states on mission change
   useEffect(() => {
     setAttemptIndex(0);
+    setRetryCount(0);
     setCustomOverrideUrl(null);
     setFailed(false);
     setErrorMessage("");
@@ -363,6 +371,7 @@ export default function VideoPlayer({
                   setFailed(false);
                   setErrorMessage("");
                   setLoading(true);
+                  setRetryCount((prev) => prev + 1);
                 }}
               >
                 <Icon name="RefreshCw" size={13} />
