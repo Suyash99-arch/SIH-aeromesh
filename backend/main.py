@@ -2941,6 +2941,15 @@ def ranged_file_response(file_path: Path, request: Request, content_type: str = 
     """
     stat_res = file_path.stat()
     file_size = stat_res.st_size
+
+    if request.method == "HEAD":
+        headers = {
+            "Accept-Ranges": "bytes",
+            "Content-Length": str(file_size),
+            "Content-Disposition": f'inline; filename="{file_path.name}"',
+        }
+        return Response(status_code=200, headers=headers, media_type=content_type)
+
     range_header = request.headers.get("range") or request.headers.get("Range")
 
     if not range_header or not range_header.strip().startswith("bytes="):
@@ -2952,7 +2961,6 @@ def ranged_file_response(file_path: Path, request: Request, content_type: str = 
         headers = {
             "Accept-Ranges": "bytes",
             "Content-Length": str(file_size),
-            "Content-Range": f"bytes 0-{file_size - 1}/{file_size}" if file_size > 0 else "bytes 0-0/0",
             "Content-Disposition": f'inline; filename="{file_path.name}"',
         }
         return StreamingResponse(iter_full(), status_code=200, media_type=content_type, headers=headers)
@@ -3356,7 +3364,24 @@ async def get_mission_video_proxy(mission_id: str, request: Request):
     if not original_path:
         return get_artifact_status_response(mission, "video")
 
-    # Determine mission directory for proxy storage
+    # Look for existing proxy in all potential mission directories
+    proxy_path: Path | None = None
+    for cand_dir in [
+        DATA_DIR / "objects" / "missions" / mission_id,
+        MISSIONS_DIR / mission_id,
+        original_path.parent.parent,
+        original_path.parent,
+    ]:
+        p_cand = cand_dir / "proxy" / "video_proxy.mp4"
+        if p_cand.is_file() and p_cand.stat().st_size > 10_000:
+            proxy_path = p_cand
+            break
+
+    # Serve existing proxy immediately if ready
+    if proxy_path and proxy_path.exists() and proxy_path.stat().st_size > 10_000:
+        return ranged_file_response(proxy_path, request, content_type="video/mp4")
+
+    # Determine target directory where new proxy should be written
     mission_dir: Path | None = None
     for base_dir in [DATA_DIR / "objects" / "missions" / mission_id, MISSIONS_DIR / mission_id]:
         if base_dir.exists():
@@ -3364,12 +3389,6 @@ async def get_mission_video_proxy(mission_id: str, request: Request):
             break
     if not mission_dir:
         mission_dir = original_path.parent.parent  # fallback: put proxy next to original
-
-    proxy_path = mission_dir / "proxy" / "video_proxy.mp4"
-
-    # Serve existing proxy immediately if ready
-    if proxy_path.exists() and proxy_path.stat().st_size > 10_000:
-        return ranged_file_response(proxy_path, request, content_type="video/mp4")
 
     # If proxy is not ready yet, trigger generation asynchronously in background
     # and IMMEDIATELY stream the original video so the browser video player starts with 0 delay.
