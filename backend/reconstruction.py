@@ -610,9 +610,10 @@ def _run_pycolmap_sfm(
     if has_masks and masks_dir.exists():
         reader_options.mask_path = masks_dir
 
+    colmap_threads = max(1, min((os.cpu_count() or 4) - 1, 4))
     extraction_options = pycolmap.FeatureExtractionOptions()
     extraction_options.max_image_size = RECONSTRUCTION_MAX_IMAGE_DIM
-    extraction_options.num_threads = max(1, os.cpu_count() or 4)
+    extraction_options.num_threads = colmap_threads
     if hasattr(extraction_options, "sift"):
         extraction_options.sift.peak_threshold = float(os.getenv("SFM_PEAK_THRESHOLD", "0.005"))
         extraction_options.sift.max_num_features = int(os.getenv("SFM_MAX_FEATURES", "4096"))
@@ -647,7 +648,7 @@ def _run_pycolmap_sfm(
         progress_cb("Matching multi-view feature correspondences", 50)
 
     matching_options = pycolmap.FeatureMatchingOptions()
-    matching_options.num_threads = max(1, os.cpu_count() or 4)
+    matching_options.num_threads = colmap_threads
 
     try:
         is_mock_seq = hasattr(pycolmap.match_sequential, "mock_calls") or type(pycolmap.match_sequential).__name__ == "MagicMock"
@@ -716,7 +717,7 @@ def _run_pycolmap_sfm(
         sparse_dir.mkdir(parents=True, exist_ok=True)
 
         inc_options = pycolmap.IncrementalPipelineOptions()
-        inc_options.num_threads = max(1, os.cpu_count() or 4)
+        inc_options.num_threads = colmap_threads
         inc_options.min_model_size = 2
         inc_options.multiple_models = True
         inc_options.min_num_matches = 10
