@@ -2526,8 +2526,8 @@ async def list_missions(
                 if is_benchmark_mission and not include_benchmarks:
                     continue
 
-                # Strict tenant / user isolation
-                if current_user is not None:
+                # Strict tenant / user isolation (skipped in AUTH_OPTIONAL_MODE / OPERATOR mode)
+                if current_user is not None and not AUTH_OPTIONAL_MODE and current_user.role not in (ROLE_ADMIN, ROLE_OPERATOR):
                     is_superadmin = (current_user.role == ROLE_ADMIN and not current_user.organization_name)
                     if not is_superadmin:
                         if current_user.portal_type == PORTAL_GOV_ORG and current_user.organization_name:
