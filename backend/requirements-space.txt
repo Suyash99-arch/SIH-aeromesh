@@ -16,6 +16,7 @@ pydantic>=2.5.0,<3.0.0
 ultralytics>=8.3.0
 pycolmap>=0.6.0
 SQLAlchemy>=2.0,<3.0
+psycopg[binary]>=3.1,<4.0
 alembic>=1.13,<2.0
 PyJWT>=2.8.0
 passlib[argon2]>=1.7.4
