@@ -1,12 +1,34 @@
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import Icon from "../ui/Icon";
 import { resolveAssetUrl } from "../../api/missions";
 import { useUI } from "../../context/UIContext";
 
+function parseVideoResolution(resolution) {
+  if (typeof resolution === "string") {
+    const match = resolution.trim().match(/^(\d+)\s*[x×]\s*(\d+)$/i);
+    if (match) return [Number(match[1]), Number(match[2])];
+  }
+  if (Array.isArray(resolution) && resolution.length >= 2) {
+    return [Number(resolution[0]), Number(resolution[1])];
+  }
+  if (resolution && typeof resolution === "object") {
+    const width = Number(resolution.width ?? resolution.w);
+    const height = Number(resolution.height ?? resolution.h);
+    if (width > 0 && height > 0) return [width, height];
+  }
+  return [];
+}
+
+function validDimension(value, fallback) {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) && numeric > 0 ? numeric : fallback;
+}
+
 
 function getBoundingBoxStyle(bbox, frameWidth = 1920, frameHeight = 1080) {
   if (!bbox || !Array.isArray(bbox) || bbox.length < 4) return null;
-  const [b0, b1, b2, b3] = bbox;
+  const [b0, b1, b2, b3] = bbox.slice(0, 4).map(Number);
+  if (![b0, b1, b2, b3].every(Number.isFinite)) return null;
   // If normalized 0..1
   if (b0 <= 1 && b1 <= 1 && b2 <= 1 && b3 <= 1) {
     return {
@@ -37,7 +59,7 @@ function getBoundingBoxStyle(bbox, frameWidth = 1920, frameHeight = 1080) {
 }
 
 function getDetColor(cls) {
-  const c = (cls || "").toLowerCase();
+  const c = String(cls || "").toLowerCase();
   if (c.includes("car") || c.includes("vehicle")) return "#38bdf8";
   if (c.includes("van") || c.includes("bus") || c.includes("truck")) return "#a855f7";
   if (c.includes("person") || c.includes("pedestrian") || c.includes("human")) return "#10b981";
@@ -62,26 +84,59 @@ export default function VideoFramesTab({
 }) {
   const { t } = useUI();
   const videoSrc = resolveAssetUrl(
-    mission?.assets?.video || (missionId ? `/api/v1/missions/${missionId}/video` : "")
+    mission?.assets?.video_proxy || mission?.video?.proxy_url ||
+    (missionId ? `/api/v1/missions/${missionId}/video/proxy` : "")
+  );
+  const directVideoSrc = resolveAssetUrl(
+    mission?.assets?.video || mission?.video?.original_url || mission?.video?.url ||
+    (missionId ? `/api/v1/missions/${missionId}/video` : "")
   );
 
   const videoRef = useRef(null);
   const [playbackSpeed, setPlaybackSpeed] = useState(1.0);
   const [filterClass, setFilterClass] = useState("all");
   const [minConfidence, setMinConfidence] = useState(0.25);
+  const [videoSourceIndex, setVideoSourceIndex] = useState(0);
+  const [videoUnavailable, setVideoUnavailable] = useState(false);
 
-  const parsedRes = (mission?.video?.resolution || "").split("x");
-  const resolvedW = selectedKeyframe?.width || (parsedRes.length === 2 ? Number(parsedRes[0]) : null) || mission?.video?.width || 1920;
-  const resolvedH = selectedKeyframe?.height || (parsedRes.length === 2 ? Number(parsedRes[1]) : null) || mission?.video?.height || 1080;
+  const safeKeyframes = Array.isArray(keyframes)
+    ? keyframes.filter((frame) => frame && typeof frame === "object")
+    : [];
+  const parsedRes = parseVideoResolution(mission?.video?.resolution);
+  const resolvedW = validDimension(selectedKeyframe?.width, parsedRes[0]) || validDimension(mission?.video?.width, 1920);
+  const resolvedH = validDimension(selectedKeyframe?.height, parsedRes[1]) || validDimension(mission?.video?.height, 1080);
+  const videoSources = [...new Set([videoSrc, directVideoSrc].filter(Boolean))];
+  const activeVideoSrc = videoSources[Math.min(videoSourceIndex, Math.max(0, videoSources.length - 1))] || "";
 
-  const filteredKeyframes = keyframes.filter((kf) => {
+  useEffect(() => {
+    setVideoSourceIndex(0);
+    setVideoUnavailable(false);
+  }, [missionId, videoSrc, directVideoSrc]);
+
+  const filteredKeyframes = safeKeyframes.filter((kf) => {
     if (filterClass === "all") return true;
     if (filterClass === "with_detections") {
-      return (kf.detections_count || (kf.detections ? kf.detections.length : 0)) > 0;
+      return (Number(kf.detections_count) || (Array.isArray(kf.detections) ? kf.detections.length : 0)) > 0;
     }
-    if (kf.counts_by_class && kf.counts_by_class[filterClass] > 0) return true;
+    if (kf.counts_by_class && typeof kf.counts_by_class === "object" && Number(kf.counts_by_class[filterClass]) > 0) return true;
     return false;
   });
+
+  const selectedDetections = Array.isArray(selectedKeyframe?.detections)
+    ? selectedKeyframe.detections.filter((detection) => detection && typeof detection === "object")
+    : [];
+  const selectedCounts = selectedKeyframe?.counts_by_class && typeof selectedKeyframe.counts_by_class === "object" && !Array.isArray(selectedKeyframe.counts_by_class)
+    ? selectedKeyframe.counts_by_class
+    : {};
+  const frameClasses = [...new Set(safeKeyframes.flatMap((frame) => {
+    const counts = frame.counts_by_class && typeof frame.counts_by_class === "object" && !Array.isArray(frame.counts_by_class)
+      ? Object.keys(frame.counts_by_class)
+      : [];
+    const detections = Array.isArray(frame.detections)
+      ? frame.detections.map((detection) => detection?.class_name || detection?.class).filter(Boolean).map(String)
+      : [];
+    return [...counts, ...detections];
+  }))].sort((a, b) => a.localeCompare(b));
 
   return (
     <div className="video-frames-workspace" id="video-frames-workspace">
@@ -138,12 +193,28 @@ export default function VideoFramesTab({
             <video
               ref={videoRef}
               controls
-              src={videoSrc}
-              poster={keyframes[0]?.url}
+              playsInline
+              preload="metadata"
+              src={activeVideoSrc}
+              poster={resolveAssetUrl(safeKeyframes[0]?.url || "")}
               className="source-video-element"
+              onLoadedMetadata={() => setVideoUnavailable(false)}
+              onError={() => {
+                if (videoSourceIndex + 1 < videoSources.length) {
+                  setVideoSourceIndex((index) => index + 1);
+                } else {
+                  setVideoUnavailable(true);
+                }
+              }}
             >
               Your browser does not support HTML5 video playback.
             </video>
+            {videoUnavailable && (
+              <div className="video-source-alert" role="status">
+                <strong>Video source unavailable</strong>
+                <span>Upload or re-upload a video for this mission, then refresh this view.</span>
+              </div>
+            )}
           </div>
 
           {/* Stepper & Sync Controls */}
@@ -172,14 +243,14 @@ export default function VideoFramesTab({
                   cursor: "pointer",
                 }}
                 onClick={() => {
-                  if (!keyframes || keyframes.length === 0) return;
-                  const currIdx = keyframes.findIndex(
+                  if (safeKeyframes.length === 0) return;
+                  const currIdx = safeKeyframes.findIndex(
                     (k) => k.frame_id === selectedKeyframe?.frame_id,
                   );
-                  const prevIdx = currIdx > 0 ? currIdx - 1 : keyframes.length - 1;
-                  onSelectKeyframe?.(keyframes[prevIdx]);
-                  if (videoRef.current && typeof keyframes[prevIdx].timestamp === "number") {
-                    videoRef.current.currentTime = keyframes[prevIdx].timestamp;
+                  const prevIdx = currIdx > 0 ? currIdx - 1 : safeKeyframes.length - 1;
+                  onSelectKeyframe?.(safeKeyframes[prevIdx]);
+                  if (videoRef.current && typeof safeKeyframes[prevIdx].timestamp === "number") {
+                    videoRef.current.currentTime = safeKeyframes[prevIdx].timestamp;
                   }
                 }}
               >
@@ -198,14 +269,14 @@ export default function VideoFramesTab({
                   cursor: "pointer",
                 }}
                 onClick={() => {
-                  if (!keyframes || keyframes.length === 0) return;
-                  const currIdx = keyframes.findIndex(
+                  if (safeKeyframes.length === 0) return;
+                  const currIdx = safeKeyframes.findIndex(
                     (k) => k.frame_id === selectedKeyframe?.frame_id,
                   );
-                  const nextIdx = currIdx < keyframes.length - 1 ? currIdx + 1 : 0;
-                  onSelectKeyframe?.(keyframes[nextIdx]);
-                  if (videoRef.current && typeof keyframes[nextIdx].timestamp === "number") {
-                    videoRef.current.currentTime = keyframes[nextIdx].timestamp;
+                  const nextIdx = currIdx < safeKeyframes.length - 1 ? currIdx + 1 : 0;
+                  onSelectKeyframe?.(safeKeyframes[nextIdx]);
+                  if (videoRef.current && typeof safeKeyframes[nextIdx].timestamp === "number") {
+                    videoRef.current.currentTime = safeKeyframes[nextIdx].timestamp;
                   }
                 }}
               >
@@ -246,8 +317,22 @@ export default function VideoFramesTab({
               <h3>{t("videoFrames.title")}</h3>
             </div>
             <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+              <label className="frame-filter-label">
+                <span className="sr-only">Filter frames</span>
+                <select
+                  className="frame-filter-select"
+                  value={filterClass}
+                  onChange={(event) => setFilterClass(event.target.value)}
+                >
+                  <option value="all">All frames</option>
+                  <option value="with_detections">With detections</option>
+                  {frameClasses.map((frameClass) => (
+                    <option value={frameClass} key={frameClass}>{frameClass}</option>
+                  ))}
+                </select>
+              </label>
               <span className="gallery-count-pill">
-                {filteredKeyframes.length} / {keyframes.length} Frames
+                {filteredKeyframes.length} / {safeKeyframes.length} Frames
               </span>
             </div>
           </div>
@@ -261,12 +346,12 @@ export default function VideoFramesTab({
             ) : (
               filteredKeyframes.map((kf, idx) => {
                 const isSelected = selectedKeyframe?.frame_id === kf.frame_id;
-                const totalDets =
-                  kf.detections_count || (kf.detections ? kf.detections.length : 0);
+                const totalDets = Number(kf.detections_count) || (Array.isArray(kf.detections) ? kf.detections.length : 0);
 
                 return (
-                  <div
+                  <button
                     key={kf.frame_id || idx}
+                    type="button"
                     className={`gallery-thumb-card ${isSelected ? "selected" : ""}`}
                     onClick={() => {
                       onSelectKeyframe?.(kf);
@@ -277,7 +362,7 @@ export default function VideoFramesTab({
                   >
                     <div className="thumb-image-wrap">
                       <img
-                        src={kf.url}
+                        src={resolveAssetUrl(kf.url || "")}
                         alt={`Frame ${idx + 1}`}
                         loading="lazy"
                         onError={(e) => {
@@ -300,7 +385,7 @@ export default function VideoFramesTab({
                           : `00:${String(idx * 2).padStart(2, "0")}`}
                       </span>
                     </div>
-                  </div>
+                  </button>
                 );
               })
             )}
@@ -328,7 +413,7 @@ export default function VideoFramesTab({
               }}
             >
               <img
-                src={selectedKeyframe.url}
+                src={resolveAssetUrl(selectedKeyframe.url || "")}
                 alt={selectedKeyframe.frame_id}
                 style={{ width: "100%", height: "auto", display: "block" }}
                 onError={(e) => {
@@ -340,13 +425,12 @@ export default function VideoFramesTab({
               />
 
               {/* Real 2D Bounding Box Visual Overlays */}
-              {selectedKeyframe.detections &&
-                selectedKeyframe.detections
+              {selectedDetections
                   .filter((det) => {
                     const conf = det.confidence != null ? (det.confidence > 1 ? det.confidence / 100 : det.confidence) : 1.0;
                     if (conf < minConfidence) return false;
                     if (filterClass !== "all" && filterClass !== "with_detections") {
-                      const cls = (det.class_name || det.class || "").toLowerCase();
+                      const cls = String(det.class_name || det.class || "").toLowerCase();
                       if (!cls.includes(filterClass.toLowerCase())) return false;
                     }
                     return true;
@@ -416,10 +500,7 @@ export default function VideoFramesTab({
               <div className="meta-cell">
                 <span className="meta-cell-label">{t("missionCommand.totalDetections")}</span>
                 <span className="meta-cell-val cyan">
-                  {selectedKeyframe.detections_count ||
-                    (selectedKeyframe.detections
-                      ? selectedKeyframe.detections.length
-                      : 0)}
+                  {Number(selectedKeyframe.detections_count) || selectedDetections.length}
                 </span>
               </div>
             </div>
@@ -445,9 +526,8 @@ export default function VideoFramesTab({
             <div className="detections-by-class-section">
               <h4>{t("missionCommand.byClass")}</h4>
               <div className="class-breakdown-pills">
-                {selectedKeyframe.counts_by_class &&
-                Object.keys(selectedKeyframe.counts_by_class).length > 0 ? (
-                  Object.entries(selectedKeyframe.counts_by_class).map(
+                {Object.keys(selectedCounts).length > 0 ? (
+                  Object.entries(selectedCounts).map(
                     ([cls, count]) => (
                       <div key={cls} className="class-pill">
                         <span className="class-name">{cls}</span>
@@ -464,9 +544,9 @@ export default function VideoFramesTab({
             {/* Individual Bounding Box Detections */}
             <div className="frame-detections-list">
               <h4>{t("videoFrames.title")}</h4>
-              {selectedKeyframe.detections && selectedKeyframe.detections.length > 0 ? (
+              {selectedDetections.length > 0 ? (
                 <div className="detections-scroll">
-                  {selectedKeyframe.detections.map((det, dIdx) => (
+                  {selectedDetections.map((det, dIdx) => (
                     <div key={dIdx} className="detection-row">
                       <div className="det-row-left">
                         <span
