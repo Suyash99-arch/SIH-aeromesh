@@ -24,7 +24,9 @@ services:
       - key: SECRET_KEY
         generateValue: true
       - key: PIPELINE_ENABLED
-        value: "false"
+        value: "true"
+      - key: PIPELINE_MODE
+        value: "light"
       - key: PROFILE
         value: "api"
       - key: PYTHONUNBUFFERED
