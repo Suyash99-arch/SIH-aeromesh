@@ -158,28 +158,24 @@ def run_database_migrations(database_url: str | None = None) -> bool:
     url = database_url or get_database_url()
     if not url:
         return False
+    root_dir = Path(__file__).resolve().parent.parent
+    alembic_cfg_path = root_dir / "alembic.ini"
+    if not alembic_cfg_path.exists():
+        logger.error("Alembic configuration file is missing: %s", alembic_cfg_path)
+        return False
+
     try:
         from alembic import command
         from alembic.config import Config
-        root_dir = Path(__file__).resolve().parent.parent
-        alembic_cfg_path = root_dir / "alembic.ini"
-        if not alembic_cfg_path.exists():
-            alembic_cfg_path = Path(__file__).resolve().parent / "alembic.ini"
-        if alembic_cfg_path.exists():
-            alembic_cfg = Config(str(alembic_cfg_path))
-            alembic_cfg.set_main_option("sqlalchemy.url", url)
-            command.upgrade(alembic_cfg, "head")
-            logger.info("Alembic database migrations applied successfully")
-            return True
+        alembic_cfg = Config(str(alembic_cfg_path))
+        alembic_cfg.set_main_option("sqlalchemy.url", url)
+        logger.info("Starting Alembic upgrade to head (database dialect: %s)", url.split(":", 1)[0])
+        command.upgrade(alembic_cfg, "head")
+        logger.info("Alembic upgrade to head completed successfully")
+        return True
     except Exception as exc:
-        logger.warning("Alembic programmatic migration skipped: %s; creating tables via metadata", exc)
-        try:
-            init_database()
-            return True
-        except Exception as e:
-            logger.error("Failed to initialize database tables: %s", e)
-            return False
-    return False
+        logger.exception("Alembic upgrade to head failed; full traceback follows: %s", exc)
+        return False
 
 
 def check_database(database_engine=None) -> bool:

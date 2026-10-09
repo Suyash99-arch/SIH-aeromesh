@@ -32,7 +32,7 @@ def upgrade() -> None:
             sa.Column("source_evidence", sa.Text(), nullable=True),
             sa.Column("confidence", sa.Float(), server_default="1.0", nullable=False),
             sa.Column("coordinate_system", sa.String(length=50), server_default="LOCAL_ARBITRARY", nullable=False),
-            sa.Column("is_active", sa.Boolean(), server_default=sa.text("1"), nullable=False),
+            sa.Column("is_active", sa.Boolean(), server_default=sa.true(), nullable=False),
             sa.Column("uncertainty", sa.Float(), nullable=True),
             sa.Column("created_at", sa.DateTime(), server_default=sa.func.now(), nullable=False),
         )
@@ -43,7 +43,7 @@ def upgrade() -> None:
             "measurement_status": sa.Column("measurement_status", sa.String(length=50), server_default="RELATIVE"),
             "unit": sa.Column("unit", sa.String(length=50), server_default="relative_units"),
             "scale_status": sa.Column("scale_status", sa.String(length=50), server_default="RELATIVE_SCALE"),
-            "metric_available": sa.Column("metric_available", sa.Boolean(), server_default=sa.text("0")),
+            "metric_available": sa.Column("metric_available", sa.Boolean(), server_default=sa.false()),
             "calibration_id": sa.Column("calibration_id", sa.String(length=80), nullable=True),
             "uncertainty": sa.Column("uncertainty", sa.Float(), nullable=True),
             "source_coordinates": sa.Column("source_coordinates", sa.JSON(), nullable=True),

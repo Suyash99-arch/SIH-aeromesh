@@ -56,7 +56,7 @@ from fastapi.responses import FileResponse, JSONResponse, Response, StreamingRes
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 import uvicorn
-from backend.database import check_database, get_configured_engine, get_database_url, init_database, mask_database_url, session_scope, validate_production_database_url
+from backend.database import check_database, get_configured_engine, get_database_url, mask_database_url, session_scope, validate_production_database_url
 from backend.repository import MissionRepository
 from backend.jobs import JOB_STAGES, create_job, get_job, update_job
 from backend.storage import get_storage, mission_object_key
@@ -200,7 +200,8 @@ configured_engine = get_configured_engine()
 if configured_engine is not None:
     try:
         from backend.database import run_database_migrations
-        run_database_migrations()
+        if not run_database_migrations():
+            raise RuntimeError("Database migrations did not complete successfully.")
         if not check_database(configured_engine):
             raise RuntimeError("Database connection check query failed.")
         logger.info("Database storage and migrations successfully initialized")
@@ -337,12 +338,16 @@ async def production_exception_handler(request: Request, exc: Exception):
         )
 
     request_id = str(uuid.uuid4())
-    logger.error("Unhandled server exception [request_id=%s] on %s %s: %s", request_id, request.method, request.url.path, exc, exc_info=True)
+    logger.exception(
+        "Unhandled server exception [request_id=%s] %s %s",
+        request_id,
+        request.method,
+        request.url.path,
+    )
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={
             "error": "INTERNAL_ERROR",
-            "message": "An unexpected internal server error occurred.",
             "request_id": request_id,
         },
     )
@@ -1354,6 +1359,53 @@ async def health():
         "opencv_status": cv_status,
         "ffmpeg_status": ff_status,
     }
+
+
+@app.get("/api/v1/health/db")
+async def database_schema_health():
+    """Check PostgreSQL connectivity and compare persisted tables/columns to ORM metadata."""
+    from sqlalchemy import inspect, text
+    from backend.models import Base
+
+    request_id = str(uuid.uuid4())
+    database_engine = get_configured_engine()
+    if database_engine is None:
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={"status": "unhealthy", "error": "database_not_configured", "request_id": request_id},
+        )
+
+    try:
+        with database_engine.connect() as connection:
+            connection.execute(text("SELECT 1"))
+            inspector = inspect(connection)
+            existing_tables = set(inspector.get_table_names())
+            required_tables = set(Base.metadata.tables)
+            missing_tables = sorted(required_tables - existing_tables)
+            missing_columns = {}
+            for table_name in sorted(required_tables & existing_tables):
+                existing_columns = {column["name"] for column in inspector.get_columns(table_name)}
+                required_columns = {column.name for column in Base.metadata.tables[table_name].columns}
+                missing = sorted(required_columns - existing_columns)
+                if missing:
+                    missing_columns[table_name] = missing
+    except Exception:
+        logger.exception("Database schema health check failed [request_id=%s]", request_id)
+        return JSONResponse(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            content={"status": "unhealthy", "error": "database_check_failed", "request_id": request_id},
+        )
+
+    is_healthy = not missing_tables and not missing_columns
+    return JSONResponse(
+        status_code=status.HTTP_200_OK if is_healthy else status.HTTP_503_SERVICE_UNAVAILABLE,
+        content={
+            "status": "healthy" if is_healthy else "degraded",
+            "database": "connected",
+            "missing_tables": missing_tables,
+            "missing_columns": missing_columns,
+        },
+    )
 
 
 @app.get("/ready")
