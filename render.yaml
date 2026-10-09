@@ -23,6 +23,8 @@ services:
         value: "production"
       - key: SECRET_KEY
         generateValue: true
+      - key: ALLOWED_ORIGINS
+        value: "https://sih-aeromesh-blond.vercel.app,http://localhost:5173"
       - key: PIPELINE_ENABLED
         value: "true"
       - key: PIPELINE_MODE

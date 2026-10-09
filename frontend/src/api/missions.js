@@ -8,13 +8,9 @@ import { formatApiError } from "../utils/errorUtils.js";
 export { formatApiError };
 
 export function getApiBase() {
-  const isDev = Boolean(
-    typeof import.meta !== "undefined" && import.meta.env?.DEV
-  );
   const envUrl =
     (typeof import.meta !== "undefined" &&
-      (import.meta.env?.VITE_API_BASE_URL || import.meta.env?.VITE_API_URL)) ||
-    (isDev ? "http://127.0.0.1:8000/api/v1" : "/api/v1");
+      import.meta.env?.VITE_API_BASE_URL) || "/api/v1";
   const clean = String(envUrl).replace(/\/+$/, "");
   if (clean.endsWith("/api/v1")) {
     return clean;
@@ -263,6 +259,51 @@ function normalizeMission(rawMission = {}) {
 // Mission state cache and log throttle
 const missionCache = new Map();
 const loggedMissionStates = new Map();
+let missionListCache = { identity: null, data: null };
+let healthySince = 0;
+let lastHealthPayload = null;
+
+function getMissionCacheIdentity() {
+  const user = getStoredUser();
+  return `${user?.id || user?.email || "anonymous"}:${user?.portal_type || ""}`;
+}
+
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+export async function fetchHealthWithRetry(onState = () => {}) {
+  if (Date.now() - healthySince < 30_000) {
+    return lastHealthPayload;
+  }
+
+  const backoffMs = [0, 2_000, 5_000, 10_000, 15_000, 20_000];
+  for (let attempt = 0; attempt < backoffMs.length; attempt += 1) {
+    if (attempt > 0) {
+      onState("waking");
+      await wait(backoffMs[attempt]);
+    }
+    try {
+      const response = await fetch(`${API_BASE}/health`, {
+        headers: getAuthHeaders(),
+        credentials: "include",
+      });
+      if (response.ok) {
+        const health = await response.json();
+        if (health?.status === "healthy" || health?.ok === true || health?.backend === "ready") {
+          healthySince = Date.now();
+          lastHealthPayload = health;
+          return health;
+        }
+      }
+    } catch {
+      // Render free instances may take up to a minute to wake.
+    }
+  }
+  healthySince = 0;
+  lastHealthPayload = null;
+  return null;
+}
 
 const getSeededMission = (missionId) =>
   seededMissions.find((mission) => mission.id === missionId);
@@ -288,13 +329,17 @@ async function parseResponse(response) {
 }
 
 export async function listMissions() {
+  const identity = getMissionCacheIdentity();
   try {
+    const health = await fetchHealthWithRetry();
+    if (!health) return missionListCache.identity === identity ? (missionListCache.data || []) : [];
     const response = await fetch(`${API_BASE}/missions`, {
       headers: getAuthHeaders(),
+      credentials: "include",
     });
     if (!response.ok) {
       console.warn(`[API] listMissions returned HTTP ${response.status}`);
-      return [];
+      return missionListCache.identity === identity ? (missionListCache.data || []) : [];
     }
     const data = await response.json();
     const rawItems = Array.isArray(data)
@@ -310,10 +355,11 @@ export async function listMissions() {
     normalized.forEach((m) => {
       if (m && m.id) missionCache.set(m.id, m);
     });
+    missionListCache = { identity, data: normalized };
     return normalized;
   } catch (error) {
     console.warn("[API] listMissions network error:", error);
-    return [];
+    return missionListCache.identity === identity ? (missionListCache.data || []) : [];
   }
 }
 
@@ -342,7 +388,7 @@ export async function createMission({ name, missionType, location, operator }) {
     console.error("Create mission error:", error);
     if (error instanceof TypeError) {
       throw new Error(
-        "Backend is unavailable. Start the FastAPI server on localhost:8000.",
+        "Backend is unavailable. Please try again shortly.",
         { cause: error },
       );
     }
@@ -448,7 +494,7 @@ export async function getMission(missionId, forceRefresh = true) {
         backendUnavailable: true,
         hasError: true,
         detail:
-          "Backend server is not responding. Start the FastAPI server on localhost:8000.",
+          "Backend server is not responding. Please try again shortly.",
       };
     }
 
@@ -1165,6 +1211,9 @@ export function clearAuthToken() {
   localStorage.removeItem("aeromesh_current_user");
   localStorage.removeItem("aeromesh_active_mission_id");
   missionCache.clear();
+  missionListCache = { identity: null, data: null };
+  healthySince = 0;
+  lastHealthPayload = null;
 }
 
 export function getStoredUser() {
@@ -1177,6 +1226,7 @@ export function getStoredUser() {
 }
 
 export function setStoredUser(user) {
+  missionListCache = { identity: null, data: null };
   if (user) {
     localStorage.setItem("aeromesh_current_user", JSON.stringify(user));
   } else {

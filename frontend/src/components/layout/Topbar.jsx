@@ -1,44 +1,29 @@
 import { useState, useEffect } from "react";
 import AuthModal from "../auth/AuthModal";
-import { API_BASE, getAuthHeaders, getStoredUser, fetchCurrentUser } from "../../api/missions";
+import { fetchHealthWithRetry } from "../../api/missions";
 import UIControlsToolbar from "./UIControlsToolbar";
 import { useUI } from "../../context/UIContext";
 
 /** Poll /api/v1/health every 30s; returns { ok, label } */
 function useHealthStatus(language) {
-  const [health, setHealth] = useState({ ok: null, label: "…" });
+  const [health, setHealth] = useState({ ok: null, label: "WAKING UP SERVER" });
 
   useEffect(() => {
     let cancelled = false;
     const check = async () => {
-      try {
-        const res = await fetch(`${API_BASE}/health`, {
-          method: "GET",
-          headers: getAuthHeaders(),
-        });
-        if (cancelled) return;
-        if (res.ok) {
-          const json = await res.json();
-          const isHealthy = json?.status === "healthy" || json?.ok === true || json?.backend === "ready";
-          const label = language === "hi"
-            ? (isHealthy ? "सिस्टम सक्रिय" : "सिस्टम बाधित")
-            : (isHealthy ? "SYSTEMS OPERATIONAL" : `SYSTEMS ${json?.status?.toUpperCase() || "DEGRADED"}`);
-          setHealth({ ok: isHealthy, label });
-        } else {
-          setHealth({ ok: false, label: language === "hi" ? `बैकएंड त्रुटि ${res.status}` : `BACKEND ${res.status}` });
-        }
-      } catch {
-        if (!cancelled) setHealth({ ok: false, label: language === "hi" ? "बैकएंड अनुपलब्ध" : "BACKEND UNREACHABLE" });
-      }
+      setHealth({ ok: null, label: "WAKING UP SERVER" });
+      const json = await fetchHealthWithRetry((state) => {
+        if (!cancelled && state === "waking") setHealth({ ok: null, label: "WAKING UP SERVER" });
+      });
+      if (!cancelled) setHealth({ ok: Boolean(json), label: json ? "ONLINE" : "OFFLINE" });
     };
     check();
-    const id = setInterval(check, 30_000);
+    const id = setInterval(check, 60_000);
     return () => { cancelled = true; clearInterval(id); };
   }, [language]);
 
   return health;
 }
-
 export default function Topbar({
   title,
   notice,

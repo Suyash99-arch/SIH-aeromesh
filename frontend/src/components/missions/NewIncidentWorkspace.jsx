@@ -418,7 +418,7 @@ export default function NewIncidentWorkspace({ onClose, onMissionCreated, curren
                         {t("newMission.tunnelHelpTitle")}
                       </strong>
                       1. Start worker: <code style={{ color: "#f1f5f9" }}>python -m uvicorn backend.main:app --port 8001</code> with PIPELINE_ENABLED=true<br />
-                      2. Expose tunnel: <code style={{ color: "#f1f5f9" }}>cloudflared tunnel --url http://localhost:8001</code><br />
+                      2. Expose tunnel: <code style={{ color: "#f1f5f9" }}>cloudflared tunnel --url &lt;your-api-host&gt;:8001</code><br />
                       3. Configure API: Set <code style={{ color: "#f1f5f9" }}>WORKER_URL=https://&lt;tunnel-id&gt;.trycloudflare.com</code>
                     </div>
                   )}

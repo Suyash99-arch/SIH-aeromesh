@@ -4,7 +4,7 @@ import Icon from "../components/ui/Icon";
 import HeroCompassReconstruction from "../components/hero/HeroCompassReconstruction";
 import FloatingWord from "../components/hero/FloatingWord";
 import NarrativePipelineSequence from "../components/narrative/NarrativePipelineSequence";
-import { API_BASE, BACKEND_URL, loginGuest } from "../api/missions";
+import { loginGuest, listMissions, fetchHealthWithRetry } from "../api/missions";
 import { useUI } from "../context/UIContext";
 import UIControlsToolbar from "../components/layout/UIControlsToolbar";
 import "../styles/homepage.css";
@@ -1166,8 +1166,9 @@ export default function HomePage({ onNavigateDashboard, onStartMission, currentU
   const [workflowVisible, setWorkflowVisible] = useState(false);
   const [missionsList, setMissionsList] = useState([]);
   const [systemHealth, setSystemHealth] = useState({
-    online: true,
-    status: "All Systems Operational",
+    state: "waking",
+    online: null,
+    status: "Waking up the server…",
     mode: "heavy",
   });
   const timerRef = useRef(null);
@@ -1208,38 +1209,25 @@ export default function HomePage({ onNavigateDashboard, onStartMission, currentU
   useEffect(() => {
     let active = true;
 
-    fetch(`${API_BASE}/health`, {
-      headers: { "ngrok-skip-browser-warning": "true" },
-    })
-      .then((res) => res.json())
-      .then((data) => {
-        if (!active) return;
-        setSystemHealth({
-          online: data.status === "healthy" || data.ok === true || data.backend === "ready",
-          status:
-            data.status === "healthy" || data.ok === true ? "All Systems Operational" : "Degraded",
-          mode: data.pipeline_mode === "light" ? "light" : "heavy",
-        });
-      })
-      .catch(() => {
-        if (active)
-          setSystemHealth({
-            online: false,
-            status: "Offline Mode (Local Fallback)",
-            mode: "light",
-          });
+    fetchHealthWithRetry((state) => {
+      if (active && state === "waking") {
+        setSystemHealth((current) => ({ ...current, state: "waking", online: null, status: "Waking up the server…" }));
+      }
+    }).then(async (data) => {
+      if (!active) return;
+      if (!data) {
+        setSystemHealth((current) => ({ ...current, state: "offline", online: false, status: "Server unavailable" }));
+        return;
+      }
+      setSystemHealth({
+        state: "online",
+        online: true,
+        status: "Online",
+        mode: data.pipeline_mode || data.reconstruction_mode || "light",
       });
-
-    fetch(`${API_BASE}/missions`, {
-      headers: { "ngrok-skip-browser-warning": "true" },
-    })
-      .then((res) => res.json())
-      .then((data) => {
-        if (active && Array.isArray(data)) {
-          setMissionsList(data);
-        }
-      })
-      .catch(() => {});
+      const missions = await listMissions();
+      if (active) setMissionsList(missions);
+    });
 
     return () => {
       active = false;
@@ -1479,15 +1467,20 @@ export default function HomePage({ onNavigateDashboard, onStartMission, currentU
               <div className="hero-stat-item">
                 <span
                   className="hero-stat-val"
-                  style={{ color: systemHealth.online ? "var(--status-active)" : "#f59e0b" }}
+                  style={{ color: systemHealth.state === "online" ? "var(--status-active)" : systemHealth.state === "waking" ? "#f59e0b" : "#ef4444" }}
                 >
-                  {systemHealth.online ? "ONLINE" : "OFFLINE"}
+                  {systemHealth.state === "online" ? "ONLINE" : systemHealth.state === "waking" ? "WAKING" : "OFFLINE"}
                 </span>
                 <span className="hero-stat-label">
                   {systemHealth.mode === "light" ? t("hero.lightPipeline") : t("hero.heavyPipeline")}
                 </span>
               </div>
             </div>
+            {systemHealth.state === "waking" && (
+              <div role="status" aria-live="polite" style={{ marginTop: 12, color: "#fbbf24", fontSize: 13 }}>
+                Waking up the server. This can take up to about a minute.
+              </div>
+            )}
           </div>
 
           {/* Central Hero Visual: Auto-rotating 3D Model in Concentric Compass Rings */}

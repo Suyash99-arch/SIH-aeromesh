@@ -7,14 +7,14 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://closable-ducky-unsuited.ngrok-free.dev/api/:path*"
+      "destination": "https://sih-aeromesh.onrender.com/api/:path*"
     },
     {
       "source": "/health",
-      "destination": "https://closable-ducky-unsuited.ngrok-free.dev/health"
+      "destination": "https://sih-aeromesh.onrender.com/health"
     },
     {
-      "source": "/(.*)",
+      "source": "/((?!api/).*)",
       "destination": "/index.html"
     }
   ]

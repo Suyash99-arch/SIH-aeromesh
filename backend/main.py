@@ -246,7 +246,10 @@ is_prod_cors = (os.getenv("ENVIRONMENT", "").lower() == "production" or
                 os.getenv("APP_ENV", "").lower() == "production" or
                 os.getenv("RENDER", "").lower() in ("true", "1") or
                 bool(os.getenv("SPACE_ID")))
-cors_origins_env = os.getenv("CORS_ALLOWED_ORIGINS", "").strip()
+cors_origins_env = (
+    os.getenv("ALLOWED_ORIGINS", "").strip()
+    or os.getenv("CORS_ALLOWED_ORIGINS", "").strip()
+)
 allowed_origins_list = list(dev_origins)
 if os.getenv("SPACE_HOST"):
     space_orig = f"https://{os.getenv('SPACE_HOST').strip()}"

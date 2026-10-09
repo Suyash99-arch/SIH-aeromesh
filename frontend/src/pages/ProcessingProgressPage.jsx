@@ -283,7 +283,7 @@ export default function ProcessingProgressPage({ mission, navigate }) {
                     How to connect a local worker via Cloudflare Tunnel:
                   </strong>
                   1. Run worker: <code style={{ color: "#f1f5f9" }}>python -m uvicorn backend.main:app --port 8001</code> (with PIPELINE_ENABLED=true)<br />
-                  2. Expose tunnel: <code style={{ color: "#f1f5f9" }}>cloudflared tunnel --url http://localhost:8001</code><br />
+                  2. Expose tunnel: <code style={{ color: "#f1f5f9" }}>cloudflared tunnel --url &lt;your-api-host&gt;:8001</code><br />
                   3. Set env on API: <code style={{ color: "#f1f5f9" }}>WORKER_URL=https://&lt;tunnel-id&gt;.trycloudflare.com</code>
                 </div>
               )}
