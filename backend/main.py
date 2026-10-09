@@ -955,6 +955,8 @@ def is_api_profile() -> bool:
     profile = os.getenv("PROFILE", "").strip().lower()
     if profile in ("worker", "ml", "pipeline"):
         return False
+    if profile in ("api", "gateway"):
+        return True
     return not is_pipeline_enabled()
 
 def get_git_commit() -> str:

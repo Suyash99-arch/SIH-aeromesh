@@ -69,7 +69,7 @@ EXPOSE 7860
 
 # 10. Healthcheck
 HEALTHCHECK --interval=30s --timeout=10s --start-period=20s --retries=3 \
-    CMD curl -f http://localhost:7860/api/v1/health || exit 1
+    CMD curl -f http://localhost:${PORT:-7860}/api/v1/health || exit 1
 
 # 11. Run FastAPI via single-worker uvicorn with dynamic $PORT binding
 CMD ["sh", "-c", "exec uvicorn backend.main:app --host 0.0.0.0 --port ${PORT:-7860} --workers 1"]
