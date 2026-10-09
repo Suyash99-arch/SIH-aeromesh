@@ -56,7 +56,7 @@ from fastapi.responses import FileResponse, JSONResponse, Response, StreamingRes
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
 import uvicorn
-from backend.database import check_database, get_configured_engine, get_database_url, mask_database_url, session_scope, validate_production_database_url
+from backend.database import check_database, get_configured_engine, get_database_url, mask_database_url, session_scope, summarize_database_error, validate_production_database_url
 from backend.repository import MissionRepository
 from backend.jobs import JOB_STAGES, create_job, get_job, update_job
 from backend.storage import get_storage, mission_object_key
@@ -188,6 +188,7 @@ def is_production_mode() -> bool:
     return os.getenv("ENVIRONMENT", "").strip().lower() in ("production", "prod") or os.getenv("ENV", "").strip().lower() in ("production", "prod") or os.getenv("RENDER", "").strip().lower() in ("true", "1")
 
 is_production = is_production_mode()
+database_migration_error_summary: Optional[str] = None
 
 raw_db_url = os.getenv("DATABASE_URL", "").strip()
 if is_production:
@@ -200,21 +201,15 @@ configured_engine = get_configured_engine()
 if configured_engine is not None:
     try:
         from backend.database import run_database_migrations
-        if not run_database_migrations():
-            raise RuntimeError("Database migrations did not complete successfully.")
-        if not check_database(configured_engine):
-            raise RuntimeError("Database connection check query failed.")
-        logger.info("Database storage and migrations successfully initialized")
+        run_database_migrations()
     except Exception as exc:
-        masked_url = mask_database_url(get_database_url())
-        clean_exc = mask_database_url(str(exc))
-        if is_production:
-            logger.critical("PRODUCTION STARTUP HALTED: Database at %s is unreachable (%s)", masked_url, clean_exc)
-            raise RuntimeError(
-                f"PRODUCTION STARTUP HALTED: Database at {masked_url} is unreachable ({clean_exc}). "
-                "Please verify host reachability, credentials, and firewall settings."
-            )
-        logger.warning("Database unavailable; JSON storage fallback remains active: %s", clean_exc)
+        database_migration_error_summary = summarize_database_error(exc, get_database_url())
+        logger.error("Database migration failed; API will continue in degraded mode: %s", database_migration_error_summary)
+    else:
+        if check_database(configured_engine):
+            logger.info("Database storage and migrations successfully initialized")
+        else:
+            logger.error("Database connection check failed after Alembic completed; API will continue with database unavailable")
 else:
     if is_production:
         logger.critical("PRODUCTION STARTUP HALTED: DATABASE_URL is missing. Production requires a PostgreSQL database (e.g. Render Postgres).")
@@ -229,6 +224,25 @@ app = FastAPI(
     description="Single-Pass Drone Video to 3D Reconstruction",
     version="1.0.0",
 )
+
+
+def _degraded_missions_response(request: Request) -> JSONResponse:
+    response = JSONResponse(
+        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+        content={
+            "error": "DATABASE_MIGRATION_FAILED",
+            "message": "Missions are temporarily unavailable while the database schema is being initialized.",
+            "error_summary": database_migration_error_summary,
+        },
+    )
+    # The URL normalization middleware wraps CORS, so preserve CORS headers on
+    # this short-circuit response for the configured frontend origins.
+    origin = request.headers.get("origin", "")
+    if origin in allowed_origins_list or (origin.startswith("https://") and origin.endswith(".vercel.app")):
+        response.headers["Access-Control-Allow-Origin"] = origin
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+        response.headers["Vary"] = "Origin"
+    return response
 
 # 1. CORS Middleware (Dev Origins + Vercel Production + Env Configurable + Localhost Regex)
 dev_origins = [
@@ -281,6 +295,10 @@ app.add_middleware(SecurityHeadersMiddleware)
 @app.middleware("http")
 async def api_url_normalization_middleware(request: Request, call_next):
     path = request.scope.get("path", "")
+    if database_migration_error_summary and request.method == "GET" and path in (
+        "/api/v1/missions", "/api/missions", "/missions"
+    ):
+        return _degraded_missions_response(request)
     is_legacy = False
     if path == "/missions" or path.startswith("/missions/"):
         request.scope["path"] = "/api" + path
@@ -1096,9 +1114,12 @@ async def startup_hardware_detection():
             raise RuntimeError(f"PRODUCTION STARTUP HALTED: {err_msg}")
         engine = get_configured_engine()
         if engine is None or not check_database(engine):
-            masked = mask_database_url(raw_url)
-            logger.critical("PRODUCTION STARTUP HALTED: Active PostgreSQL connection required at %s.", masked)
-            raise RuntimeError(f"PRODUCTION STARTUP HALTED: Active PostgreSQL connection required at {masked}.")
+            if database_migration_error_summary:
+                logger.warning("PostgreSQL is unavailable after a migration failure; continuing in degraded mode")
+            else:
+                masked = mask_database_url(raw_url)
+                logger.critical("PRODUCTION STARTUP HALTED: Active PostgreSQL connection required at %s.", masked)
+                raise RuntimeError(f"PRODUCTION STARTUP HALTED: Active PostgreSQL connection required at {masked}.")
 
     # 2. Environment & Model Weights Verification
     try:
@@ -1289,6 +1310,12 @@ async def estimate_system_eta(
 @app.get("/api/health", deprecated=True)
 @app.get("/api/v1/health")
 async def health():
+    if database_migration_error_summary:
+        return {
+            "database": "migration_failed",
+            "error_summary": database_migration_error_summary,
+        }
+
     database_engine = get_configured_engine()
     database_configured = database_engine is not None
     database_ready = check_database(database_engine) if database_configured else False

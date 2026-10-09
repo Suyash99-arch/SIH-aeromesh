@@ -1,5 +1,6 @@
 import logging
 import os
+import re
 from contextlib import contextmanager
 from pathlib import Path
 from typing import Iterator
@@ -49,6 +50,29 @@ def mask_database_url(url: str | None) -> str:
         return str(url).strip()
     except Exception:
         return "<sanitized-url>"
+
+
+def summarize_database_error(error: BaseException, database_url: str | None = None) -> str:
+    """Return a short diagnostic with URL credentials removed for API responses."""
+    summary = str(error).strip() or type(error).__name__
+    if database_url:
+        normalized = normalize_database_url(database_url)
+        for candidate in (database_url, normalized):
+            if candidate:
+                summary = summary.replace(candidate, mask_database_url(candidate))
+        try:
+            from urllib.parse import urlsplit
+            parsed = urlsplit(database_url)
+            if parsed.password:
+                summary = summary.replace(parsed.password, "***")
+        except Exception:
+            pass
+    summary = re.sub(
+        r"(?i)(postgres(?:ql)?(?:\+\w+)?://[^:/@\s]+:)[^@\s]+(@)",
+        r"\1***\2",
+        summary,
+    )
+    return summary[:500]
 
 
 def validate_production_database_url(url: str | None) -> tuple[bool, str]:
@@ -154,28 +178,63 @@ def init_database(database_engine=None) -> None:
 
 
 def run_database_migrations(database_url: str | None = None) -> bool:
-    """Run Alembic database migrations programmatically at startup."""
+    """Initialize a fresh schema or apply Alembic migrations at startup.
+
+    Failures are logged with their original traceback and re-raised so the API
+    can enter degraded mode while preserving the actual startup diagnostic.
+    """
     url = database_url or get_database_url()
     if not url:
-        return False
+        raise RuntimeError("DATABASE_URL is not configured; Alembic migrations cannot run")
     root_dir = Path(__file__).resolve().parent.parent
     alembic_cfg_path = root_dir / "alembic.ini"
     if not alembic_cfg_path.exists():
-        logger.error("Alembic configuration file is missing: %s", alembic_cfg_path)
-        return False
+        raise FileNotFoundError(f"Alembic configuration file is missing: {alembic_cfg_path}")
 
+    dialect = url.split(":", 1)[0]
+    engine = None
     try:
         from alembic import command
         from alembic.config import Config
+        from sqlalchemy import inspect
+        from .models import Base as ModelBase
+
+        engine = create_database_engine(url)
+        if engine is None:
+            raise RuntimeError("Could not create a database engine for Alembic")
+
         alembic_cfg = Config(str(alembic_cfg_path))
-        alembic_cfg.set_main_option("sqlalchemy.url", url)
-        logger.info("Starting Alembic upgrade to head (database dialect: %s)", url.split(":", 1)[0])
-        command.upgrade(alembic_cfg, "head")
-        logger.info("Alembic upgrade to head completed successfully")
+        # ConfigParser treats '%' as interpolation syntax; doubling it here
+        # preserves percent-encoded URL credentials without exposing them.
+        alembic_cfg.set_main_option("sqlalchemy.url", url.replace("%", "%%"))
+
+        inspector = inspect(engine)
+        existing_tables = set(inspector.get_table_names())
+        application_tables = set(ModelBase.metadata.tables)
+        is_fresh_database = (
+            "alembic_version" not in existing_tables
+            and not (existing_tables & application_tables)
+        )
+
+        if is_fresh_database:
+            logger.info("No Alembic version or application tables found; creating fresh schema (dialect: %s)", dialect)
+            with engine.begin() as connection:
+                if dialect.startswith("postgresql") and os.getenv("AEROMESH_POSTGIS", "1").strip().lower() not in ("0", "false", "off", "no"):
+                    connection.execute(text("CREATE EXTENSION IF NOT EXISTS postgis"))
+                ModelBase.metadata.create_all(connection)
+            command.stamp(alembic_cfg, "head")
+            logger.info("Fresh schema created and stamped at Alembic head")
+        else:
+            logger.info("Starting Alembic upgrade to head (database dialect: %s)", dialect)
+            command.upgrade(alembic_cfg, "head")
+            logger.info("Alembic upgrade to head completed successfully")
         return True
-    except Exception as exc:
-        logger.exception("Alembic upgrade to head failed; full traceback follows: %s", exc)
-        return False
+    except Exception:
+        logger.exception("Alembic schema initialization/upgrade failed (dialect: %s); original traceback follows", dialect)
+        raise
+    finally:
+        if engine is not None:
+            engine.dispose()
 
 
 def check_database(database_engine=None) -> bool:

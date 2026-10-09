@@ -31,7 +31,7 @@ target_metadata = Base.metadata
 
 
 def run_migrations_offline():
-    url = get_database_url()
+    url = config.get_main_option("sqlalchemy.url") or get_database_url()
     if not url:
         raise RuntimeError("DATABASE_URL must be configured for migrations")
     context.configure(url=url, target_metadata=target_metadata, literal_binds=True, dialect_opts={"paramstyle": "named"}, version_num_length=128)
@@ -40,7 +40,7 @@ def run_migrations_offline():
 
 
 def run_migrations_online():
-    url = get_database_url()
+    url = config.get_main_option("sqlalchemy.url") or get_database_url()
     if not url:
         raise RuntimeError("DATABASE_URL must be configured for migrations")
     configuration = config.get_section(config.config_ini_section, {})
