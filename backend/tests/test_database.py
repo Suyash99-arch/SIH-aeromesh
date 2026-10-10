@@ -1,7 +1,9 @@
 from datetime import datetime
+from contextlib import contextmanager
+import json
 
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, insert
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.schema import CreateTable
 from sqlalchemy.orm import Session
@@ -74,6 +76,55 @@ def test_mission_api_uses_database_when_configured(tmp_path, monkeypatch):
     assert any(item["id"] == mission_id for item in listed.json()["missions"])
 
 
+def test_mission_creation_db_failure_is_sanitized_and_never_falls_back_to_json(tmp_path, monkeypatch):
+    monkeypatch.setattr(main, "get_configured_engine", lambda: object())
+    monkeypatch.setattr(main, "MISSIONS_DIR", tmp_path)
+
+    @contextmanager
+    def failing_session_scope(_engine):
+        yield object()
+
+    class FailingMissionRepository:
+        def __init__(self, _session):
+            pass
+
+        def get(self, _mission_id):
+            return None
+
+        def create(self, _data):
+            raise ValueError("sensitive SQL and database details")
+
+    monkeypatch.setattr(main, "session_scope", failing_session_scope)
+    monkeypatch.setattr(main, "MissionRepository", FailingMissionRepository)
+    client = TestClient(main.app, raise_server_exceptions=False)
+
+    response = client.post("/api/v1/missions", params={"name": "DB failure test"})
+    body = response.json()
+
+    assert response.status_code == 500
+    assert set(body) == {"error", "request_id", "stage", "error_type"}
+    assert body["error"] == "INTERNAL_ERROR"
+    assert body["request_id"]
+    assert body["stage"] == "db_create"
+    assert body["error_type"] == "ValueError"
+    assert "sensitive" not in response.text
+    assert list(tmp_path.glob("*.json")) == []
+
+
+def test_mission_creation_uses_json_fallback_when_database_is_unconfigured(tmp_path, monkeypatch):
+    monkeypatch.setattr(main, "get_configured_engine", lambda: None)
+    monkeypatch.setattr(main, "MISSIONS_DIR", tmp_path)
+    client = TestClient(main.app)
+
+    response = client.post("/api/v1/missions", params={"name": "Local JSON mission"})
+
+    assert response.status_code == 200
+    mission_id = response.json()["mission"]["id"]
+    mission_path = tmp_path / f"{mission_id}.json"
+    assert mission_path.is_file()
+    assert json.loads(mission_path.read_text(encoding="utf-8"))["name"] == "Local JSON mission"
+
+
 def test_required_relationships_are_persisted():
     engine = create_engine("sqlite:///:memory:")
     init_database(engine)
@@ -112,6 +163,21 @@ def test_geometry_columns_are_postgis_compatible():
 
     assert "geometry(POINT,4326)" in sql
     assert "reference_location" in sql
+
+
+def test_postgres_geometry_insert_binds_nullable_wkt_as_geometry():
+    statement = insert(Mission).values(
+        id="geometry-bind-test",
+        name="Geometry bind",
+        reference_location=None,
+        payload={},
+    )
+    postgres_sql = str(statement.compile(dialect=postgresql.dialect()))
+    sqlite_sql = str(statement.compile(dialect=create_engine("sqlite://").dialect))
+
+    assert "ST_GeomFromText(CAST(" in postgres_sql
+    assert ", 4326)" in postgres_sql
+    assert "ST_GeomFromText" not in sqlite_sql
 
 
 def test_database_url_normalization_all_three_schemes():

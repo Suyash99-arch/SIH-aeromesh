@@ -6,6 +6,7 @@ dotenv.config({ path: path.resolve(process.cwd(), ".env.e2e"), quiet: true });
 
 export default defineConfig({
   testDir: "./e2e",
+  testMatch: "**/*.spec.js",
   reporter: [["list"], ["html", { outputFolder: "test-results/live-report", open: "never" }]],
   outputDir: "test-results/live",
   timeout: 120_000,

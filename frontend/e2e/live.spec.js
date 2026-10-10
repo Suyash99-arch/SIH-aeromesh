@@ -2,6 +2,7 @@ import { test, expect } from "@playwright/test";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
+import { formatTelemetryRequestUrl } from "./telemetry.js";
 
 const frontendUrl = process.env.E2E_FRONTEND_URL || "https://sih-aeromesh-blond.vercel.app";
 const backendUrl = "https://sih-aeromesh.onrender.com/api/v1";
@@ -11,7 +12,7 @@ const individualPassword = process.env.E2E_INDIVIDUAL_PASSWORD;
 const govEmail = process.env.E2E_GOV_EMAIL;
 const govPassword = process.env.E2E_GOV_PASSWORD;
 
-const telemetry = { consoleErrors: [], pageErrors: [], failedRequests: [], httpErrors: [], chunkHttpErrors: [], completedUploads: [] };
+const telemetry = { consoleErrors: [], pageErrors: [], failedRequests: [], httpErrors: [], chunkHttpErrors: [], uploadFailures: [], completedUploads: [] };
 const missionIds = new Set();
 const healthPollers = new Set();
 let accountCreated = false;
@@ -33,6 +34,10 @@ function scrub(value) {
   return result.replace(/([?&](?:token|access_token|authorization|key)=)[^&\s]*/gi, "$1[redacted]");
 }
 
+function safeRequestUrl(value) {
+  return formatTelemetryRequestUrl(value, [individualEmail, individualPassword, govEmail, govPassword, process.env.E2E_GOV_INVITE_CODE]);
+}
+
 function attachTelemetry(page) {
   page.on("console", (message) => {
     if (message.type() === "error") telemetry.consoleErrors.push(scrub(message.text()));
@@ -40,12 +45,21 @@ function attachTelemetry(page) {
   page.on("pageerror", (error) => telemetry.pageErrors.push(scrub(error.message)));
   page.on("requestfailed", (request) => {
     const url = new URL(request.url());
-    telemetry.failedRequests.push(`${request.method()} ${url.origin}${url.pathname}: ${scrub(request.failure()?.errorText)}`);
+    telemetry.failedRequests.push(`${request.method()} ${safeRequestUrl(request.url())}: ${scrub(request.failure()?.errorText)}`);
     if (telemetry.offlineWindow && url.pathname.endsWith("/upload/chunk")) {
       telemetry.offlineChunkFailures = (telemetry.offlineChunkFailures || 0) + 1;
     }
     const chunkMatch = url.pathname.match(/\/missions\/([^/]+)\/upload\/chunk$/);
     if (chunkMatch) {
+      telemetry.uploadFailures.push({
+        method: request.method(),
+        url: safeRequestUrl(request.url()),
+        status: null,
+        error: scrub(request.failure()?.errorText || "REQUEST_FAILED"),
+        request_id: null,
+        stage: null,
+        error_type: null,
+      });
       telemetry.chunkRequestFailures ??= [];
       telemetry.chunkRequestFailures.push({
         missionId: chunkMatch[1],
@@ -67,8 +81,17 @@ function attachTelemetry(page) {
       };
       telemetry.chunkHttpErrors.push(failedChunk);
       response.json().then((body) => {
-        failedChunk.requestId = body?.request_id || null;
-        failedChunk.error = body?.error || body?.detail || null;
+        const sanitized = {
+          method: response.request().method(),
+          url: safeRequestUrl(response.url()),
+          status: response.status(),
+          error: scrub(body?.error || body?.detail || "HTTP_ERROR"),
+          request_id: scrub(body?.request_id || "") || null,
+          stage: ["assemble", "validate", "probe", "thumbnails", "storage_save", "db_update"].includes(body?.stage) ? body.stage : null,
+          error_type: /^[A-Za-z][A-Za-z0-9_]{0,99}$/.test(body?.error_type || "") ? body.error_type : null,
+        };
+        Object.assign(failedChunk, sanitized);
+        telemetry.uploadFailures.push(sanitized);
       }).catch(() => {});
     }
     if (chunkMatch && response.status() === 200 && response.request().method() === "POST") {
@@ -307,6 +330,8 @@ async function captureChunkServerError(page, filePath) {
     status: response.status(),
     requestId: body.request_id || null,
     error: body.error || null,
+    stage: ["assemble", "validate", "probe", "thumbnails", "storage_save", "db_update"].includes(body?.stage) ? body.stage : null,
+    errorType: /^[A-Za-z][A-Za-z0-9_]{0,99}$/.test(body?.error_type || "") ? body.error_type : null,
   };
 }
 

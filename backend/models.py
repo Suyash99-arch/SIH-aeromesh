@@ -1,8 +1,9 @@
 from datetime import datetime
 from typing import Any
 
-from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, JSON, String, Text
+from sqlalchemy import Boolean, DateTime, Float, ForeignKey, Integer, JSON, String, Text, cast
 from sqlalchemy.ext.compiler import compiles
+from sqlalchemy.sql.functions import FunctionElement
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from sqlalchemy.types import TypeDecorator
 
@@ -23,12 +24,38 @@ class PortableGeometry(TypeDecorator):
     def copy(self, **kw: Any):
         return type(self)(self.geometry_type, self.srid, **kw)
 
+    def bind_expression(self, bindvalue):
+        # PostGIS columns require geometry-typed expressions. The Text impl
+        # keeps SQLite portable, but otherwise psycopg binds even None as
+        # VARCHAR, which PostgreSQL rejects for a geometry column.
+        return _WktToGeometry(bindvalue, self.srid)
+
+
+class _WktToGeometry(FunctionElement):
+    type = Text()
+    inherit_cache = True
+
+    def __init__(self, value, srid):
+        super().__init__(value)
+        self.srid = srid
+
 @compiles(PortableGeometry, "postgresql")
 def compile_postgis_geometry(element, compiler, **kwargs):
     import os
     if os.getenv("AEROMESH_POSTGIS", "1").strip().lower() in ("0", "false", "off", "no"):
         return "TEXT"
     return f"geometry({element.geometry_type},{element.srid})"
+
+
+@compiles(_WktToGeometry, "postgresql")
+def compile_wkt_to_postgis(element, compiler, **kwargs):
+    value = next(iter(element.clauses))
+    return f"ST_GeomFromText({compiler.process(cast(value, Text()), **kwargs)}, {element.srid})"
+
+
+@compiles(_WktToGeometry)
+def compile_wkt_for_non_postgis(element, compiler, **kwargs):
+    return compiler.process(next(iter(element.clauses)), **kwargs)
 
 
 class User(Base):

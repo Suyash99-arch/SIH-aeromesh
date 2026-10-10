@@ -505,8 +505,8 @@ async def production_exception_handler(request: Request, exc: Exception):
         content={
             "error": "INTERNAL_ERROR",
             "request_id": request_id,
-            **({"stage": request.state.finalize_stage} if getattr(request.state, "finalize_stage", None) else {}),
-            "error_type": type(exc).__name__,
+            **({"stage": getattr(exc, "api_stage", None) or getattr(request.state, "finalize_stage", None)} if (getattr(exc, "api_stage", None) or getattr(request.state, "finalize_stage", None)) else {}),
+            "error_type": getattr(exc, "api_error_type", type(exc).__name__),
         },
     )
 
@@ -807,7 +807,7 @@ class MissionData:
                     except Exception as exc:
                         time.sleep(0.005)
     
-    def save(self):
+    def save(self, *, failure_stage: str = "db_update"):
         database_engine = get_configured_engine()
         if database_engine is not None:
             try:
@@ -818,7 +818,7 @@ class MissionData:
                     else:
                         repository.update(self.mission_id, self.data)
             except Exception as exc:
-                logger.warning("Database write unavailable; using JSON fallback: %s", exc)
+                raise MissionDatabaseWriteError(failure_stage, exc) from exc
         try:
             MISSIONS_DIR.mkdir(parents=True, exist_ok=True)
             mission_file = MISSIONS_DIR / f"{self.mission_id}.json"
@@ -836,12 +836,21 @@ class MissionData:
         except Exception as exc:
             logger.warning("Failed writing mission JSON to disk: %s", exc)
     
-    def update(self, updates: dict):
+    def update(self, updates: dict, *, failure_stage: str = "db_update"):
         self.data.update(updates)
-        self.save()
+        self.save(failure_stage=failure_stage)
     
     def get(self, key: str, default=None):
         return self.data.get(key, default)
+
+
+class MissionDatabaseWriteError(RuntimeError):
+    """Sanitized API metadata for mission persistence failures."""
+
+    def __init__(self, stage: str, cause: Exception):
+        self.api_stage = stage
+        self.api_error_type = type(cause).__name__
+        super().__init__(f"Mission database write failed at {stage}")
 
 # ============================================================
 # HEALTH & STATUS
@@ -2552,7 +2561,7 @@ async def create_mission(
         "measurements": None,
         "findings": [],
         "metadata": {}
-    })
+    }, failure_stage="db_create")
     
     # Invalidate cached missions list
     _missions_list_cache["timestamp"] = 0.0
