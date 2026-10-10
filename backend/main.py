@@ -15,7 +15,10 @@ import importlib.util
 import secrets
 import base64
 import asyncio
-import psutil
+try:
+    import psutil
+except ImportError:  # pragma: no cover - exercised in clean environments without psutil
+    psutil = None
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
@@ -1029,12 +1032,21 @@ def is_lightweight_profile() -> bool:
 
 
 def log_process_memory(event: str) -> None:
-    try:
-        rss_mb = psutil.Process(os.getpid()).memory_info().rss / (1024 * 1024)
-    except (OSError, psutil.Error) as exc:
-        logger.warning("Unable to read process RSS for %s: %s", event, exc)
-        return
-    logger.info("Process memory event=%s rss_mb=%.1f", event, rss_mb)
+    if psutil is not None:
+        try:
+            rss_mb = psutil.Process(os.getpid()).memory_info().rss / (1024 * 1024)
+        except psutil.Error as exc:
+            logger.warning("Unable to read process RSS for %s: %s", event, exc)
+            return
+    else:
+        try:
+            with Path("/proc/self/status").open(encoding="ascii") as status_file:
+                rss_line = next(line for line in status_file if line.startswith("VmRSS:"))
+            rss_mb = int(rss_line.split()[1]) / 1024
+        except (OSError, ValueError, IndexError, StopIteration):
+            logger.warning("Process memory event=%s rss_mb=unavailable", event)
+            return
+    logger.warning("Process memory event=%s rss_mb=%.1f", event, rss_mb)
 
 
 def _local_storage_usage_bytes() -> int:

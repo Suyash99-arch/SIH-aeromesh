@@ -162,6 +162,16 @@ def test_api_profile_cannot_be_overridden_to_heavy(monkeypatch):
     assert main.is_lightweight_profile() is True
 
 
+def test_memory_logging_works_without_psutil(monkeypatch):
+    logged_messages = []
+    monkeypatch.setattr(main, "psutil", None)
+    monkeypatch.setattr(main.logger, "warning", lambda message, *args: logged_messages.append(message % args))
+
+    main.log_process_memory("test_without_psutil")
+
+    assert any("Process memory event=test_without_psutil rss_mb=" in message for message in logged_messages)
+
+
 def test_vercel_upload_preflight_allows_upload_headers():
     client = TestClient(main.app)
     origin = "https://sih-aeromesh-blond.vercel.app"
