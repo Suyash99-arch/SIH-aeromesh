@@ -5,6 +5,7 @@
 
 import { missions as seededMissions } from "../data/missions";
 import { formatApiError } from "../utils/errorUtils.js";
+import { joinApiUrl } from "./url.js";
 export { formatApiError };
 
 export function getApiBase() {
@@ -89,19 +90,7 @@ const fallbackMission = {
 };
 
 export function resolveAssetUrl(url) {
-  if (!url || typeof url !== "string") return "";
-  if (
-    url.startsWith("http://") ||
-    url.startsWith("https://") ||
-    url.startsWith("blob:") ||
-    url.startsWith("data:")
-  ) {
-    return url;
-  }
-  if (url.startsWith("/")) {
-    return `${BACKEND_URL}${url}`;
-  }
-  return `${BACKEND_URL}/${url}`;
+  return joinApiUrl(BACKEND_URL, url);
 }
 
 export async function fetchArtifactsStatus(missionId) {
@@ -534,7 +523,7 @@ export async function uploadVideo(missionId, file) {
     formData.append("file", file);
 
     const uploadBase = getUploadBase();
-    const response = await fetch(`${uploadBase}/missions/${missionId}/upload`, {
+    const response = await fetch(joinApiUrl(uploadBase, `/missions/${missionId}/upload`), {
       method: "POST",
       headers: getAuthHeaders(),
       body: formData,
@@ -574,7 +563,7 @@ export async function uploadVideoChunk(missionId, file, onProgress, signal, opti
   const uploadBase = getUploadBase();
   const startTime = Date.now();
   const receivedResponse = await fetch(
-    `${uploadBase}/missions/${missionId}/upload-status?upload_id=${encodeURIComponent(uploadId)}&total_chunks=${totalChunks}`,
+    joinApiUrl(uploadBase, `/missions/${missionId}/upload-status?upload_id=${encodeURIComponent(uploadId)}&total_chunks=${totalChunks}`),
     { headers: getAuthHeaders(), signal },
   );
   const uploadState = await receivedResponse.json();
@@ -602,7 +591,7 @@ export async function uploadVideoChunk(missionId, file, onProgress, signal, opti
   };
 
   const waitForBackendHealth = async () => {
-    const healthUrl = `${uploadBase}/health`;
+    const healthUrl = joinApiUrl(uploadBase, "/health");
     for (let attempt = 0; attempt < 60; attempt++) {
       if (signal?.aborted) throw new Error("Upload cancelled by user");
       try {
@@ -633,7 +622,7 @@ export async function uploadVideoChunk(missionId, file, onProgress, signal, opti
     const formData = new FormData();
     formData.append("chunk", chunkBlob, file.name);
 
-    const url = `${uploadBase}/missions/${missionId}/upload/chunk?chunk_index=${i}&total_chunks=${totalChunks}&upload_id=${uploadId}&filename=${encodeURIComponent(file.name)}`;
+    const url = joinApiUrl(uploadBase, `/missions/${missionId}/upload/chunk?chunk_index=${i}&total_chunks=${totalChunks}&upload_id=${uploadId}&filename=${encodeURIComponent(file.name)}`);
     let data;
     for (let retry = 0; retry <= 6; retry++) {
       try {

@@ -8,6 +8,7 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
+    "test:url": "node --test src/api/url.test.js",
     "test:e2e": "playwright test",
     "preview": "vite preview"
   },

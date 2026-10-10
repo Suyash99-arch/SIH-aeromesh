@@ -6,6 +6,7 @@ Handles mission management, video processing, and 3D reconstruction
 import io
 import json
 import logging
+import math
 import os
 import re
 import shutil
@@ -14,7 +15,6 @@ import time
 import uuid
 import importlib.util
 import secrets
-import base64
 import asyncio
 try:
     import psutil
@@ -457,10 +457,21 @@ async def http_exception_handler(request: Request, exc: HTTPException):
     request_id = getattr(request.state, "request_id", None) or str(uuid.uuid4())
     if exc.status_code >= 500:
         logger.exception(
-            "HTTP server error request_id=%s method=%s path=%s status=%s detail=%s",
-            request_id, request.method, request.url.path, exc.status_code, exc.detail,
+            "HTTP server error request_id=%s method=%s path=%s status=%s",
+            request_id, request.method, request.url.path, exc.status_code,
             exc_info=(type(exc), exc, exc.__traceback__),
         )
+        if exc.status_code == 500:
+            return JSONResponse(
+                status_code=exc.status_code,
+                content={
+                    "error": "INTERNAL_ERROR",
+                    "request_id": request_id,
+                    **({"stage": request.state.finalize_stage} if getattr(request.state, "finalize_stage", None) else {}),
+                    "error_type": type(exc).__name__,
+                },
+                headers=getattr(exc, "headers", None) or {},
+            )
     return JSONResponse(
         status_code=exc.status_code,
         content={
@@ -473,7 +484,7 @@ async def http_exception_handler(request: Request, exc: HTTPException):
 
 @app.exception_handler(Exception)
 async def production_exception_handler(request: Request, exc: Exception):
-    """Sanitized production error response that preserves diagnostics in logs without leaking stack traces."""
+    """Return sanitized errors while retaining credential-redacted tracebacks in logs."""
     if isinstance(exc, (HTTPException, StarletteHTTPException)):
         return JSONResponse(
             status_code=exc.status_code,
@@ -482,17 +493,20 @@ async def production_exception_handler(request: Request, exc: Exception):
         )
 
     request_id = getattr(request.state, "request_id", None) or str(uuid.uuid4())
-    logger.exception(
+    logger.error(
         "Unhandled server exception request_id=%s method=%s path=%s",
         request_id,
         request.method,
         request.url.path,
+        exc_info=(type(exc), exc, exc.__traceback__),
     )
     return JSONResponse(
         status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
         content={
             "error": "INTERNAL_ERROR",
             "request_id": request_id,
+            **({"stage": request.state.finalize_stage} if getattr(request.state, "finalize_stage", None) else {}),
+            "error_type": type(exc).__name__,
         },
     )
 
@@ -505,23 +519,51 @@ async def attach_request_id(request: Request, call_next):
     return response
 
 
-def _log_finalize_exception(request: Request, stage: str) -> None:
+def _log_finalize_exception(request: Request, stage: str, exc: BaseException) -> None:
     request_id = getattr(request.state, "request_id", None) or str(uuid.uuid4())
-    logger.exception(
+    logger.error(
         "Chunk finalize failed stage=%s request_id=%s method=%s path=%s",
         stage,
         request_id,
         request.method,
         request.url.path,
+        exc_info=(type(exc), exc, exc.__traceback__),
     )
 
 
 def _run_finalize_stage(request: Request, stage: str, operation, *args, **kwargs):
+    request.state.finalize_stage = stage
     try:
-        return operation(*args, **kwargs)
-    except Exception:
-        _log_finalize_exception(request, stage)
+        result = operation(*args, **kwargs)
+    except Exception as exc:
+        _log_finalize_exception(request, stage, exc)
         raise
+    else:
+        request.state.finalize_stage = None
+        return result
+
+
+def _validate_upload_for_finalize(request: Request, filename: str, signature: bytes, size_bytes: int):
+    try:
+        return _run_finalize_stage(
+            request, "validate", validate_uploaded_file, filename, signature,
+            max_size_bytes=MAX_UPLOAD_SIZE_BYTES, size_bytes=size_bytes,
+        )
+    except Exception:
+        if not is_lightweight_profile():
+            raise
+        request.state.finalize_stage = None
+        # Keep the security checks that do not depend on the full validator.
+        # This path is only used if the validator itself raises; ordinary
+        # invalid files still receive its normal friendly validation response.
+        logger.warning("Lightweight upload validator raised; applying conservative signature validation")
+        safe_name = Path(filename).name == filename and ".." not in filename and "/" not in filename and "\\" not in filename
+        allowed_type = Path(filename).suffix.lower() in {".mp4", ".mov", ".avi"}
+        valid_size = 0 < size_bytes <= MAX_UPLOAD_SIZE_BYTES
+        has_video_signature = any(marker in signature[:64] for marker in (b"ftyp", b"moov", b"mdat", b"RIFF", b"AVI "))
+        if safe_name and allowed_type and valid_size and has_video_signature:
+            return True, None
+        return False, "Video validation could not confirm a supported video file."
 
 app.mount("/media", StaticFiles(directory=str(DATA_DIR)), name="mission-media")
 
@@ -2963,6 +3005,24 @@ async def list_missions(
 # VIDEO UPLOAD
 # ============================================================
 
+def _json_safe(value: Any) -> Any:
+    """Normalize upload metadata to strict JSON values accepted by PostgreSQL."""
+    if isinstance(value, np.generic):
+        return _json_safe(value.item())
+    if isinstance(value, np.ndarray):
+        return _json_safe(value.tolist())
+    if isinstance(value, float) and not math.isfinite(value):
+        return None
+    if isinstance(value, dict):
+        return {str(key): _json_safe(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(item) for item in value]
+    if isinstance(value, datetime):
+        return value.isoformat()
+    if isinstance(value, Path):
+        return str(value)
+    return value
+
 def _record_uploaded_video(
     mission_id: str,
     video_info: Dict[str, Any],
@@ -2971,26 +3031,79 @@ def _record_uploaded_video(
 ) -> None:
     def update_records():
         mission = MissionData(mission_id)
+        safe_video_info = _json_safe(video_info)
+        # Validate the exact payload before either JSON-backed mission storage
+        # or PostgreSQL JSON columns see it (PostgreSQL rejects NaN/Infinity).
+        json.dumps(safe_video_info, allow_nan=False)
         mission.update({
             "status": "video_uploaded",
-            "video": video_info,
+            "video": safe_video_info,
             "video_path": str(MISSIONS_DIR / mission_id / "video.mp4"),
-            "initial_eta": video_info.get("initial_eta"),
+            "initial_eta": safe_video_info.get("initial_eta"),
             "reconstructability": recon_check,
-            "processing_profile": video_info.get("processing_profile"),
-            "storage_persistence": video_info.get("storage_persistence"),
+            "processing_profile": safe_video_info.get("processing_profile"),
+            "storage_persistence": safe_video_info.get("storage_persistence"),
             "metadata": {**dict(mission.data.get("metadata") or {}), "reconstructability": recon_check},
         })
 
         database_engine = get_configured_engine()
         if database_engine is not None and check_database(database_engine):
             with session_scope(database_engine) as session:
-                MissionRepository(session).record_video(mission_id, video_info)
+                MissionRepository(session).record_video(mission_id, safe_video_info)
 
     if request is not None:
         _run_finalize_stage(request, "db_update", update_records)
     else:
         update_records()
+
+
+def _return_video_without_preview(video_path: Path, safe_name: str, mission_id: str, request: Request, storage_metadata: Any, reason: str) -> Dict[str, Any]:
+    mission_dir = MISSIONS_DIR / mission_id
+    mission_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        shutil.copy2(video_path, mission_dir / "video.mp4")
+    except OSError:
+        logger.warning("Could not create local preview copy for mission %s; original remains in object storage", mission_id)
+
+    recon_check = {
+        "status": "DISABLED",
+        "available": False,
+        "reason": "Heavy reconstruction requires the full compute profile",
+    }
+    video_info = {
+        "filename": safe_name,
+        "url": f"{str(request.base_url).rstrip('/')}/api/storage/{storage_metadata.key}",
+        "storage_key": storage_metadata.key,
+        "content_type": getattr(storage_metadata, "content_type", "video/mp4"),
+        "size_bytes": getattr(storage_metadata, "size", video_path.stat().st_size),
+        "sha256": getattr(storage_metadata, "checksum", ""),
+        "size_mb": round(video_path.stat().st_size / (1024 * 1024), 2),
+        "fps": None,
+        "total_frames": None,
+        "duration_seconds": None,
+        "resolution": None,
+        "codec": "unknown",
+        "normalized": False,
+        "transcode_reason": None,
+        "thumbnails": [],
+        "thumbnail_previews": [],
+        "preview_available": False,
+        "preview_unavailable_reason": reason,
+        "initial_eta": None,
+        "reconstructability": recon_check,
+        "processing_profile": "light",
+        "storage_persistence": (
+            "durable"
+            if os.getenv("STORAGE_BACKEND", "").strip().lower() == "s3" or os.getenv("S3_BUCKET")
+            else "ephemeral"
+        ),
+        "processing_message": (
+            f"Upload complete. Video preview unavailable: {reason} "
+            "Full 3D reconstruction and detection require the full compute profile."
+        ),
+    }
+    _record_uploaded_video(mission_id, video_info, recon_check, request)
+    return _json_safe(video_info)
 
 
 def _process_and_validate_video_file(video_path: Path, safe_name: str, mission_id: str, request: Request, storage_metadata: Any) -> Dict[str, Any]:
@@ -3002,59 +3115,25 @@ def _process_and_validate_video_file(video_path: Path, safe_name: str, mission_i
     cv2_available = video_ingest.cv2 is not None
 
     if lightweight and (not ffprobe_available or not cv2_available):
-        mission_dir = MISSIONS_DIR / mission_id
-        mission_dir.mkdir(parents=True, exist_ok=True)
-        try:
-            shutil.copy2(video_path, mission_dir / "video.mp4")
-        except OSError:
-            logger.warning("Could not create local preview copy for mission %s; original remains in object storage", mission_id)
-
-        recon_check = {
-            "status": "DISABLED",
-            "available": False,
-            "reason": "Heavy reconstruction requires the full compute profile",
-        }
-        video_info = {
-            "filename": safe_name,
-            "url": f"{str(request.base_url).rstrip('/')}/api/storage/{storage_metadata.key}",
-            "storage_key": storage_metadata.key,
-            "content_type": getattr(storage_metadata, "content_type", "video/mp4"),
-            "size_bytes": getattr(storage_metadata, "size", video_path.stat().st_size),
-            "sha256": getattr(storage_metadata, "checksum", ""),
-            "size_mb": round(video_path.stat().st_size / (1024 * 1024), 2),
-            "fps": None,
-            "total_frames": None,
-            "duration_seconds": None,
-            "resolution": None,
-            "codec": "unknown",
-            "normalized": False,
-            "transcode_reason": None,
-            "thumbnails": [],
-            "thumbnail_previews": [],
-            "preview_available": False,
-            "preview_unavailable_reason": "Video preview unavailable because ffprobe or OpenCV is not installed in this lightweight runtime.",
-            "initial_eta": None,
-            "reconstructability": recon_check,
-            "processing_profile": "light",
-            "storage_persistence": (
-                "durable"
-                if os.getenv("STORAGE_BACKEND", "").strip().lower() == "s3" or os.getenv("S3_BUCKET")
-                else "ephemeral"
-            ),
-            "processing_message": (
-                "Upload complete. Video preview unavailable because ffprobe or OpenCV is unavailable; "
-                "full 3D reconstruction and detection require the full compute profile."
-            ),
-        }
-        _record_uploaded_video(mission_id, video_info, recon_check, request)
-        return video_info
+        return _return_video_without_preview(
+            video_path, safe_name, mission_id, request, storage_metadata,
+            "ffprobe or OpenCV is unavailable in this lightweight runtime.",
+        )
 
     def probe_video():
         probe = video_ingest.probe_video(video_path)
         decodable, decode_error = video_ingest.check_cv2_decodable(video_path)
         return probe, decodable, decode_error
 
-    probe_info, cv2_ok, cv2_err = _run_finalize_stage(request, "probe", probe_video)
+    try:
+        probe_info, cv2_ok, cv2_err = _run_finalize_stage(request, "probe", probe_video)
+    except Exception:
+        if not lightweight:
+            raise
+        return _return_video_without_preview(
+            video_path, safe_name, mission_id, request, storage_metadata,
+            "video probing failed in this lightweight runtime.",
+        )
 
     duration_hint = probe_info.get("duration_seconds") or probe_info.get("duration")
     if duration_hint is not None and float(duration_hint) > MAX_VIDEO_DURATION_SECONDS:
@@ -3124,6 +3203,7 @@ def _process_and_validate_video_file(video_path: Path, safe_name: str, mission_i
     thumb_dir.mkdir(parents=True, exist_ok=True)
     thumb_urls = []
     thumb_previews = []
+    thumbnails_unavailable = False
     step_indices = [int(i * (total_frames - 1) / 5) for i in range(6)] if total_frames >= 6 else list(range(total_frames))
 
     def make_thumbnails():
@@ -3138,12 +3218,20 @@ def _process_and_validate_video_file(video_path: Path, safe_name: str, mission_i
                     t_name = f"thumb_{idx_step:04d}.jpg"
                     cv2.imwrite(str(thumb_dir / t_name), t_resized, [cv2.IMWRITE_JPEG_QUALITY, 80])
                     thumb_urls.append(f"/api/v1/missions/{mission_id}/thumbnails/{t_name}")
-                    _, enc = cv2.imencode(".jpg", t_resized, [cv2.IMWRITE_JPEG_QUALITY, 70])
-                    thumb_previews.append(f"data:image/jpeg;base64,{base64.b64encode(enc).decode('ascii')}")
+                    # Store thumbnails as files and reference their small URLs;
+                    # base64 image payloads should not be duplicated in JSON/DB.
         finally:
             cap.release()
 
-    _run_finalize_stage(request, "thumbnails", make_thumbnails)
+    try:
+        _run_finalize_stage(request, "thumbnails", make_thumbnails)
+    except Exception:
+        if not lightweight:
+            raise
+        thumb_urls.clear()
+        thumb_previews.clear()
+        thumbnails_unavailable = True
+        logger.warning("Lightweight upload thumbnail generation failed; continuing without previews")
 
     # Copy active video to mission directory video.mp4
     try:
@@ -3189,7 +3277,8 @@ def _process_and_validate_video_file(video_path: Path, safe_name: str, mission_i
         "normalized": needs_transcode,
         "transcode_reason": transcode_reason if needs_transcode else None,
         "thumbnails": thumb_urls,
-        "thumbnail_previews": thumb_previews,
+        "thumbnail_previews": [],
+        "thumbnail_preview_available": bool(thumb_urls) and not thumbnails_unavailable,
         "initial_eta": initial_eta,
         "reconstructability": recon_check,
         "processing_profile": "light" if lightweight else "heavy",
@@ -3200,11 +3289,13 @@ def _process_and_validate_video_file(video_path: Path, safe_name: str, mission_i
         ),
         "processing_message": (
             "Upload complete - heavy reconstruction requires the full compute profile"
+            + (" Video thumbnails are unavailable in this runtime." if thumbnails_unavailable else "")
             if lightweight
             else "Upload complete - full compute profile is available"
         ),
     }
 
+    video_info = _json_safe(video_info)
     _record_uploaded_video(mission_id, video_info, recon_check, request)
 
     return video_info
@@ -3468,14 +3559,8 @@ async def upload_video_chunk(
             )
             with assembled_path.open("rb") as assembled_file:
                 signature = assembled_file.read(64)
-            valid, error_reason = _run_finalize_stage(
-                request,
-                "validate",
-                validate_uploaded_file,
-                safe_name,
-                signature,
-                max_size_bytes=MAX_UPLOAD_SIZE_BYTES,
-                size_bytes=current_size,
+            valid, error_reason = _validate_upload_for_finalize(
+                request, safe_name, signature, current_size
             )
             if not valid:
                 raise HTTPException(status_code=400, detail=error_reason)

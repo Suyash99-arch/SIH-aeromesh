@@ -91,13 +91,24 @@ class MissionRepository:
         return payload
 
     def record_video(self, mission_id: str, metadata: dict[str, Any]) -> None:
-        self.session.add(Video(
-            mission_id=mission_id,
-            filename=metadata.get("filename", "video"),
-            storage_path=metadata.get("storage_key"),
-            sha256=metadata.get("sha256"),
-            metadata_json=metadata,
-        ))
+        # Chunk-finalize may be retried after the file was saved but before the
+        # completion marker was written. Update the mission's video row when it
+        # already exists so retrying is safe, including on schemas that enforce
+        # one video per mission.
+        video = self.session.scalars(
+            select(Video).where(Video.mission_id == mission_id).order_by(Video.id)
+        ).first()
+        values = {
+            "filename": metadata.get("filename", "video"),
+            "storage_path": metadata.get("storage_key"),
+            "sha256": metadata.get("sha256"),
+            "metadata_json": metadata,
+        }
+        if video is None:
+            self.session.add(Video(mission_id=mission_id, **values))
+        else:
+            for field, value in values.items():
+                setattr(video, field, value)
         self.session.flush()
 
     def replace_detection_results(self, mission_id: str, detections: list[dict[str, Any]], tracks: list[dict[str, Any]]) -> None:
