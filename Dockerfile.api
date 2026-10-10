@@ -45,8 +45,9 @@ COPY --from=builder /install /usr/local
 RUN pip uninstall -y opencv-python opencv-contrib-python || true && \
     pip install --no-cache-dir --force-reinstall --no-deps opencv-python-headless==4.11.0.86
 
-# Build-time verification: build fails immediately if conflict exists
-RUN python -c "import importlib.metadata as m; names={d.metadata['Name'].lower() for d in m.distributions()}; assert not ({'opencv-python','opencv-contrib-python'} & names), f'Conflicting OpenCV packages installed: {names & {\"opencv-python\",\"opencv-contrib-python\"}}'"
+# Build-time verification: verify the exact runtime tools and imports used by
+# upload finalization without adding model or GPU packages to the image.
+RUN python -c "import importlib.metadata as m, shutil, cv2, numpy, PIL; names={d.metadata['Name'].lower() for d in m.distributions()}; assert 'opencv-python-headless' in names; assert not ({'opencv-python','opencv-contrib-python','opencv-contrib-python-headless'} & names); assert cv2.__version__ and numpy.__version__ and PIL.__version__; assert shutil.which('ffmpeg') and shutil.which('ffprobe'), 'ffmpeg/ffprobe missing from runtime image'"
 
 # Create non-root user and group
 RUN groupadd -g 1001 aeromesh && \

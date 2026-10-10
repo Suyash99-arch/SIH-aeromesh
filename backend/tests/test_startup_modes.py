@@ -36,7 +36,7 @@ def test_mode_local_all_in_one(monkeypatch):
     health_resp = client.get("/api/v1/health")
     assert health_resp.status_code == 200
     data = health_resp.json()
-    assert data["db"] in ("json_fallback", "sqlite")
+    assert data["db"] in ("json_fallback", "sqlite_configured")
     assert data["pipeline_enabled"] is True
 
 

@@ -5,11 +5,14 @@ import os
 import threading
 import time
 from pathlib import Path
+from types import SimpleNamespace
 
 import psutil
 from fastapi.testclient import TestClient
+from starlette.requests import Request
 
 from backend import main
+from backend import video_ingest
 
 
 def test_large_chunk_upload_is_resumable_and_disk_streamed(tmp_path, monkeypatch):
@@ -152,6 +155,83 @@ def test_health_and_upload_config_are_lightweight():
     assert config.json()["max_upload_size_bytes"] == main.MAX_UPLOAD_SIZE_BYTES
     assert config.json()["chunk_size_bytes"] == 2 * 1024 * 1024
     assert engine.status_code == 200
+
+
+def test_lightweight_upload_succeeds_without_preview_dependencies(tmp_path, monkeypatch):
+    monkeypatch.setattr(main, "is_lightweight_profile", lambda: True)
+    monkeypatch.setattr(video_ingest, "cv2", None)
+    monkeypatch.setattr(main.shutil, "which", lambda name: None if name == "ffprobe" else "/usr/bin/ffmpeg")
+
+    client = TestClient(main.app)
+    mission_response = client.post("/api/v1/missions?name=Preview_Unavailable_Test")
+    assert mission_response.status_code == 200
+    mission_id = mission_response.json()["mission"]["id"]
+    video_path = tmp_path / "stored-original.mp4"
+    video_path.write_bytes(b"stored original video")
+    request = Request({
+        "type": "http",
+        "method": "POST",
+        "scheme": "http",
+        "path": "/api/v1/missions/upload/chunk",
+        "headers": [],
+        "server": ("testserver", 80),
+        "client": ("testclient", 123),
+    })
+
+    video_info = main._process_and_validate_video_file(
+        video_path,
+        "stored-original.mp4",
+        mission_id,
+        request,
+        SimpleNamespace(
+            key=f"missions/{mission_id}/original/stored-original.mp4",
+            content_type="video/mp4",
+            size=video_path.stat().st_size,
+            checksum="test-checksum",
+        ),
+    )
+
+    assert video_info["preview_available"] is False
+    assert video_info["thumbnails"] == []
+    assert video_info["resolution"] is None
+    assert "preview unavailable" in video_info["processing_message"].lower()
+    assert (main.MISSIONS_DIR / mission_id / "video.mp4").read_bytes() == video_path.read_bytes()
+
+
+def test_unhandled_chunk_error_includes_cors_request_id_and_traceback(monkeypatch, caplog):
+    def fail_assembly(*args, **kwargs):
+        raise RuntimeError("forced chunk assembly failure")
+
+    monkeypatch.setattr(main, "assemble_chunks", fail_assembly)
+    client = TestClient(main.app, raise_server_exceptions=False)
+    mission_response = client.post("/api/v1/missions?name=Forced_Chunk_Error_Test")
+    assert mission_response.status_code == 200
+    mission_id = mission_response.json()["mission"]["id"]
+    origin = "https://sih-aeromesh-blond.vercel.app"
+
+    response = client.post(
+        f"/api/v1/missions/{mission_id}/upload/chunk",
+        params={
+            "chunk_index": 0,
+            "total_chunks": 1,
+            "upload_id": "forced_chunk_error_test",
+            "filename": "test.mp4",
+        },
+        files={"chunk": ("test.mp4", b"small test video", "video/mp4")},
+        headers={"Origin": origin},
+    )
+
+    assert response.status_code == 500
+    assert response.headers["access-control-allow-origin"] == origin
+    body = response.json()
+    assert body["error"] == "INTERNAL_ERROR"
+    assert body["request_id"]
+    assert f"request_id={body['request_id']}" in caplog.text
+    assert "method=POST" in caplog.text
+    assert "/api/v1/missions/" in caplog.text
+    assert "stage=assemble" in caplog.text
+    assert "forced chunk assembly failure" in caplog.text
+    assert "Traceback (most recent call last)" in caplog.text
 
 
 def test_api_profile_cannot_be_overridden_to_heavy(monkeypatch):

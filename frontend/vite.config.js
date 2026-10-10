@@ -4,6 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const apiProxyTarget = process.env.E2E_API_PROXY_TARGET || "http://127.0.0.1:8000";
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -19,19 +20,19 @@ export default defineConfig({
   server: {
     proxy: {
       "/api": {
-        target: "http://127.0.0.1:8000",
+        target: apiProxyTarget,
         changeOrigin: true,
       },
       "/missions": {
-        target: "http://127.0.0.1:8000",
+        target: apiProxyTarget,
         changeOrigin: true,
       },
       "/health": {
-        target: "http://127.0.0.1:8000",
+        target: apiProxyTarget,
         changeOrigin: true,
       },
       "/media": {
-        target: "http://127.0.0.1:8000",
+        target: apiProxyTarget,
         changeOrigin: true,
       },
     },

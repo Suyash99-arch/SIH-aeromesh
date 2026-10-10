@@ -1,10 +1,20 @@
 import { defineConfig } from "@playwright/test";
+import dotenv from "dotenv";
+import path from "node:path";
+
+dotenv.config({ path: path.resolve(process.cwd(), ".env.e2e"), quiet: true });
 
 export default defineConfig({
-  testDir: "./tests",
+  testDir: "./e2e",
+  reporter: [["list"], ["html", { outputFolder: "test-results/live-report", open: "never" }]],
+  outputDir: "test-results/live",
+  timeout: 120_000,
+  expect: { timeout: 15_000 },
   use: {
-    baseURL: "http://127.0.0.1:5173",
+    baseURL: "https://sih-aeromesh-blond.vercel.app",
     browserName: "chromium",
-    channel: "chrome",
+    colorScheme: "dark",
+    screenshot: "off",
+    trace: "off",
   },
 });

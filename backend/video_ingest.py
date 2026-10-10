@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any, Callable, Dict, Optional, Tuple
 try:
     import cv2
-except ImportError:
+except (ImportError, OSError):
     cv2 = None
 
 logger = logging.getLogger(__name__)

@@ -7,6 +7,7 @@ import io
 import json
 import logging
 import os
+import re
 import shutil
 import sys
 import time
@@ -219,8 +220,70 @@ MAX_STORAGE_BYTES = max(1, int(os.getenv("MAX_STORAGE_BYTES", str(1024 * 1024 * 
 DIRECT_UPLOAD_LIMIT_BYTES = 4 * 1024 * 1024
 MAX_VIDEO_DURATION_SECONDS = min(180.0, max(1.0, float(os.getenv("MAX_VIDEO_DURATION_SECONDS", "180"))))
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
+# Configure application and Uvicorn logs explicitly. Render's Uvicorn logging
+# config may already have installed stderr handlers before this module loads.
+_REDACT_ENV_SECRET_KEYS = re.compile(r"(?i)(PASSWORD|TOKEN|SECRET|API[_-]?KEY|CREDENTIAL)")
+_CREDENTIAL_TEXT_PATTERNS = (
+    re.compile(r"(?i)(\b(?:password|passwd|token|secret|api[_-]?key|authorization)\b\s*[:=]\s*)[^\s,;]+"),
+    re.compile(r"(?i)(\bBearer\s+)[A-Za-z0-9._~+/=-]+"),
+    re.compile(r"(?i)(postgres(?:ql)?(?:\+\w+)?://[^:/@\s]+:)[^@/\s]+(@)"),
+    re.compile(r"\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b"),
+)
+
+
+def _redact_log_text(value: str) -> str:
+    redacted = value
+    for key, secret in os.environ.items():
+        if secret and _REDACT_ENV_SECRET_KEYS.search(key):
+            redacted = redacted.replace(secret, "[REDACTED]")
+    for pattern in _CREDENTIAL_TEXT_PATTERNS:
+        if pattern.pattern.startswith("\\beyJ"):
+            redacted = pattern.sub("[REDACTED_TOKEN]", redacted)
+        elif "postgres" in pattern.pattern:
+            redacted = pattern.sub(r"\1[REDACTED]\2", redacted)
+        elif "Bearer" in pattern.pattern:
+            redacted = pattern.sub(r"\1[REDACTED]", redacted)
+        else:
+            redacted = pattern.sub(r"\1[REDACTED]", redacted)
+    return redacted
+
+
+class _CredentialRedactionFilter(logging.Filter):
+    def filter(self, record: logging.LogRecord) -> bool:
+        if isinstance(record.msg, str):
+            record.msg = _redact_log_text(record.msg)
+        if record.args:
+            if isinstance(record.args, dict):
+                record.args = {
+                    key: _redact_log_text(value) if isinstance(value, str) else value
+                    for key, value in record.args.items()
+                }
+            else:
+                record.args = tuple(
+                    _redact_log_text(value) if isinstance(value, str) else value
+                    for value in record.args
+                )
+        if record.exc_info:
+            import traceback
+            record.exc_text = _redact_log_text("".join(traceback.format_exception(*record.exc_info)))
+        return True
+
+
+def _configure_app_logging() -> None:
+    stdout_handler = logging.StreamHandler(sys.stdout)
+    stdout_handler.setLevel(logging.INFO)
+    stdout_handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(name)s: %(message)s"))
+    stdout_handler.addFilter(_CredentialRedactionFilter())
+    logging.basicConfig(level=logging.INFO, handlers=[stdout_handler], force=True)
+    for log_name in ("uvicorn", "uvicorn.error", "uvicorn.access", "backend"):
+        configured_logger = logging.getLogger(log_name)
+        configured_logger.disabled = False
+        configured_logger.setLevel(logging.INFO)
+        configured_logger.handlers.clear()
+        configured_logger.propagate = True
+
+
+_configure_app_logging()
 logger = logging.getLogger(__name__)
 if load_dotenv:
     load_dotenv(BASE_DIR / ".env")
@@ -260,6 +323,11 @@ else:
     if is_production:
         logger.critical("PRODUCTION STARTUP HALTED: DATABASE_URL is missing. Production requires a PostgreSQL database (e.g. Render Postgres).")
         raise RuntimeError("PRODUCTION STARTUP HALTED: DATABASE_URL is missing. Production requires a PostgreSQL database (e.g. Render Postgres).")
+
+# Alembic's logging.config.fileConfig runs during import-time migrations and
+# otherwise disables existing loggers, lowers root to WARN, and switches it to
+# stderr. Reassert the Render stdout/INFO policy after that configuration.
+_configure_app_logging()
 
 # ============================================================
 # FASTAPI APP
@@ -324,32 +392,6 @@ if cors_origins_env:
         if o and o not in allowed_origins_list:
             allowed_origins_list.append(o)
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=allowed_origins_list,
-    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$|^https://.*\.vercel\.app$",
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=[
-        "Accept",
-        "Authorization",
-        "Content-Type",
-        "Origin",
-        "X-Requested-With",
-        "X-Chunk-Index",
-        "X-Total-Chunks",
-        "X-Upload-Id",
-        "ngrok-skip-browser-warning",
-    ],
-    expose_headers=[
-        "Content-Range",
-        "Accept-Ranges",
-        "Content-Length",
-        "Content-Disposition",
-        "X-Request-ID",
-    ],
-)
-
 # 2. HTTP Security Headers
 app.add_middleware(SecurityHeadersMiddleware)
 
@@ -393,24 +435,38 @@ app.include_router(scenes_router, prefix="/scenes")
 
 @app.exception_handler(StarletteHTTPException)
 async def starlette_http_exception_handler(request: Request, exc: StarletteHTTPException):
+    request_id = getattr(request.state, "request_id", None) or str(uuid.uuid4())
+    if exc.status_code >= 500:
+        logger.exception(
+            "HTTP server error request_id=%s method=%s path=%s status=%s detail=%s",
+            request_id, request.method, request.url.path, exc.status_code, exc.detail,
+            exc_info=(type(exc), exc, exc.__traceback__),
+        )
     return JSONResponse(
         status_code=exc.status_code,
         content={
             "error": "HTTP_EXCEPTION",
             "detail": exc.detail,
-            "request_id": str(uuid.uuid4()),
+            "request_id": request_id,
         },
         headers=getattr(exc, "headers", None) or {},
     )
 
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request: Request, exc: HTTPException):
+    request_id = getattr(request.state, "request_id", None) or str(uuid.uuid4())
+    if exc.status_code >= 500:
+        logger.exception(
+            "HTTP server error request_id=%s method=%s path=%s status=%s detail=%s",
+            request_id, request.method, request.url.path, exc.status_code, exc.detail,
+            exc_info=(type(exc), exc, exc.__traceback__),
+        )
     return JSONResponse(
         status_code=exc.status_code,
         content={
             "error": "HTTP_EXCEPTION",
             "detail": exc.detail,
-            "request_id": str(uuid.uuid4()),
+            "request_id": request_id,
         },
         headers=getattr(exc, "headers", None) or {},
     )
@@ -425,9 +481,9 @@ async def production_exception_handler(request: Request, exc: Exception):
             headers=getattr(exc, "headers", None) or {},
         )
 
-    request_id = str(uuid.uuid4())
+    request_id = getattr(request.state, "request_id", None) or str(uuid.uuid4())
     logger.exception(
-        "Unhandled server exception [request_id=%s] %s %s",
+        "Unhandled server exception request_id=%s method=%s path=%s",
         request_id,
         request.method,
         request.url.path,
@@ -439,6 +495,33 @@ async def production_exception_handler(request: Request, exc: Exception):
             "request_id": request_id,
         },
     )
+
+
+@app.middleware("http")
+async def attach_request_id(request: Request, call_next):
+    request.state.request_id = str(uuid.uuid4())
+    response = await call_next(request)
+    response.headers.setdefault("X-Request-ID", request.state.request_id)
+    return response
+
+
+def _log_finalize_exception(request: Request, stage: str) -> None:
+    request_id = getattr(request.state, "request_id", None) or str(uuid.uuid4())
+    logger.exception(
+        "Chunk finalize failed stage=%s request_id=%s method=%s path=%s",
+        stage,
+        request_id,
+        request.method,
+        request.url.path,
+    )
+
+
+def _run_finalize_stage(request: Request, stage: str, operation, *args, **kwargs):
+    try:
+        return operation(*args, **kwargs)
+    except Exception:
+        _log_finalize_exception(request, stage)
+        raise
 
 app.mount("/media", StaticFiles(directory=str(DATA_DIR)), name="mission-media")
 
@@ -1210,7 +1293,10 @@ def print_startup_summary(dev: Dict[str, Any], env_info: Dict[str, Any]):
 
     cv = env_info.get("opencv", {})
     cv_pkg = (cv.get("packages") or ["unknown"])[0] if cv.get("packages") else "opencv"
-    cv_status = f"Ready ({cv_pkg} {cv.get('version', '')})".strip() if cv.get("available") else "Missing / Error"
+    if cv.get("status") == "deferred":
+        cv_status = "Deferred until video upload (lightweight profile)"
+    else:
+        cv_status = f"Ready ({cv_pkg} {cv.get('version', '')})".strip() if cv.get("available") else "Missing / Error"
 
     device_name = dev.get("device_name", "Host CPU")
     cuda_status = "CUDA Active" if dev.get("cuda_available") else "CPU Only"
@@ -1268,7 +1354,10 @@ async def startup_hardware_detection():
 
     # Keep lightweight profiles free of ML imports and model downloads at startup.
     if is_lightweight_profile():
-        env_info = {"ffmpeg": check_ffmpeg_environment(strict=False), "opencv": {"available": False}}
+        env_info = {
+            "ffmpeg": check_ffmpeg_environment(strict=False),
+            "opencv": {"available": None, "status": "deferred", "packages": ["opencv-python-headless"]},
+        }
         dev = detect_compute_device()
     else:
         try:
@@ -1465,7 +1554,7 @@ async def health():
 
     # Mounted route prefixes calculation
     prefixes = set()
-    for route in app.routes:
+    for route in fastapi_app.routes:
         path = getattr(route, "path", None)
         if path:
             parts = [p for p in path.split("/") if p]
@@ -1480,7 +1569,7 @@ async def health():
     return {
         "status": "healthy",
         "ok": True,
-        "version": app.version,
+        "version": fastapi_app.version,
         "git_commit": git_commit,
         "db": db_status,
         "storage": storage_status,
@@ -2709,11 +2798,13 @@ async def delete_mission(
         try:
             get_storage(DATA_DIR / "objects").delete(storage_key)
         except Exception as exc:
-            request_id = str(uuid.uuid4())
+            request_id = getattr(request.state, "request_id", None) or str(uuid.uuid4())
             logger.exception(
-                "Unable to delete mission video mission_id=%s [request_id=%s]",
+                "Unable to delete mission video mission_id=%s request_id=%s method=%s path=%s",
                 mission_id,
                 request_id,
+                request.method,
+                request.url.path,
             )
             raise HTTPException(
                 status_code=500,
@@ -2872,13 +2963,98 @@ async def list_missions(
 # VIDEO UPLOAD
 # ============================================================
 
+def _record_uploaded_video(
+    mission_id: str,
+    video_info: Dict[str, Any],
+    recon_check: Optional[Dict[str, Any]],
+    request: Optional[Request] = None,
+) -> None:
+    def update_records():
+        mission = MissionData(mission_id)
+        mission.update({
+            "status": "video_uploaded",
+            "video": video_info,
+            "video_path": str(MISSIONS_DIR / mission_id / "video.mp4"),
+            "initial_eta": video_info.get("initial_eta"),
+            "reconstructability": recon_check,
+            "processing_profile": video_info.get("processing_profile"),
+            "storage_persistence": video_info.get("storage_persistence"),
+            "metadata": {**dict(mission.data.get("metadata") or {}), "reconstructability": recon_check},
+        })
+
+        database_engine = get_configured_engine()
+        if database_engine is not None and check_database(database_engine):
+            with session_scope(database_engine) as session:
+                MissionRepository(session).record_video(mission_id, video_info)
+
+    if request is not None:
+        _run_finalize_stage(request, "db_update", update_records)
+    else:
+        update_records()
+
+
 def _process_and_validate_video_file(video_path: Path, safe_name: str, mission_id: str, request: Request, storage_metadata: Any) -> Dict[str, Any]:
     """Probe video with ffprobe & OpenCV, normalize/transcode non-compliant codecs (HEVC/VFR/Rotated), generate thumbnails, compute ETA."""
-    from backend.video_ingest import probe_video, check_cv2_decodable, should_transcode, transcode_to_normalized_h264
+    from backend import video_ingest
 
     lightweight = is_lightweight_profile()
-    probe_info = probe_video(video_path)
-    cv2_ok, cv2_err = check_cv2_decodable(video_path)
+    ffprobe_available = shutil.which(video_ingest.get_ffprobe_bin()) is not None
+    cv2_available = video_ingest.cv2 is not None
+
+    if lightweight and (not ffprobe_available or not cv2_available):
+        mission_dir = MISSIONS_DIR / mission_id
+        mission_dir.mkdir(parents=True, exist_ok=True)
+        try:
+            shutil.copy2(video_path, mission_dir / "video.mp4")
+        except OSError:
+            logger.warning("Could not create local preview copy for mission %s; original remains in object storage", mission_id)
+
+        recon_check = {
+            "status": "DISABLED",
+            "available": False,
+            "reason": "Heavy reconstruction requires the full compute profile",
+        }
+        video_info = {
+            "filename": safe_name,
+            "url": f"{str(request.base_url).rstrip('/')}/api/storage/{storage_metadata.key}",
+            "storage_key": storage_metadata.key,
+            "content_type": getattr(storage_metadata, "content_type", "video/mp4"),
+            "size_bytes": getattr(storage_metadata, "size", video_path.stat().st_size),
+            "sha256": getattr(storage_metadata, "checksum", ""),
+            "size_mb": round(video_path.stat().st_size / (1024 * 1024), 2),
+            "fps": None,
+            "total_frames": None,
+            "duration_seconds": None,
+            "resolution": None,
+            "codec": "unknown",
+            "normalized": False,
+            "transcode_reason": None,
+            "thumbnails": [],
+            "thumbnail_previews": [],
+            "preview_available": False,
+            "preview_unavailable_reason": "Video preview unavailable because ffprobe or OpenCV is not installed in this lightweight runtime.",
+            "initial_eta": None,
+            "reconstructability": recon_check,
+            "processing_profile": "light",
+            "storage_persistence": (
+                "durable"
+                if os.getenv("STORAGE_BACKEND", "").strip().lower() == "s3" or os.getenv("S3_BUCKET")
+                else "ephemeral"
+            ),
+            "processing_message": (
+                "Upload complete. Video preview unavailable because ffprobe or OpenCV is unavailable; "
+                "full 3D reconstruction and detection require the full compute profile."
+            ),
+        }
+        _record_uploaded_video(mission_id, video_info, recon_check, request)
+        return video_info
+
+    def probe_video():
+        probe = video_ingest.probe_video(video_path)
+        decodable, decode_error = video_ingest.check_cv2_decodable(video_path)
+        return probe, decodable, decode_error
+
+    probe_info, cv2_ok, cv2_err = _run_finalize_stage(request, "probe", probe_video)
 
     duration_hint = probe_info.get("duration_seconds") or probe_info.get("duration")
     if duration_hint is not None and float(duration_hint) > MAX_VIDEO_DURATION_SECONDS:
@@ -2902,7 +3078,7 @@ def _process_and_validate_video_file(video_path: Path, safe_name: str, mission_i
     mission_dir = MISSIONS_DIR / mission_id
     mission_dir.mkdir(parents=True, exist_ok=True)
 
-    needs_transcode, transcode_reason = should_transcode(probe_info, cv2_ok)
+    needs_transcode, transcode_reason = video_ingest.should_transcode(probe_info, cv2_ok)
     if lightweight:
         needs_transcode = False
         transcode_reason = "Skipped in lightweight profile"
@@ -2912,7 +3088,7 @@ def _process_and_validate_video_file(video_path: Path, safe_name: str, mission_i
         logger.info("Normalizing video file for mission %s: %s", mission_id, transcode_reason)
         normalized_path = mission_dir / "normalized_video.mp4"
         try:
-            transcode_to_normalized_h264(video_path, normalized_path, target_fps=30.0)
+            video_ingest.transcode_to_normalized_h264(video_path, normalized_path, target_fps=30.0)
             active_video_path = normalized_path
         except Exception as exc:
             logger.error("Failed to transcode video: %s", exc)
@@ -2950,19 +3126,24 @@ def _process_and_validate_video_file(video_path: Path, safe_name: str, mission_i
     thumb_previews = []
     step_indices = [int(i * (total_frames - 1) / 5) for i in range(6)] if total_frames >= 6 else list(range(total_frames))
 
-    for idx_step in step_indices:
-        cap.set(cv2.CAP_PROP_POS_FRAMES, idx_step)
-        t_ret, t_frame = cap.read()
-        if t_ret and t_frame is not None:
-            h_orig, w_orig = t_frame.shape[:2]
-            scale_factor = min(320.0 / w_orig, 180.0 / h_orig, 1.0)
-            t_resized = cv2.resize(t_frame, (int(w_orig * scale_factor), int(h_orig * scale_factor)))
-            t_name = f"thumb_{idx_step:04d}.jpg"
-            cv2.imwrite(str(thumb_dir / t_name), t_resized, [cv2.IMWRITE_JPEG_QUALITY, 80])
-            thumb_urls.append(f"/api/v1/missions/{mission_id}/thumbnails/{t_name}")
-            _, enc = cv2.imencode(".jpg", t_resized, [cv2.IMWRITE_JPEG_QUALITY, 70])
-            thumb_previews.append(f"data:image/jpeg;base64,{base64.b64encode(enc).decode('ascii')}")
-    cap.release()
+    def make_thumbnails():
+        try:
+            for idx_step in step_indices:
+                cap.set(cv2.CAP_PROP_POS_FRAMES, idx_step)
+                t_ret, t_frame = cap.read()
+                if t_ret and t_frame is not None:
+                    h_orig, w_orig = t_frame.shape[:2]
+                    scale_factor = min(320.0 / w_orig, 180.0 / h_orig, 1.0)
+                    t_resized = cv2.resize(t_frame, (int(w_orig * scale_factor), int(h_orig * scale_factor)))
+                    t_name = f"thumb_{idx_step:04d}.jpg"
+                    cv2.imwrite(str(thumb_dir / t_name), t_resized, [cv2.IMWRITE_JPEG_QUALITY, 80])
+                    thumb_urls.append(f"/api/v1/missions/{mission_id}/thumbnails/{t_name}")
+                    _, enc = cv2.imencode(".jpg", t_resized, [cv2.IMWRITE_JPEG_QUALITY, 70])
+                    thumb_previews.append(f"data:image/jpeg;base64,{base64.b64encode(enc).decode('ascii')}")
+        finally:
+            cap.release()
+
+    _run_finalize_stage(request, "thumbnails", make_thumbnails)
 
     # Copy active video to mission directory video.mp4
     try:
@@ -3024,22 +3205,7 @@ def _process_and_validate_video_file(video_path: Path, safe_name: str, mission_i
         ),
     }
 
-    mission = MissionData(mission_id)
-    mission.update({
-        "status": "video_uploaded",
-        "video": video_info,
-        "video_path": str(mission_dir / "video.mp4"),
-        "initial_eta": initial_eta,
-        "reconstructability": recon_check,
-        "processing_profile": "light" if lightweight else "heavy",
-        "storage_persistence": video_info["storage_persistence"],
-        "metadata": {**dict(mission.data.get("metadata") or {}), "reconstructability": recon_check},
-    })
-
-    database_engine = get_configured_engine()
-    if database_engine is not None and check_database(database_engine):
-        with session_scope(database_engine) as session:
-            MissionRepository(session).record_video(mission_id, video_info)
+    _record_uploaded_video(mission_id, video_info, recon_check, request)
 
     return video_info
 
@@ -3066,7 +3232,9 @@ def _persist_uploaded_video(
         if local_storage_root is not None:
             video_path = Path(local_storage_root) / storage_key
             video_path.parent.mkdir(parents=True, exist_ok=True)
-            storage_metadata = storage.upload(storage_key, stream, safe_name, content_type)
+            storage_metadata = _run_finalize_stage(
+                request, "storage_save", storage.upload, storage_key, stream, safe_name, content_type
+            )
         else:
             if staged_path is None:
                 stage_dir = upload_directory(DATA_DIR, mission_id, f"direct_{uuid.uuid4().hex}")
@@ -3076,7 +3244,9 @@ def _persist_uploaded_video(
                     shutil.copyfileobj(stream, staged_file, length=1024 * 1024)
                 owns_staged_file = True
             with staged_path.open("rb") as staged_file:
-                storage_metadata = storage.upload(storage_key, staged_file, safe_name, content_type)
+                storage_metadata = _run_finalize_stage(
+                    request, "storage_save", storage.upload, storage_key, staged_file, safe_name, content_type
+                )
             video_path = staged_path
         return _process_and_validate_video_file(
             video_path, safe_name, mission_id, request, storage_metadata
@@ -3094,7 +3264,7 @@ def _upload_response(video_info: Dict[str, Any]) -> Dict[str, Any]:
         "next_step": "configure_processing",
         "processing": {
             "status": "upload_only" if lightweight else "ready",
-            "message": (
+            "message": video_info.get("processing_message") or (
                 "Upload complete - heavy reconstruction requires the full compute profile"
                 if lightweight
                 else "Upload complete - full compute profile is available"
@@ -3285,7 +3455,10 @@ async def upload_video_chunk(
 
             _ensure_local_storage_capacity(current_size, replacing_bytes=current_size)
             assembled_path = session_dir / f"assembled{Path(safe_name).suffix.lower()}"
-            await run_in_threadpool(assemble_chunks, session_dir, total_chunks, assembled_path)
+            await run_in_threadpool(
+                _run_finalize_stage, request, "assemble", assemble_chunks,
+                session_dir, total_chunks, assembled_path,
+            )
             s3_configured = (
                 os.getenv("STORAGE_BACKEND", "").strip().lower() == "s3"
                 or bool(os.getenv("S3_BUCKET"))
@@ -3295,7 +3468,10 @@ async def upload_video_chunk(
             )
             with assembled_path.open("rb") as assembled_file:
                 signature = assembled_file.read(64)
-            valid, error_reason = validate_uploaded_file(
+            valid, error_reason = _run_finalize_stage(
+                request,
+                "validate",
+                validate_uploaded_file,
                 safe_name,
                 signature,
                 max_size_bytes=MAX_UPLOAD_SIZE_BYTES,
@@ -7051,6 +7227,7 @@ async def generate_report(
 @app.get("/api/missions/{mission_id}/report/pdf", dependencies=[Depends(rate_limit_dependency)])
 def export_mission_pdf(
     mission_id: str,
+    request: Request,
     current_user: Optional[UserRecord] = Depends(get_current_user_optional),
 ):
     """Download executive-ready PDF mission decision report with authorization check."""
@@ -7060,7 +7237,7 @@ def export_mission_pdf(
 
     check_mission_access(mission_id, current_user, mission.data.get("created_by") or mission.data.get("operator"))
 
-    request_id = str(uuid.uuid4())
+    request_id = getattr(request.state, "request_id", None) or str(uuid.uuid4())
     pdf_buffer = io.BytesIO()
     try:
         report = build_mission_report(mission_id, mission)
@@ -7069,7 +7246,10 @@ def export_mission_pdf(
     except HTTPException:
         raise
     except Exception as exc:
-        logger.exception("PDF generation failed for mission %s [req_id=%s]: %s", mission_id, request_id, exc)
+        logger.exception(
+            "PDF generation failed for mission %s request_id=%s method=%s path=%s: %s",
+            mission_id, request_id, request.method, request.url.path, exc,
+        )
         return JSONResponse(
             status_code=500,
             content={
@@ -7103,6 +7283,35 @@ for _route in app.routes:
     _rpath = getattr(_route, "path", "")
     if _rpath.startswith("/api/") and not _rpath.startswith("/api/v1/"):
         setattr(_route, "deprecated", True)
+
+# Keep CORS outside Starlette's ServerErrorMiddleware so sanitized 500 responses
+# produced by the unhandled-exception handler also carry the allowed origin.
+fastapi_app = app
+app = CORSMiddleware(
+    fastapi_app,
+    allow_origins=allowed_origins_list,
+    allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$|^https://.*\.vercel\.app$",
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=[
+        "Accept",
+        "Authorization",
+        "Content-Type",
+        "Origin",
+        "X-Requested-With",
+        "X-Chunk-Index",
+        "X-Total-Chunks",
+        "X-Upload-Id",
+        "ngrok-skip-browser-warning",
+    ],
+    expose_headers=[
+        "Content-Range",
+        "Accept-Ranges",
+        "Content-Length",
+        "Content-Disposition",
+        "X-Request-ID",
+    ],
+)
 
 # ============================================================
 # RUN

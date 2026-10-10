@@ -121,3 +121,6 @@ tools/
 .venv312/
 .venv311/
 .venv310/
+
+.env.e2e
+frontend/.env.e2e
