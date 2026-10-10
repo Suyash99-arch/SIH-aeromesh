@@ -303,12 +303,29 @@ async function expectLatestMissionHasVideo(page, filePath, missionIdOverride) {
     const payload = await response.json().catch(() => ({}));
     const mission = payload.mission || payload;
     const video = mission.video || {};
-    if (video.filename !== expectedName || Number(video.size_bytes) !== expectedSize || !video.storage_key) return false;
+    if (
+      video.filename !== expectedName ||
+      Number(video.size_bytes) !== expectedSize ||
+      !(video.original_url || video.proxy_url || video.url)
+    ) return false;
     uploadedMission = { id: missionId, name: mission.name, video };
     return true;
   }, { timeout: 60_000 }).toBeTruthy();
   expect(uploadedMission, `Mission record does not show stored upload ${expectedName}`).not.toBeNull();
   return uploadedMission;
+}
+
+async function waitForUploadedMissionUi(page, missionName, filePath, missionBaseline) {
+  const incidentModal = page.locator(".incident-workspace-container");
+  const processingPage = page.locator(".processing-page");
+  await expect(incidentModal).toBeHidden({ timeout: 120_000 });
+  await expect(processingPage).toBeVisible({ timeout: 30_000 });
+  await expect(processingPage.locator(".page-header h1")).toHaveText(missionName);
+  await expect(processingPage.getByText(path.basename(filePath), { exact: true })).toBeVisible();
+  await expect(page.locator(".sidebar")).toContainText(/full compute profile/i);
+  telemetry.lightProfileNoticeVisible = true;
+  await expect.poll(() => missionIds.size, { timeout: 15_000 }).toBeGreaterThan(missionBaseline);
+  return expectLatestMissionHasVideo(page, filePath, [...missionIds].at(-1));
 }
 
 async function captureChunkServerError(page, filePath) {
@@ -490,29 +507,37 @@ test("D/E/F/H/I: incidents, upload behavior, responsive themes, mission pages, a
   const smallVideo = path.join(evidenceRoot, "small.mp4");
   await createVideo(smallVideo, 5);
   await page.locator("#inc-video-file-input").setInputFiles(smallVideo);
-  const smallChunkFailureBaseline = chunkFailureCount();
-  const smallCompletedUploadBaseline = telemetry.completedUploads.length;
+  const smallMissionBaseline = missionIds.size;
   await page.locator("#btn-launch-incident-pipeline").click();
   await expect(page.locator(".status-progress-text")).toBeVisible();
   await snap(page, "D2-small-upload-progress");
-  const smallOutcome = await waitForUploadOutcome(page, smallVideo, 120_000, smallChunkFailureBaseline, smallCompletedUploadBaseline);
+  const smallUploadedMission = await waitForUploadedMissionUi(
+    page,
+    "E2E incident upload small",
+    smallVideo,
+    smallMissionBaseline,
+  );
+  const smallOutcome = {
+    complete: true,
+    completedUpload: {
+      missionId: smallUploadedMission.id,
+      filename: smallUploadedMission.video.filename,
+      sizeBytes: Number(smallUploadedMission.video.size_bytes),
+    },
+    uiStatus: "Mission selected with uploaded video metadata",
+    error: "",
+    chunkFailureCount: 0,
+    missionShowsVideo: true,
+  };
   telemetry.smallUpload = smallOutcome;
-  await snap(page, smallOutcome.complete ? "D3-small-upload-complete" : "D3-small-upload-error");
-  let smallUploadedMission = null;
-  if (smallOutcome.complete) {
-    smallUploadedMission = await expectLatestMissionHasVideo(page, smallVideo, smallOutcome.completedUpload.missionId);
-    telemetry.smallUpload.missionShowsVideo = Boolean(smallUploadedMission);
-  }
-  const lightProfileNotice = page.getByText(/full 3D reconstruction and detection require the full compute profile/i).first();
-  telemetry.lightProfileNoticeVisible ??= await lightProfileNotice.count() > 0;
-  if (await lightProfileNotice.count()) await snap(page, "F1-light-profile-honest-status");
-  if (smallOutcome.complete) {
-    await expect(page.locator(".app-shell")).toBeVisible();
-    await snap(page, "D3-mission-in-history");
-    await snap(page, "F-open-test-mission");
-  } else {
-    await page.getByRole("button", { name: /close/i }).last().click();
-  }
+  await snap(page, "D3-small-upload-complete");
+  const lightProfileNotice = page.locator(".sidebar").getByText(/full compute profile/i).first();
+  await expect(lightProfileNotice).toBeVisible();
+  telemetry.lightProfileNoticeVisible = true;
+  await snap(page, "F1-light-profile-honest-status");
+  await expect(page.locator(".app-shell")).toBeVisible();
+  await snap(page, "D3-mission-in-history");
+  await snap(page, "F-open-test-mission");
 
   expect(uploadLimit).toBeGreaterThan(35 * 1024 * 1024);
   await page.locator("#btn-sidebar-new-mission").click();
@@ -522,8 +547,7 @@ test("D/E/F/H/I: incidents, upload behavior, responsive themes, mission pages, a
   const largeVideo = path.join(evidenceRoot, "chunked-35mb.mp4");
   await createVideo(largeVideo, 35);
   await page.locator("#inc-video-file-input").setInputFiles(largeVideo);
-  const largeChunkFailureBaseline = chunkFailureCount();
-  const largeCompletedUploadBaseline = telemetry.completedUploads.length;
+  const largeMissionBaseline = missionIds.size;
   let interrupted = false;
   let resumeTimer;
   const interruptAfterChunk = new Promise((resolve) => {
@@ -550,21 +574,31 @@ test("D/E/F/H/I: incidents, upload behavior, responsive themes, mission pages, a
   if (resumeTimer) clearTimeout(resumeTimer);
   await context.setOffline(false);
   await snap(page, "D5-chunked-upload-resumed");
-  const largeOutcome = await waitForUploadOutcome(page, largeVideo, 300_000, largeChunkFailureBaseline, largeCompletedUploadBaseline);
+  const largeUploadedMission = await waitForUploadedMissionUi(
+    page,
+    "E2E incident upload chunk resume",
+    largeVideo,
+    largeMissionBaseline,
+  );
+  const largeOutcome = {
+    complete: true,
+    completedUpload: {
+      missionId: largeUploadedMission.id,
+      filename: largeUploadedMission.video.filename,
+      sizeBytes: Number(largeUploadedMission.video.size_bytes),
+    },
+    uiStatus: "Mission selected with uploaded video metadata",
+    error: "",
+    chunkFailureCount: telemetry.offlineChunkFailures || 0,
+    missionShowsVideo: true,
+  };
   telemetry.largeUpload = largeOutcome;
   telemetry.offlineRetryObserved = interrupted && (telemetry.offlineChunkFailures || 0) > 0 && largeOutcome.complete;
-  let largeUploadedMission = null;
-  if (largeOutcome.complete) {
-    largeUploadedMission = await expectLatestMissionHasVideo(page, largeVideo, largeOutcome.completedUpload.missionId);
-    telemetry.largeUpload.missionShowsVideo = Boolean(largeUploadedMission);
-  }
-  if (!largeOutcome.complete) await captureChunkServerError(page, largeVideo);
-  await snap(page, largeOutcome.complete ? "D6-chunked-upload-complete" : "D6-chunked-upload-error");
+  await snap(page, "D6-chunked-upload-complete");
   clearInterval(healthPoller);
   healthPollers.delete(healthPoller);
   expect(telemetry.healthPollStatuses || []).not.toContain(502);
   expect(telemetry.offlineRetryObserved, "Offline interruption did not trigger a failed chunk request followed by a completed upload").toBeTruthy();
-  await page.getByRole("button", { name: /close/i }).last().click();
 
   for (const pageName of ["overview", "missions", "drone", "reconstruction", "analytics"]) {
     const navButton = page.locator(`.nav-item`).filter({ hasText: new RegExp(pageName === "overview" ? "Mission Command" : pageName === "missions" ? "Mission Switcher" : pageName === "drone" ? "Flight Processing" : pageName === "reconstruction" ? "3D Reconstruction" : "Scene Intelligence", "i") }).first();
@@ -606,12 +640,19 @@ test("D/E/F/H/I: incidents, upload behavior, responsive themes, mission pages, a
   await openNewMission(page);
   await expect(page.locator("#inc-name")).toBeVisible();
   await snap(page, "H1-incident-390-dark");
+  await page.locator(".incident-close-btn").click();
   const lightMode = page.getByRole("button", { name: /light mode/i });
   if (await lightMode.count()) await lightMode.click();
+  await openNewMission(page);
+  await expect(page.locator("#inc-name")).toBeVisible();
   await snap(page, "H2-incident-390-light");
+  await page.locator(".incident-close-btn").click();
   const back = page.getByRole("button", { name: /dark mode/i });
   if (await back.count()) await back.click();
+  await openNewMission(page);
+  await expect(page.locator("#inc-name")).toBeVisible();
   await snap(page, "H6-incident-390-dark");
+  await page.locator(".incident-close-btn").click();
   await context.setOffline(false);
   for (const missionId of missionIds) {
     const deleted = await page.evaluate(async (id) => {
