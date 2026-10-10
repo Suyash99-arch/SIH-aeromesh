@@ -132,6 +132,10 @@ export default function App() {
       .then((user) => {
         if (user) {
           setCurrentUser(user);
+          if (new URLSearchParams(window.location.search).get("page") === "auth") {
+            setShowHomepage(false);
+            setActivePage("overview");
+          }
         } else if (getStoredUser()) {
           clearAuthToken();
           setCurrentUser(null);
@@ -164,7 +168,7 @@ export default function App() {
           url.searchParams.set("page", activePage);
           changed = true;
         }
-      } else if (showHomepage && url.searchParams.has("page")) {
+      } else if ((showHomepage || activePage === "overview") && url.searchParams.has("page")) {
         url.searchParams.delete("page");
         changed = true;
       }
