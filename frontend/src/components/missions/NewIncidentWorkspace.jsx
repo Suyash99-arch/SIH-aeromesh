@@ -5,6 +5,7 @@ import {
   createMission,
   uploadVideo,
   uploadVideoChunk,
+  getUploadConfig,
   processVideo,
   getComputeDevice,
   estimatePipelineEtaApi,
@@ -98,6 +99,8 @@ export default function NewIncidentWorkspace({ onClose, onMissionCreated, curren
   const [uploadSpeed, setUploadSpeed] = useState("0.0");
   const [errorMessage, setErrorMessage] = useState("");
   const abortControllerRef = useRef(null);
+  const uploadIdRef = useRef(null);
+  const [uploadFailed, setUploadFailed] = useState(false);
 
   const updateEtaEstimate = async (file, width = 1920, height = 1080, duration = 30.0) => {
     if (!file) return;
@@ -124,14 +127,28 @@ export default function NewIncidentWorkspace({ onClose, onMissionCreated, curren
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
-  const handleFileSelect = (file) => {
+  const handleFileSelect = async (file) => {
     setErrorMessage("");
     if (!file) return;
-    if (!file.type.startsWith("video/") && !file.name.match(/\.(mp4|mov|avi|mkv)$/i)) {
-      setErrorMessage("Please select a valid drone video file (MP4, MOV, MKV).");
+    if (!/\.(mp4|mov|avi)$/i.test(file.name)) {
+      setErrorMessage("Please select a supported drone video file (.mp4, .mov, or .avi).");
+      return;
+    }
+    let maxBytes = 200 * 1024 * 1024;
+    try {
+      const uploadConfig = await getUploadConfig();
+      maxBytes = Number(uploadConfig.max_upload_size_bytes) || maxBytes;
+    } catch (error) {
+      setErrorMessage(formatApiError(error) || "Unable to verify the configured video upload limit.");
+      return;
+    }
+    if (file.size > maxBytes) {
+      setErrorMessage(`This video is ${(file.size / (1024 * 1024)).toFixed(1)} MB. The maximum allowed size is ${(maxBytes / (1024 * 1024)).toFixed(0)} MB.`);
       return;
     }
     setVideoFile(file);
+    uploadIdRef.current = null;
+    setUploadFailed(false);
     setVideoMeta({
       name: file.name,
       size: (file.size / (1024 * 1024)).toFixed(1) + " MB",
@@ -157,6 +174,8 @@ export default function NewIncidentWorkspace({ onClose, onMissionCreated, curren
       operator: currentUser?.full_name || "",
     });
     setVideoFile(null);
+    uploadIdRef.current = null;
+    setUploadFailed(false);
     setVideoPreviewUrl(null);
     setVideoMeta(null);
     setCreatedMissionId(null);
@@ -235,6 +254,7 @@ export default function NewIncidentWorkspace({ onClose, onMissionCreated, curren
   const handleLaunchPipeline = async (e) => {
     e?.preventDefault();
     setErrorMessage("");
+    setUploadFailed(false);
     if (!formData.name.trim()) {
       setErrorMessage("Incident Name is required.");
       return;
@@ -245,46 +265,61 @@ export default function NewIncidentWorkspace({ onClose, onMissionCreated, curren
     }
 
     setIsSubmitting(true);
-    setStatusMessage("Creating incident record in database...");
+    setStatusMessage(createdMissionId ? "Resuming video upload..." : "Creating incident record in database...");
     abortControllerRef.current = new AbortController();
+    let uploadInProgress = false;
 
     try {
-      const missionPayload = {
-        name: formData.name,
-        missionType: formData.missionType,
-        location: formData.location,
-        operator: formData.operator,
-        description: formData.description,
-        incident_id: incidentId,
-      };
+      let missionId = createdMissionId;
+      if (!missionId) {
+        const created = await createMission({
+          name: formData.name,
+          missionType: formData.missionType,
+          location: formData.location,
+          operator: formData.operator,
+          description: formData.description,
+          incident_id: incidentId,
+        });
+        missionId = created.id;
+        setCreatedMissionId(missionId);
+      }
 
-      const created = await createMission(missionPayload);
-      const missionId = created.id;
-      setCreatedMissionId(missionId);
-
-      setStatusMessage("Uploading drone video footage...");
-      try {
-        await uploadVideoChunk(
+      let uploadResult;
+      uploadInProgress = true;
+      if (videoFile.size > 4 * 1024 * 1024) {
+        uploadIdRef.current ||= `upl_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
+        setStatusMessage("Uploading drone video footage directly to the backend...");
+        uploadResult = await uploadVideoChunk(
           missionId,
           videoFile,
           (info) => {
             setUploadProgress(info.progress);
             setUploadSpeed(info.speedMBps);
-            if (info.isFinalizing || info.chunkIndex === info.totalChunks) {
-              setStatusMessage(`Assembling footage & validating codecs on server (${info.progress}%)...`);
-            } else {
-              setStatusMessage(`Uploading chunk ${info.chunkIndex}/${info.totalChunks} (${info.progress}% @ ${info.speedMBps} MB/s)...`);
-            }
+            const mbUploaded = (info.uploadedBytes / (1024 * 1024)).toFixed(1);
+            const mbTotal = (info.totalBytes / (1024 * 1024)).toFixed(1);
+            setStatusMessage(
+              info.retryStatus ||
+              `Uploading ${mbUploaded}/${mbTotal} MB (${info.progress}%, chunk ${info.chunkIndex}/${info.totalChunks} @ ${info.speedMBps} MB/s)...`
+            );
           },
-          abortControllerRef.current.signal
+          abortControllerRef.current.signal,
+          { uploadId: uploadIdRef.current },
         );
-      } catch (chunkErr) {
-        if (chunkErr.name === "AbortError" || chunkErr.message?.includes("cancelled")) {
-          throw chunkErr;
-        }
-        console.warn("Chunked upload failed, falling back to direct upload:", chunkErr);
-        setStatusMessage("Chunk upload interrupted; falling back to direct upload...");
-        await uploadVideo(missionId, videoFile);
+      } else {
+        setStatusMessage("Uploading small video directly to the backend...");
+        uploadResult = await uploadVideo(missionId, videoFile);
+      }
+      uploadInProgress = false;
+      setUploadFailed(false);
+
+      if (uploadResult.processing?.heavy_reconstruction_available === false) {
+        const message = uploadResult.processing.message ||
+          "Upload complete - heavy reconstruction requires the full compute profile";
+        setStatusMessage(message);
+        notice?.(message, "success");
+        onMissionCreated?.(missionId);
+        setIsSubmitting(false);
+        return;
       }
 
       setStatusMessage("Authorizing 8-stage photogrammetric pipeline...");
@@ -306,6 +341,7 @@ export default function NewIncidentWorkspace({ onClose, onMissionCreated, curren
       } else {
         setErrorMessage(formatApiError(err) || "Pipeline launch error.");
       }
+      setUploadFailed(uploadInProgress);
       setIsSubmitting(false);
       setStatusMessage("");
     }
@@ -377,9 +413,9 @@ export default function NewIncidentWorkspace({ onClose, onMissionCreated, curren
                     <div style={{ marginTop: "12px" }}>
                       <button
                         type="button"
-                        onClick={handleRetryProcessing}
+                        onClick={uploadFailed ? handleLaunchPipeline : handleRetryProcessing}
                         disabled={isSubmitting}
-                        id="btn-retry-pipeline-processing"
+                        id={uploadFailed ? "btn-retry-video-upload" : "btn-retry-pipeline-processing"}
                         style={{
                           background: "#0284c7",
                           color: "#ffffff",
@@ -396,7 +432,7 @@ export default function NewIncidentWorkspace({ onClose, onMissionCreated, curren
                         }}
                       >
                         <Icon name="RotateCcw" size={14} />
-                        <span>{t("newMission.retryPipelineKeepVideo")}</span>
+                        <span>{uploadFailed ? "Retry video upload" : t("newMission.retryPipelineKeepVideo")}</span>
                       </button>
                     </div>
                   )}
@@ -573,7 +609,7 @@ export default function NewIncidentWorkspace({ onClose, onMissionCreated, curren
                     ref={fileInputRef}
                     id="inc-video-file-input"
                     type="file"
-                    accept="video/mp4,video/quicktime,video/x-matroska,.mp4,.mov,.mkv"
+                    accept="video/mp4,video/quicktime,video/x-msvideo,.mp4,.mov,.avi"
                     style={{ display: "none" }}
                     onChange={(e) => handleFileSelect(e.target.files?.[0])}
                   />

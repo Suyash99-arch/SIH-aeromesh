@@ -31,9 +31,18 @@ export function getUploadBase() {
     const clean = String(envUpload).replace(/\/+$/, "");
     return clean.endsWith("/api/v1") ? clean : `${clean}/api/v1`;
   }
-  return API_BASE;
+  return "https://sih-aeromesh.onrender.com/api/v1";
 }
 export const UPLOAD_BASE = getUploadBase();
+
+export async function getUploadConfig() {
+  const response = await fetch(`${API_BASE}/config`, { headers: getAuthHeaders() });
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(formatApiError(data) || "Unable to load video upload limits.");
+  }
+  return data;
+}
 
 const fallbackMission = {
   id: "",
@@ -516,6 +525,9 @@ export async function getMission(missionId, forceRefresh = true) {
 }
 
 export async function uploadVideo(missionId, file) {
+  if (file.size > 4 * 1024 * 1024) {
+    throw new Error("Files larger than 4 MB must use resumable chunked upload.");
+  }
   try {
     console.log(`[Upload] Starting video upload for mission ${missionId}`);
     const formData = new FormData();
@@ -554,11 +566,55 @@ export async function uploadVideo(missionId, file) {
   }
 }
 
-export async function uploadVideoChunk(missionId, file, onProgress, signal) {
+export async function uploadVideoChunk(missionId, file, onProgress, signal, options = {}) {
+  if (!file.size) throw new Error("The selected video file is empty.");
   const CHUNK_SIZE = 2 * 1024 * 1024; // 2 MB chunks
   const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
-  const uploadId = `upl_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
-  let startTime = Date.now();
+  const uploadId = options.uploadId || `upl_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
+  const uploadBase = getUploadBase();
+  const startTime = Date.now();
+  const receivedResponse = await fetch(
+    `${uploadBase}/missions/${missionId}/upload-status?upload_id=${encodeURIComponent(uploadId)}&total_chunks=${totalChunks}`,
+    { headers: getAuthHeaders(), signal },
+  );
+  const uploadState = await receivedResponse.json();
+  if (!receivedResponse.ok) {
+    throw new Error(formatApiError(uploadState) || "Unable to resume the video upload.");
+  }
+  if (uploadState.complete && uploadState.result) {
+    return { ...uploadState.result, uploadId };
+  }
+  const received = new Set(uploadState.received_chunks || []);
+  let uploadedBytes = 0;
+  const progress = (retryStatus = "") => {
+    const elapsed = Math.max((Date.now() - startTime) / 1000, 0.001);
+    if (onProgress) {
+      onProgress({
+        progress: Math.round((uploadedBytes / file.size) * 100),
+        uploadedBytes,
+        totalBytes: file.size,
+        speedMBps: ((uploadedBytes / (1024 * 1024)) / elapsed).toFixed(2),
+        chunkIndex: received.size,
+        totalChunks,
+        retryStatus,
+      });
+    }
+  };
+
+  const waitForBackendHealth = async () => {
+    const healthUrl = `${uploadBase}/health`;
+    for (let attempt = 0; attempt < 60; attempt++) {
+      if (signal?.aborted) throw new Error("Upload cancelled by user");
+      try {
+        const health = await fetch(healthUrl, { headers: getAuthHeaders(), signal });
+        if (health.ok) return;
+      } catch (error) {
+        if (signal?.aborted) throw error;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+    }
+    throw new Error("The upload server is restarting. Please retry in a moment.");
+  };
 
   for (let i = 0; i < totalChunks; i++) {
     if (signal?.aborted) {
@@ -567,68 +623,59 @@ export async function uploadVideoChunk(missionId, file, onProgress, signal) {
 
     const start = i * CHUNK_SIZE;
     const end = Math.min(file.size, start + CHUNK_SIZE);
+    if (received.has(i) && !(i === totalChunks - 1 && received.size === totalChunks)) {
+      uploadedBytes += end - start;
+      progress();
+      continue;
+    }
     const chunkBlob = file.slice(start, end);
 
     const formData = new FormData();
     formData.append("chunk", chunkBlob, file.name);
 
-    const uploadBase = getUploadBase();
     const url = `${uploadBase}/missions/${missionId}/upload/chunk?chunk_index=${i}&total_chunks=${totalChunks}&upload_id=${uploadId}&filename=${encodeURIComponent(file.name)}`;
-
-    const elapsedBefore = (Date.now() - startTime) / 1000;
-    const speedMBpsCalc = elapsedBefore > 0 ? ((start) / (1024 * 1024)) / elapsedBefore : 0;
-    if (onProgress && i === totalChunks - 1) {
-      onProgress({
-        progress: Math.round((start / file.size) * 100),
-        uploadedBytes: start,
-        totalBytes: file.size,
-        speedMBps: speedMBpsCalc.toFixed(2),
-        chunkIndex: totalChunks,
-        totalChunks,
-        isFinalizing: true,
-      });
-    }
-
-    const response = await fetch(url, {
-      method: "POST",
-      headers: getAuthHeaders(),
-      body: formData,
-      signal,
-    });
-
     let data;
-    try {
-      data = await response.json();
-    } catch {
-      const text = await response.text().catch(() => "");
-      throw new Error(text || `Chunk ${i + 1} failed: HTTP ${response.status} ${response.statusText}`);
+    for (let retry = 0; retry <= 6; retry++) {
+      try {
+        const response = await fetch(url, {
+          method: "POST",
+          headers: getAuthHeaders(),
+          body: formData,
+          signal,
+        });
+        const body = await response.text();
+        try {
+          data = JSON.parse(body);
+        } catch {
+          data = { detail: body || `HTTP ${response.status} ${response.statusText}` };
+        }
+        if (!response.ok || !data.success) {
+          const error = new Error(formatApiError(data) || `Chunk ${i + 1} upload failed (HTTP ${response.status}).`);
+          error.status = response.status;
+          throw error;
+        }
+        break;
+      } catch (error) {
+        if (signal?.aborted || retry === 6) {
+          throw new Error(`Chunk ${i + 1} failed after ${retry} retries: ${error.message}`);
+        }
+        const retryNumber = retry + 1;
+        progress(`Retry ${retryNumber}/6 for chunk ${i + 1}`);
+        if ([502, 503, 504].includes(error.status)) {
+          await waitForBackendHealth();
+        }
+        await new Promise((resolve) => setTimeout(resolve, Math.min(1000 * (2 ** retry), 30000)));
+      }
     }
-
-    if (!response.ok || !data.success) {
-      throw new Error(formatApiError(data) || `Chunk ${i + 1} upload failed`);
-    }
-
-    const elapsed = (Date.now() - startTime) / 1000;
-    const uploadedBytes = end;
-    const speedMBps = elapsed > 0 ? (uploadedBytes / (1024 * 1024)) / elapsed : 0;
-
-    if (onProgress) {
-      onProgress({
-        progress: Math.round((uploadedBytes / file.size) * 100),
-        uploadedBytes,
-        totalBytes: file.size,
-        speedMBps: speedMBps.toFixed(2),
-        chunkIndex: i + 1,
-        totalChunks,
-        isFinalizing: i === totalChunks - 1,
-      });
-    }
-
-    if (i === totalChunks - 1) {
+    received.add(i);
+    uploadedBytes += end - start;
+    progress();
+    if (data.status === "upload_complete") {
       missionCache.delete(missionId);
-      return data;
+      return { ...data, uploadId };
     }
   }
+  throw new Error("Upload ended without a completion response. Retry to resume the remaining chunks.");
 }
 
 export async function deleteMission(missionId) {
@@ -1552,4 +1599,3 @@ export async function fetchMissionKeyframes(missionId) {
   }
   return [];
 }
-

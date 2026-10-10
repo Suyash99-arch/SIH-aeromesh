@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useMemo, useCallback } from "react";
-import { resolveAssetUrl, fetchArtifactsStatus, uploadVideoChunk, uploadVideo, getMission } from "../../api/missions.js";
+import { resolveAssetUrl, fetchArtifactsStatus, uploadVideoChunk, uploadVideo, getMission, getUploadConfig } from "../../api/missions.js";
 import Icon from "../ui/Icon";
 
 export default function VideoPlayer({
@@ -16,6 +16,7 @@ export default function VideoPlayer({
   const canvasRef = useRef(null);
   const fileInputRef = useRef(null);
   const replaceFileInputRef = useRef(null);
+  const uploadIdRef = useRef(null);
 
   // True while the user (or program) is actively dragging/seeking
   const userSeekingRef = useRef(false);
@@ -118,13 +119,25 @@ export default function VideoPlayer({
   // ------------------------------------------------------------------
   // Video Upload Handlers
   // ------------------------------------------------------------------
-  const handleFileSelect = (file, autoStart = true) => {
+  const handleFileSelect = async (file, autoStart = true) => {
     if (!file) return;
-    if (!file.name.match(/\.(mp4|mov|mkv|avi|webm)$/i)) {
-      setUploadError("Please select a valid video file (.mp4, .mov, .mkv, .avi, .webm)");
+    if (!file.name.match(/\.(mp4|mov|avi)$/i)) {
+      setUploadError("Please select a supported video file (.mp4, .mov, or .avi).");
+      return;
+    }
+    try {
+      const uploadConfig = await getUploadConfig();
+      const maxBytes = Number(uploadConfig.max_upload_size_bytes) || 200 * 1024 * 1024;
+      if (file.size > maxBytes) {
+        setUploadError(`This video is ${(file.size / (1024 * 1024)).toFixed(1)} MB. The maximum allowed size is ${(maxBytes / (1024 * 1024)).toFixed(0)} MB.`);
+        return;
+      }
+    } catch (error) {
+      setUploadError(error.message || "Unable to verify the configured video upload limit.");
       return;
     }
     setSelectedFile(file);
+    uploadIdRef.current = null;
     setUploadError("");
     if (autoStart) {
       handleStartUpload(file);
@@ -142,21 +155,23 @@ export default function VideoPlayer({
 
     try {
       let result;
-      try {
+      if (file.size > 4 * 1024 * 1024) {
+        uploadIdRef.current ||= `upl_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
         result = await uploadVideoChunk(mission.id, file, (info) => {
           const num = typeof info === "object" ? Number(info.progress ?? 0) : Number(info ?? 0);
           setUploadProgress(num);
-          const chunkStr = typeof info === "object" && info.chunkIndex && info.totalChunks
+          const chunkStr = typeof info === "object" && info.chunkIndex !== undefined && info.totalChunks
             ? `chunk ${info.chunkIndex}/${info.totalChunks} `
             : "";
           const speedStr = typeof info === "object" && info.speedMBps
             ? ` @ ${info.speedMBps} MB/s`
             : "";
-          setUploadStatusMsg(`Uploading ${chunkStr}(${num}%${speedStr})`);
-        });
-      } catch (chunkErr) {
-        console.warn("[VideoPlayer] Chunked upload failed, falling back to direct upload:", chunkErr);
-        setUploadStatusMsg("Uploading via direct stream...");
+          const byteStr = typeof info === "object" && info.totalBytes
+            ? ` ${(info.uploadedBytes / (1024 * 1024)).toFixed(1)}/${(info.totalBytes / (1024 * 1024)).toFixed(1)} MB`
+            : "";
+          setUploadStatusMsg(info.retryStatus || `Uploading${byteStr} ${chunkStr}(${num}%${speedStr})`);
+        }, undefined, { uploadId: uploadIdRef.current });
+      } else {
         result = await uploadVideo(mission.id, file);
       }
 
@@ -506,6 +521,11 @@ export default function VideoPlayer({
                 <div className="upload-error-alert">
                   <Icon name="AlertCircle" size={14} />
                   <span>{uploadError}</span>
+                  {selectedFile && (
+                    <button type="button" onClick={() => handleStartUpload(selectedFile)}>
+                      Retry upload
+                    </button>
+                  )}
                 </div>
               )}
             </div>

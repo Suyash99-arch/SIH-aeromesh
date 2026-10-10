@@ -216,6 +216,35 @@ export function uploadVideo(missionId: string, file: File): Promise<{
   video_metadata: VideoMetadata;
 }>;
 
+export function getUploadConfig(): Promise<{
+  max_upload_size_bytes: number;
+  max_upload_size_mb: number;
+  allowed_video_extensions: string[];
+  direct_upload_limit_bytes: number;
+  chunk_size_bytes: number;
+  storage_backend: string;
+  storage_persistence: string;
+  max_storage_bytes: number;
+  pipeline_mode: string;
+  heavy_reconstruction_available: boolean;
+}>;
+
+export function uploadVideoChunk(
+  missionId: string,
+  file: File,
+  onProgress?: (progress: {
+    progress: number;
+    uploadedBytes: number;
+    totalBytes: number;
+    speedMBps: string;
+    chunkIndex: number;
+    totalChunks: number;
+    retryStatus?: string;
+  }) => void,
+  signal?: AbortSignal,
+  options?: { uploadId?: string },
+): Promise<Record<string, unknown>>;
+
 export function processVideo(
   missionId: string,
   frameSampling?: number,

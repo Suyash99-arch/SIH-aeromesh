@@ -17,4 +17,5 @@ reportlab>=4.1.0
 httpx>=0.27.0
 opencv-python-headless==4.11.0.86
 numpy>=1.26.0,<2.0.0
+psutil>=5.9.0,<8.0.0
 python-dotenv>=1.0.0

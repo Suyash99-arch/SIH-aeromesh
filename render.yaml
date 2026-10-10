@@ -31,6 +31,12 @@ services:
         value: "light"
       - key: PROFILE
         value: "api"
+      - key: AEROMESH_DATA_DIR
+        value: "/app/data"
+      - key: MAX_UPLOAD_SIZE_BYTES
+        value: "209715200"
+      - key: MAX_STORAGE_BYTES
+        value: "1073741824"
       - key: PYTHONUNBUFFERED
         value: "1"
       - key: PYTHONDONTWRITEBYTECODE

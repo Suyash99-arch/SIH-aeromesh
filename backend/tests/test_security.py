@@ -219,23 +219,37 @@ def test_safe_error_handling_no_stack_trace_leak():
     assert "Traceback (most recent call last)" not in res.text
 
 
-def test_pipeline_disabled_worker_disconnected_returns_503(monkeypatch, mock_mission_data):
-    """Verify upload and process endpoints return 503 when PIPELINE_ENABLED=false and no WORKER_URL."""
+def test_lightweight_profile_reports_upload_only_when_worker_disconnected(
+    monkeypatch, mock_mission_data
+):
+    """Verify light-profile uploads succeed honestly without claiming reconstruction."""
     from backend import main
     client = TestClient(main.app)
     m_id = mock_mission_data["id"]
 
     monkeypatch.setenv("PIPELINE_ENABLED", "false")
+    monkeypatch.setenv("PIPELINE_MODE", "light")
     monkeypatch.delenv("WORKER_URL", raising=False)
+    monkeypatch.setattr(main, "is_lightweight_profile", lambda: True)
 
-    # 1. Process endpoints return 503
+    # Processing requests report upload-only instead of pretending to reconstruct.
     res_proc_v1 = client.post(f"/api/v1/missions/{m_id}/process")
-    assert res_proc_v1.status_code == 503
-    assert "Processing worker not connected" in res_proc_v1.json()["detail"]
+    assert res_proc_v1.status_code == 200
+    assert res_proc_v1.json()["status"] == "UPLOAD_ONLY"
+    assert res_proc_v1.json()["heavy_reconstruction_available"] is False
+    assert "requires the full compute profile" in res_proc_v1.json()["message"]
 
-    # 2. Upload endpoint returns 503
+    def accept_test_video(video_path, safe_name, mission_id, request, storage_metadata):
+        return {
+            "filename": safe_name,
+            "storage_key": storage_metadata.key,
+            "size_bytes": video_path.stat().st_size,
+        }
+
+    monkeypatch.setattr(main, "_process_and_validate_video_file", accept_test_video)
     mp4_bytes = b"\x00\x00\x00\x20ftypisom\x00\x00\x02\x00isomiso2avc1mp41" + b"\x00" * 4000
     files = {"file": ("flight.mp4", mp4_bytes, "video/mp4")}
     res_up = client.post(f"/api/v1/missions/{m_id}/upload", files=files)
-    assert res_up.status_code == 503
-    assert "Processing worker not connected" in res_up.json()["detail"]
+    assert res_up.status_code == 200, res_up.text
+    assert res_up.json()["processing"]["status"] == "upload_only"
+    assert res_up.json()["processing"]["heavy_reconstruction_available"] is False

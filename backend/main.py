@@ -15,6 +15,7 @@ import importlib.util
 import secrets
 import base64
 import asyncio
+import psutil
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
@@ -33,10 +34,18 @@ if os.environ.get("AEROMESH_OFFLINE") == "1" or os.environ.get("OFFLINE") == "1"
     os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
 os.environ.setdefault("YOLO_VERBOSE", "False")
 
-try:
-    import cv2
-except ImportError:
-    cv2 = None
+class _LazyModule:
+    def __init__(self, module_name: str):
+        self._module_name = module_name
+        self._module = None
+
+    def __getattr__(self, name: str):
+        if self._module is None:
+            self._module = importlib.import_module(self._module_name)
+        return getattr(self._module, name)
+
+
+cv2 = _LazyModule("cv2")
 import numpy as np
 from fastapi import (
     BackgroundTasks,
@@ -55,11 +64,21 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.exceptions import HTTPException as StarletteHTTPException
+from starlette.concurrency import run_in_threadpool
 import uvicorn
 from backend.database import check_database, get_configured_engine, get_database_url, mask_database_url, session_scope, summarize_database_error, validate_production_database_url
 from backend.repository import MissionRepository
 from backend.jobs import JOB_STAGES, create_job, get_job, update_job
 from backend.storage import get_storage, mission_object_key
+from backend.upload_sessions import (
+    CHUNK_SIZE_BYTES,
+    assemble_chunks,
+    prune_stale_uploads,
+    received_chunk_indexes,
+    upload_directory,
+    upload_lock,
+    write_chunk,
+)
 from backend.tasks import enqueue_processing_job
 from pydantic import BaseModel, Field
 from backend.security import (
@@ -120,15 +139,10 @@ try:
 except Exception:  # pragma: no cover
     load_dotenv = None
 
-try:
-    from backend.reconstruction import (
-        get_reconstruction_pointcloud_path,
-        get_reconstruction_mesh_path,
-        get_reconstruction_metadata,
-        run_reconstruction_for_mission,
-    )
-except Exception:  # pragma: no cover
-    def run_reconstruction_for_mission(*args, **kwargs):
+def run_reconstruction_for_mission(*args, **kwargs):
+    try:
+        from backend.reconstruction import run_reconstruction_for_mission as run
+    except ImportError:  # pragma: no cover
         return {
             "success": False,
             "status": "FAILED",
@@ -137,17 +151,36 @@ except Exception:  # pragma: no cover
             "processing_time_s": 0.0,
             "output_path": None,
         }
-    def get_reconstruction_pointcloud_path(*args, **kwargs):
-        return None
-    def get_reconstruction_mesh_path(*args, **kwargs):
-        return None
-    def get_reconstruction_metadata(*args, **kwargs):
-        return None
+    return run(*args, **kwargs)
 
-try:
-    from backend.damage_detection import analyze_damage_for_mission, detect_entry_exit_points
-except Exception:  # pragma: no cover
-    def analyze_damage_for_mission(*args, **kwargs):
+
+def get_reconstruction_pointcloud_path(*args, **kwargs):
+    try:
+        from backend.reconstruction import get_reconstruction_pointcloud_path as get_path
+    except ImportError:  # pragma: no cover
+        return None
+    return get_path(*args, **kwargs)
+
+
+def get_reconstruction_mesh_path(*args, **kwargs):
+    try:
+        from backend.reconstruction import get_reconstruction_mesh_path as get_path
+    except ImportError:  # pragma: no cover
+        return None
+    return get_path(*args, **kwargs)
+
+
+def get_reconstruction_metadata(*args, **kwargs):
+    try:
+        from backend.reconstruction import get_reconstruction_metadata as get_metadata
+    except ImportError:  # pragma: no cover
+        return None
+    return get_metadata(*args, **kwargs)
+
+def analyze_damage_for_mission(*args, **kwargs):
+    try:
+        from backend.damage_detection import analyze_damage_for_mission as analyze
+    except ImportError:  # pragma: no cover
         return {
             "available": False,
             "status": "UNKNOWN",
@@ -156,21 +189,31 @@ except Exception:  # pragma: no cover
             "processing_time_s": 0.0,
             "method": "roboflow",
         }
-    def detect_entry_exit_points(*args, **kwargs):
+    return analyze(*args, **kwargs)
+
+
+def detect_entry_exit_points(*args, **kwargs):
+    try:
+        from backend.damage_detection import detect_entry_exit_points as detect
+    except ImportError:  # pragma: no cover
         return {
             "available": False,
             "status": "UNKNOWN",
             "points": [],
             "method": "opencv_heuristic",
         }
+    return detect(*args, **kwargs)
 
 # ============================================================
 # CONFIG
 # ============================================================
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-DATA_DIR = BASE_DIR / "data"
+DATA_DIR = Path(os.getenv("AEROMESH_DATA_DIR", str(BASE_DIR / "data"))).resolve()
 MISSIONS_DIR = DATA_DIR / "missions"
+MAX_UPLOAD_SIZE_BYTES = max(1, int(os.getenv("MAX_UPLOAD_SIZE_BYTES", str(200 * 1024 * 1024))))
+MAX_STORAGE_BYTES = max(1, int(os.getenv("MAX_STORAGE_BYTES", str(1024 * 1024 * 1024))))
+DIRECT_UPLOAD_LIMIT_BYTES = 4 * 1024 * 1024
 MAX_VIDEO_DURATION_SECONDS = min(180.0, max(1.0, float(os.getenv("MAX_VIDEO_DURATION_SECONDS", "180"))))
 
 # Configure logging
@@ -284,8 +327,24 @@ app.add_middleware(
     allow_origin_regex=r"^https?://(localhost|127\.0\.0\.1)(:\d+)?$|^https://.*\.vercel\.app$",
     allow_credentials=True,
     allow_methods=["*"],
-    allow_headers=["*"],
-    expose_headers=["Content-Range", "Accept-Ranges", "Content-Length", "Content-Disposition"],
+    allow_headers=[
+        "Accept",
+        "Authorization",
+        "Content-Type",
+        "Origin",
+        "X-Requested-With",
+        "X-Chunk-Index",
+        "X-Total-Chunks",
+        "X-Upload-Id",
+        "ngrok-skip-browser-warning",
+    ],
+    expose_headers=[
+        "Content-Range",
+        "Accept-Ranges",
+        "Content-Length",
+        "Content-Disposition",
+        "X-Request-ID",
+    ],
 )
 
 # 2. HTTP Security Headers
@@ -333,7 +392,11 @@ app.include_router(scenes_router, prefix="/scenes")
 async def starlette_http_exception_handler(request: Request, exc: StarletteHTTPException):
     return JSONResponse(
         status_code=exc.status_code,
-        content={"error": "HTTP_EXCEPTION", "detail": exc.detail},
+        content={
+            "error": "HTTP_EXCEPTION",
+            "detail": exc.detail,
+            "request_id": str(uuid.uuid4()),
+        },
         headers=getattr(exc, "headers", None) or {},
     )
 
@@ -341,7 +404,11 @@ async def starlette_http_exception_handler(request: Request, exc: StarletteHTTPE
 async def http_exception_handler(request: Request, exc: HTTPException):
     return JSONResponse(
         status_code=exc.status_code,
-        content={"error": "HTTP_EXCEPTION", "detail": exc.detail},
+        content={
+            "error": "HTTP_EXCEPTION",
+            "detail": exc.detail,
+            "request_id": str(uuid.uuid4()),
+        },
         headers=getattr(exc, "headers", None) or {},
     )
 
@@ -947,6 +1014,67 @@ def is_pipeline_enabled() -> bool:
         return True
     return val.strip().lower() in ("1", "true", "yes", "on")
 
+
+def get_pipeline_mode() -> str:
+    configured = os.getenv("PIPELINE_MODE", "").strip().lower()
+    if configured in {"light", "heavy"}:
+        return configured
+    return "heavy" if is_pipeline_enabled() and not is_api_profile() else "light"
+
+
+def is_lightweight_profile() -> bool:
+    return get_pipeline_mode() != "heavy"
+
+
+def log_process_memory(event: str) -> None:
+    try:
+        rss_mb = psutil.Process(os.getpid()).memory_info().rss / (1024 * 1024)
+    except (OSError, psutil.Error) as exc:
+        logger.warning("Unable to read process RSS for %s: %s", event, exc)
+        return
+    logger.info("Process memory event=%s rss_mb=%.1f", event, rss_mb)
+
+
+def _local_storage_usage_bytes() -> int:
+    roots = [DATA_DIR]
+    is_s3 = os.getenv("STORAGE_BACKEND", "").strip().lower() == "s3" or bool(os.getenv("S3_BUCKET"))
+    if not is_s3:
+        configured_root = os.getenv("OBJECT_STORAGE_ROOT", "").strip()
+        roots.append(
+            Path(configured_root).resolve()
+            if configured_root
+            else (DATA_DIR / "objects").resolve()
+        )
+    total = 0
+    seen: Set[Path] = set()
+    for root in roots:
+        if not root.exists():
+            continue
+        resolved_root = root.resolve()
+        if resolved_root in seen:
+            continue
+        seen.add(resolved_root)
+        for path in resolved_root.rglob("*"):
+            if path.is_file():
+                try:
+                    total += path.stat().st_size
+                except OSError:
+                    continue
+    return total
+
+
+def _ensure_local_storage_capacity(additional_bytes: int, replacing_bytes: int = 0) -> None:
+    used_bytes = max(0, _local_storage_usage_bytes() - replacing_bytes)
+    if used_bytes + additional_bytes > MAX_STORAGE_BYTES:
+        raise HTTPException(
+            status_code=status.HTTP_507_INSUFFICIENT_STORAGE,
+            detail=(
+                "Local upload storage is full. Delete older missions or configure "
+                "STORAGE_BACKEND=s3 before uploading more videos."
+            ),
+        )
+
+
 def get_worker_url() -> Optional[str]:
     url = os.getenv("WORKER_URL", "").strip()
     return url.rstrip("/") if url else None
@@ -963,13 +1091,6 @@ def get_git_commit() -> str:
     commit = os.getenv("RENDER_GIT_COMMIT") or os.getenv("GIT_COMMIT")
     if commit:
         return commit[:8]
-    try:
-        import subprocess
-        res = subprocess.run(["git", "rev-parse", "--short", "HEAD"], capture_output=True, text=True, timeout=2)
-        if res.returncode == 0 and res.stdout.strip():
-            return res.stdout.strip()
-    except Exception:
-        pass
     return "unknown"
 
 _detected_compute_device = None
@@ -1107,6 +1228,14 @@ def print_startup_summary(dev: Dict[str, Any], env_info: Dict[str, Any]):
 
 @app.on_event("startup")
 async def startup_hardware_detection():
+    log_process_memory("startup")
+    try:
+        removed_uploads = prune_stale_uploads(DATA_DIR)
+        if removed_uploads:
+            logger.info("Removed %d stale partial upload session(s)", removed_uploads)
+    except OSError:
+        logger.exception("Unable to clean stale partial upload sessions")
+
     # 1. Production Mode Check: Strictly enforce PostgreSQL
     if is_production_mode():
         raw_url = os.getenv("DATABASE_URL", "").strip()
@@ -1123,22 +1252,22 @@ async def startup_hardware_detection():
                 logger.critical("PRODUCTION STARTUP HALTED: Active PostgreSQL connection required at %s.", masked)
                 raise RuntimeError(f"PRODUCTION STARTUP HALTED: Active PostgreSQL connection required at {masked}.")
 
-    # 2. Environment & Model Weights Verification
-    try:
-        from backend.model_downloader import ensure_model_weights
-        ensure_model_weights()
-    except Exception as mw_exc:
-        logger.warning("Model weights check/download encountered an error: %s", mw_exc)
-
-    if is_pipeline_enabled():
-        env_info = verify_environment(strict=True)
+    # Keep the API profile free of ML imports and model downloads at startup.
+    if is_api_profile():
+        env_info = {"ffmpeg": check_ffmpeg_environment(strict=False), "opencv": {"available": False}}
         dev = detect_compute_device()
     else:
-        env_info = verify_environment(strict=False)
+        try:
+            from backend.model_downloader import ensure_model_weights
+            ensure_model_weights()
+        except Exception as mw_exc:
+            logger.warning("Model weights check/download encountered an error: %s", mw_exc)
+        env_info = verify_environment(strict=is_pipeline_enabled())
         dev = detect_compute_device()
 
     # 3. Print Clean Startup Summary
     print_startup_summary(dev, env_info)
+    log_process_memory("startup_complete")
 
     # 4. Orphaned Job Recovery: Convert stuck PROCESSING / QUEUED missions to INTERRUPTED
     try:
@@ -1194,23 +1323,10 @@ async def get_ai_engine_status():
     """Live status of AI inference models, pycolmap photogrammetry, compute hardware, and tiling."""
     model_path = Path(os.getenv("YOLO_MODEL_PATH", "backend/models/aeromesh_yolo.pt"))
     weights_present = model_path.exists() and model_path.stat().st_size > 1000
-    detector_loadable = False
-    if weights_present:
-        try:
-            from backend.model_registry import ModelRegistry
-            registry = ModelRegistry(model_path)
-            rec = registry.inspect()
-            detector_loadable = bool(rec.available)
-        except Exception:
-            detector_loadable = False
-
-    try:
-        import pycolmap  # type: ignore
-        has_colmap = True
-        colmap_ver = getattr(pycolmap, "__version__", "4.1.1")
-    except ImportError:
-        has_colmap = False
-        colmap_ver = None
+    lightweight = is_lightweight_profile()
+    detector_loadable = weights_present and not lightweight
+    has_colmap = importlib.util.find_spec("pycolmap") is not None and not lightweight
+    colmap_ver = "installed (not loaded)" if has_colmap else None
 
     comp_device = detect_compute_device()
     is_cuda = comp_device.get("is_cuda", False) or comp_device.get("device") == "cuda"
@@ -1222,7 +1338,9 @@ async def get_ai_engine_status():
     detector_label = "YOLO Object Detection (Loaded)" if (weights_present and detector_loadable) else "Detector: not loaded"
     detector_status = "LOADED" if (weights_present and detector_loadable) else "NOT_LOADED"
     
-    colmap_label = f"pycolmap {colmap_ver}" if has_colmap else "pycolmap not importable"
+    colmap_label = f"pycolmap {colmap_ver}" if has_colmap else (
+        "Heavy reconstruction requires the full compute profile" if lightweight else "pycolmap not importable"
+    )
     colmap_status = "AVAILABLE" if has_colmap else "UNAVAILABLE"
 
     return {
@@ -1236,7 +1354,7 @@ async def get_ai_engine_status():
             "model_path": str(model_path),
         },
         "reconstruction": {
-            "status": colmap_status,
+            "status": "DISABLED" if lightweight else colmap_status,
             "label": colmap_label,
             "ready": bool(has_colmap),
             "importable": has_colmap,
@@ -1312,47 +1430,23 @@ async def estimate_system_eta(
 @app.get("/api/health", deprecated=True)
 @app.get("/api/v1/health")
 async def health():
-    if database_migration_error_summary:
-        return {
-            "database": "migration_failed",
-            "error_summary": database_migration_error_summary,
-        }
-
     database_engine = get_configured_engine()
-    database_configured = database_engine is not None
-    database_ready = check_database(database_engine) if database_configured else False
-    db_url = (get_database_url() or (str(database_engine.url) if database_engine else "")).lower()
-    if database_ready:
-        if "postgres" in db_url:
-            db_status = "postgres"
-        elif "sqlite" in db_url:
-            db_status = "sqlite"
-        else:
-            db_status = "ready"
+    db_url = (get_database_url() or "").lower()
+    if database_migration_error_summary:
+        db_status = "migration_failed"
+    elif database_engine is None:
+        db_status = "json_fallback"
+    elif "postgres" in db_url:
+        db_status = "postgres_configured"
+    elif "sqlite" in db_url:
+        db_status = "sqlite_configured"
     else:
-        db_status = "configured_unavailable" if database_configured else "json_fallback"
-    
-    cv_status = check_opencv_environment(strict=False)
-    ff_status = check_ffmpeg_environment(strict=False)
+        db_status = "database_configured"
 
-    storage_status = "ready"
-    try:
-        storage = get_storage(DATA_DIR / "objects")
-        storage_status = "ready" if storage is not None else "unavailable"
-    except Exception:
-        storage_status = "unavailable"
-
+    s3_configured = os.getenv("STORAGE_BACKEND", "").strip().lower() == "s3" or bool(os.getenv("S3_BUCKET"))
+    storage_status = "s3" if s3_configured else "local_ephemeral"
     pipeline_on = is_pipeline_enabled()
-    render_mode = "light" if os.getenv("RENDER", "").lower() in ("1", "true", "yes") else "heavy"
-    pipeline_mode = os.getenv("PIPELINE_MODE", render_mode).strip().lower()
-    if pipeline_mode not in ("heavy", "light"):
-        pipeline_mode = "heavy"
-    try:
-        from backend.reconstruction import has_pycolmap as colmap_available
-        if not colmap_available:
-            pipeline_mode = "light"
-    except Exception:
-        pipeline_mode = "light"
+    pipeline_mode = get_pipeline_mode()
     git_commit = get_git_commit()
 
     # Mounted route prefixes calculation
@@ -1378,15 +1472,34 @@ async def health():
         "storage": storage_status,
         "pipeline_enabled": pipeline_on,
         "pipeline_mode": pipeline_mode,
+        "storage_persistence": "durable" if s3_configured else "ephemeral",
+        "max_upload_size_bytes": MAX_UPLOAD_SIZE_BYTES,
         "mounted_route_prefixes": mounted_prefixes,
         # Backward-compatible fields
         "backend": "ready",
         "database": db_status,
-        "processing_engine": "ready",
-        "reconstruction_engine": "ready",
+        "processing_engine": "lightweight" if is_lightweight_profile() else "ready",
+        "reconstruction_engine": "disabled" if is_lightweight_profile() else "ready",
         "compute_device": detect_compute_device(),
-        "opencv_status": cv_status,
-        "ffmpeg_status": ff_status,
+        "opencv_status": "loaded_on_demand",
+        "ffmpeg_status": "checked_during_upload",
+    }
+
+
+@app.get("/api/v1/config")
+async def api_config():
+    s3_configured = os.getenv("STORAGE_BACKEND", "").strip().lower() == "s3" or bool(os.getenv("S3_BUCKET"))
+    return {
+        "max_upload_size_bytes": MAX_UPLOAD_SIZE_BYTES,
+        "max_upload_size_mb": round(MAX_UPLOAD_SIZE_BYTES / (1024 * 1024), 1),
+        "allowed_video_extensions": [".mp4", ".mov", ".avi"],
+        "direct_upload_limit_bytes": DIRECT_UPLOAD_LIMIT_BYTES,
+        "chunk_size_bytes": CHUNK_SIZE_BYTES,
+        "storage_backend": "s3" if s3_configured else "local_ephemeral",
+        "storage_persistence": "durable" if s3_configured else "ephemeral",
+        "max_storage_bytes": MAX_STORAGE_BYTES,
+        "pipeline_mode": get_pipeline_mode(),
+        "heavy_reconstruction_available": not is_lightweight_profile(),
     }
 
 
@@ -2576,6 +2689,23 @@ async def delete_mission(
 
     check_mission_access(mission_id, current_user, mission.data.get("created_by") or mission.data.get("owner_id"))
 
+    video_info = mission.data.get("video") or {}
+    storage_key = video_info.get("storage_key")
+    if storage_key:
+        try:
+            get_storage(DATA_DIR / "objects").delete(storage_key)
+        except Exception as exc:
+            request_id = str(uuid.uuid4())
+            logger.exception(
+                "Unable to delete mission video mission_id=%s [request_id=%s]",
+                mission_id,
+                request_id,
+            )
+            raise HTTPException(
+                status_code=500,
+                detail={"message": "Mission video could not be deleted", "request_id": request_id},
+            ) from exc
+
     # Remove mission file
     mission_file = MISSIONS_DIR / f"{mission_id}.json"
     if mission_file.exists():
@@ -2732,6 +2862,7 @@ def _process_and_validate_video_file(video_path: Path, safe_name: str, mission_i
     """Probe video with ffprobe & OpenCV, normalize/transcode non-compliant codecs (HEVC/VFR/Rotated), generate thumbnails, compute ETA."""
     from backend.video_ingest import probe_video, check_cv2_decodable, should_transcode, transcode_to_normalized_h264
 
+    lightweight = is_lightweight_profile()
     probe_info = probe_video(video_path)
     cv2_ok, cv2_err = check_cv2_decodable(video_path)
 
@@ -2758,9 +2889,12 @@ def _process_and_validate_video_file(video_path: Path, safe_name: str, mission_i
     mission_dir.mkdir(parents=True, exist_ok=True)
 
     needs_transcode, transcode_reason = should_transcode(probe_info, cv2_ok)
+    if lightweight:
+        needs_transcode = False
+        transcode_reason = "Skipped in lightweight profile"
     active_video_path = video_path
 
-    if needs_transcode:
+    if needs_transcode and not lightweight:
         logger.info("Normalizing video file for mission %s: %s", mission_id, transcode_reason)
         normalized_path = mission_dir / "normalized_video.mp4"
         try:
@@ -2830,12 +2964,19 @@ def _process_and_validate_video_file(video_path: Path, safe_name: str, mission_i
     )
 
     # Pre-flight reconstructability check
-    recon_check = None
-    try:
-        from backend.reconstructability import analyze_video_reconstructability
-        recon_check = analyze_video_reconstructability(active_video_path)
-    except Exception as exc:
-        logger.warning("Reconstructability pre-flight analysis failed: %s", exc)
+    if lightweight:
+        recon_check = {
+            "status": "DISABLED",
+            "available": False,
+            "reason": "Heavy reconstruction requires the full compute profile",
+        }
+    else:
+        recon_check = None
+        try:
+            from backend.reconstructability import analyze_video_reconstructability
+            recon_check = analyze_video_reconstructability(active_video_path)
+        except Exception as exc:
+            logger.warning("Reconstructability pre-flight analysis failed: %s", exc)
 
     video_info = {
         "filename": safe_name,
@@ -2856,6 +2997,17 @@ def _process_and_validate_video_file(video_path: Path, safe_name: str, mission_i
         "thumbnail_previews": thumb_previews,
         "initial_eta": initial_eta,
         "reconstructability": recon_check,
+        "processing_profile": "light" if lightweight else "heavy",
+        "storage_persistence": (
+            "durable"
+            if os.getenv("STORAGE_BACKEND", "").strip().lower() == "s3" or os.getenv("S3_BUCKET")
+            else "ephemeral"
+        ),
+        "processing_message": (
+            "Upload complete - heavy reconstruction requires the full compute profile"
+            if lightweight
+            else "Upload complete - full compute profile is available"
+        ),
     }
 
     mission = MissionData(mission_id)
@@ -2865,6 +3017,8 @@ def _process_and_validate_video_file(video_path: Path, safe_name: str, mission_i
         "video_path": str(mission_dir / "video.mp4"),
         "initial_eta": initial_eta,
         "reconstructability": recon_check,
+        "processing_profile": "light" if lightweight else "heavy",
+        "storage_persistence": video_info["storage_persistence"],
         "metadata": {**dict(mission.data.get("metadata") or {}), "reconstructability": recon_check},
     })
 
@@ -2874,6 +3028,66 @@ def _process_and_validate_video_file(video_path: Path, safe_name: str, mission_i
             MissionRepository(session).record_video(mission_id, video_info)
 
     return video_info
+
+
+def _persist_uploaded_video(
+    mission_id: str,
+    safe_name: str,
+    stream: Any,
+    content_type: Optional[str],
+    request: Request,
+    staged_path: Optional[Path] = None,
+) -> Dict[str, Any]:
+    stream.seek(0, os.SEEK_END)
+    size_bytes = stream.tell()
+    stream.seek(0)
+    if size_bytes > MAX_UPLOAD_SIZE_BYTES:
+        raise HTTPException(status_code=413, detail="Video exceeds the configured upload limit.")
+    storage = get_storage(DATA_DIR / "objects")
+    storage_key = mission_object_key(mission_id, safe_name)
+    local_storage_root = getattr(storage, "root", None)
+    owns_staged_file = False
+
+    try:
+        if local_storage_root is not None:
+            video_path = Path(local_storage_root) / storage_key
+            video_path.parent.mkdir(parents=True, exist_ok=True)
+            storage_metadata = storage.upload(storage_key, stream, safe_name, content_type)
+        else:
+            if staged_path is None:
+                stage_dir = upload_directory(DATA_DIR, mission_id, f"direct_{uuid.uuid4().hex}")
+                stage_dir.mkdir(parents=True, exist_ok=True)
+                staged_path = stage_dir / safe_name
+                with staged_path.open("wb") as staged_file:
+                    shutil.copyfileobj(stream, staged_file, length=1024 * 1024)
+                owns_staged_file = True
+            with staged_path.open("rb") as staged_file:
+                storage_metadata = storage.upload(storage_key, staged_file, safe_name, content_type)
+            video_path = staged_path
+        return _process_and_validate_video_file(
+            video_path, safe_name, mission_id, request, storage_metadata
+        )
+    finally:
+        if owns_staged_file:
+            shutil.rmtree(staged_path.parent, ignore_errors=True)
+
+
+def _upload_response(video_info: Dict[str, Any]) -> Dict[str, Any]:
+    lightweight = is_lightweight_profile()
+    return {
+        "success": True,
+        "video": video_info,
+        "next_step": "configure_processing",
+        "processing": {
+            "status": "upload_only" if lightweight else "ready",
+            "message": (
+                "Upload complete - heavy reconstruction requires the full compute profile"
+                if lightweight
+                else "Upload complete - full compute profile is available"
+            ),
+            "heavy_reconstruction_available": not lightweight,
+        },
+    }
 
 
 @app.post("/api/v1/missions/{mission_id}/video", dependencies=[Depends(rate_limit_dependency)])
@@ -2902,41 +3116,78 @@ async def upload_video(
         raise HTTPException(status_code=400, detail="Dangerous path traversal characters detected in filename")
 
     safe_name = sanitize_filename(file.filename)
-    allowed = {".mp4", ".mov", ".avi", ".mkv", ".webm"}
+    allowed = {".mp4", ".mov", ".avi"}
     if Path(safe_name).suffix.lower() not in allowed:
         raise HTTPException(status_code=400, detail=f"Unsupported format: {Path(safe_name).suffix}")
 
     file.file.seek(0, os.SEEK_END)
     upload_size = file.file.tell()
     file.file.seek(0)
+    if upload_size > MAX_UPLOAD_SIZE_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"Video exceeds the configured {MAX_UPLOAD_SIZE_BYTES // (1024 * 1024)} MB upload limit.",
+        )
+    if upload_size > DIRECT_UPLOAD_LIMIT_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail="Files larger than 4 MB must use the resumable chunked upload endpoint.",
+        )
     signature = file.file.read(64)
     file.file.seek(0)
     valid, error_reason = validate_uploaded_file(safe_name, signature, size_bytes=upload_size)
     if not valid:
         raise HTTPException(status_code=400, detail=error_reason)
 
-    if not is_pipeline_enabled() and not get_worker_url():
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Processing worker not connected. The backend API is running in lightweight profile (PIPELINE_ENABLED=false) and no WORKER_URL is configured. Please start a processing worker or connect via tunnel.",
+    _ensure_local_storage_capacity(upload_size)
+    try:
+        video_info = await run_in_threadpool(
+            _persist_uploaded_video,
+            mission_id,
+            safe_name,
+            file.file,
+            file.content_type,
+            request,
         )
+        return _upload_response(video_info)
+    finally:
+        log_process_memory("upload_complete")
 
-    storage = get_storage(DATA_DIR / "objects")
-    storage_key = mission_object_key(mission_id, safe_name)
-    storage_metadata = storage.upload(
-        storage_key,
-        file.file,
-        safe_name,
-        file.content_type,
-    )
 
-    video_path = DATA_DIR / "objects" / storage_key
-    video_info = _process_and_validate_video_file(video_path, safe_name, mission_id, request, storage_metadata)
-
+@app.get("/api/v1/missions/{mission_id}/upload-status")
+@app.get("/api/missions/{mission_id}/upload-status")
+async def get_video_upload_status(
+    mission_id: str,
+    upload_id: str = Query(...),
+    total_chunks: int = Query(..., ge=1),
+    current_user: Optional[UserRecord] = Depends(get_current_user_optional),
+):
+    mission = MissionData(mission_id)
+    if not mission.data:
+        raise HTTPException(status_code=404, detail="Mission not found")
+    check_mission_access(mission_id, current_user, mission.data.get("created_by") or mission.data.get("operator"))
+    try:
+        session_dir = upload_directory(DATA_DIR, mission_id, upload_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    completion_path = session_dir / "complete.json"
+    if completion_path.is_file():
+        with completion_path.open("r", encoding="utf-8") as complete_file:
+            complete_result = json.load(complete_file)
+        return {
+            "success": True,
+            "upload_id": upload_id,
+            "total_chunks": total_chunks,
+            "received_chunks": list(range(total_chunks)),
+            "complete": True,
+            "result": complete_result,
+        }
     return {
         "success": True,
-        "video": video_info,
-        "next_step": "configure_processing"
+        "upload_id": upload_id,
+        "total_chunks": total_chunks,
+        "received_chunks": received_chunk_indexes(session_dir, total_chunks),
+        "complete": False,
     }
 
 
@@ -2946,83 +3197,130 @@ async def upload_video_chunk(
     mission_id: str,
     request: Request,
     chunk: UploadFile = File(...),
-    chunk_index: int = Query(...),
-    total_chunks: int = Query(...),
+    chunk_index: int = Query(..., ge=0),
+    total_chunks: int = Query(..., ge=1),
     upload_id: str = Query(...),
     filename: str = Query(...),
     current_user: Optional[UserRecord] = Depends(get_current_user_optional),
 ):
-    """Chunked/resumable video upload handler with real-time progress and final assembly validation."""
+    """Stream a chunk to disk, then assemble a completed upload from disk."""
     mission = MissionData(mission_id)
     if not mission.data:
         raise HTTPException(status_code=404, detail="Mission not found")
-
     check_mission_access(mission_id, current_user, mission.data.get("created_by") or mission.data.get("operator"))
 
     if ".." in filename or "/" in filename or "\\" in filename:
         raise HTTPException(status_code=400, detail="Dangerous path traversal characters detected")
-
     safe_name = sanitize_filename(filename)
-    allowed = {".mp4", ".mov", ".avi", ".mkv", ".webm"}
-    if Path(safe_name).suffix.lower() not in allowed:
-        raise HTTPException(status_code=400, detail=f"Unsupported format: {Path(safe_name).suffix}")
+    if Path(safe_name).suffix.lower() not in {".mp4", ".mov", ".avi"}:
+        raise HTTPException(status_code=400, detail="Only MP4, MOV, and AVI video files are supported")
+    if chunk_index >= total_chunks:
+        raise HTTPException(status_code=400, detail="chunk_index must be less than total_chunks")
+    if total_chunks > (MAX_UPLOAD_SIZE_BYTES + CHUNK_SIZE_BYTES - 1) // CHUNK_SIZE_BYTES:
+        raise HTTPException(status_code=413, detail="Upload exceeds the configured file-size limit")
 
-    if not is_pipeline_enabled() and not get_worker_url():
-        raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Processing worker not connected. The backend API is running in lightweight profile (PIPELINE_ENABLED=false) and no WORKER_URL is configured. Please start a processing worker or connect via tunnel.",
-        )
+    try:
+        session_dir = upload_directory(DATA_DIR, mission_id, upload_id)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
 
-    staging_dir = DATA_DIR / "staging"
-    staging_dir.mkdir(parents=True, exist_ok=True)
-    chunk_file_path = staging_dir / f"{mission_id}_{upload_id}.part"
+    try:
+        prune_stale_uploads(DATA_DIR)
+        lock = upload_lock(f"{mission_id}:{upload_id}")
+        await run_in_threadpool(lock.acquire)
+        try:
+            completion_path = session_dir / "complete.json"
+            if completion_path.is_file():
+                with completion_path.open("r", encoding="utf-8") as complete_file:
+                    return json.load(complete_file)
 
-    chunk_content = await chunk.read()
-    mode = "ab" if chunk_index > 0 and chunk_file_path.exists() else "wb"
-    with open(chunk_file_path, mode) as f:
-        f.write(chunk_content)
+            session_dir.mkdir(parents=True, exist_ok=True)
+            chunk_path = session_dir / f"{chunk_index}.chunk"
+            replacing = chunk_path.stat().st_size if chunk_path.exists() else 0
+            chunk.file.seek(0, os.SEEK_END)
+            incoming_size = chunk.file.tell()
+            chunk.file.seek(0)
+            if incoming_size > CHUNK_SIZE_BYTES:
+                raise HTTPException(status_code=413, detail="Chunk exceeds the 2 MB chunk limit")
+            _ensure_local_storage_capacity(incoming_size, replacing_bytes=replacing)
+            written = await run_in_threadpool(
+                write_chunk,
+                chunk.file,
+                chunk_path,
+                CHUNK_SIZE_BYTES,
+            )
+            if written > MAX_UPLOAD_SIZE_BYTES:
+                chunk_path.unlink(missing_ok=True)
+                raise HTTPException(status_code=413, detail="Chunk exceeds the configured file-size limit")
 
-    if chunk_index + 1 < total_chunks:
-        return {
-            "success": True,
-            "chunk_received": chunk_index,
-            "total_chunks": total_chunks,
-            "progress_percent": round(((chunk_index + 1) / total_chunks) * 100, 1),
-            "status": "uploading_chunks",
-        }
+            received = received_chunk_indexes(session_dir, total_chunks)
+            current_size = sum((session_dir / f"{index}.chunk").stat().st_size for index in received)
+            if current_size > MAX_UPLOAD_SIZE_BYTES:
+                raise HTTPException(status_code=413, detail="Upload exceeds the configured file-size limit")
+            _ensure_local_storage_capacity(0)
+            if len(received) != total_chunks:
+                return {
+                    "success": True,
+                    "chunk_received": chunk_index,
+                    "received_chunks": received,
+                    "total_chunks": total_chunks,
+                    "uploaded_bytes": current_size,
+                    "progress_percent": round((len(received) / total_chunks) * 100, 1),
+                    "status": "uploading_chunks",
+                }
 
-    # Final chunk received: validate assembled file
-    with open(chunk_file_path, "rb") as f:
-        full_content = f.read()
+            _ensure_local_storage_capacity(current_size, replacing_bytes=current_size)
+            assembled_path = session_dir / f"assembled{Path(safe_name).suffix.lower()}"
+            await run_in_threadpool(assemble_chunks, session_dir, total_chunks, assembled_path)
+            s3_configured = (
+                os.getenv("STORAGE_BACKEND", "").strip().lower() == "s3"
+                or bool(os.getenv("S3_BUCKET"))
+            )
+            _ensure_local_storage_capacity(
+                current_size if s3_configured else current_size * 2
+            )
+            with assembled_path.open("rb") as assembled_file:
+                signature = assembled_file.read(64)
+            valid, error_reason = validate_uploaded_file(
+                safe_name,
+                signature,
+                max_size_bytes=MAX_UPLOAD_SIZE_BYTES,
+                size_bytes=current_size,
+            )
+            if not valid:
+                raise HTTPException(status_code=400, detail=error_reason)
 
-    valid, error_reason = validate_uploaded_file(safe_name, full_content)
-    if not valid:
-        chunk_file_path.unlink(missing_ok=True)
-        raise HTTPException(status_code=400, detail=error_reason)
+            with assembled_path.open("rb") as assembled_file:
+                video_info = await run_in_threadpool(
+                    _persist_uploaded_video,
+                    mission_id,
+                    safe_name,
+                    assembled_file,
+                    chunk.content_type or "video/mp4",
+                    request,
+                    assembled_path,
+                )
 
-    storage = get_storage(DATA_DIR / "objects")
-    storage_key = mission_object_key(mission_id, safe_name)
-    storage_metadata = storage.upload(
-        storage_key,
-        io.BytesIO(full_content),
-        safe_name,
-        chunk.content_type or "video/mp4",
-    )
-    chunk_file_path.unlink(missing_ok=True)
-
-    video_path = DATA_DIR / "objects" / storage_key
-    if not video_path.exists():
-        video_path.parent.mkdir(parents=True, exist_ok=True)
-        video_path.write_bytes(full_content)
-
-    video_info = _process_and_validate_video_file(video_path, safe_name, mission_id, request, storage_metadata)
-
-    return {
-        "success": True,
-        "video": video_info,
-        "status": "upload_complete",
-        "next_step": "configure_processing"
-    }
+            response = _upload_response(video_info)
+            response.update({
+                "status": "upload_complete",
+                "upload_id": upload_id,
+                "total_chunks": total_chunks,
+                "received_chunks": received,
+                "uploaded_bytes": current_size,
+            })
+            complete_tmp = session_dir / "complete.tmp"
+            complete_tmp.write_text(json.dumps(response), encoding="utf-8")
+            os.replace(complete_tmp, completion_path)
+            for index in received:
+                (session_dir / f"{index}.chunk").unlink(missing_ok=True)
+            assembled_path.unlink(missing_ok=True)
+            return response
+        finally:
+            lock.release()
+    finally:
+        await chunk.close()
+        log_process_memory("chunk_upload_complete")
 
 
 @app.get("/api/v1/missions/{mission_id}/thumbnails/{filename}")
@@ -3609,6 +3907,21 @@ async def create_processing_job(
     mission = MissionData(target_mission_id)
     if not mission.data:
         raise HTTPException(status_code=404, detail="Mission not found")
+    if is_lightweight_profile():
+        message = "Upload complete - heavy reconstruction requires the full compute profile"
+        mission.update({
+            "status": "video_uploaded",
+            "processing_message": message,
+            "processing_profile": "light",
+            "reconstruction": {"status": "DISABLED", "reason": message},
+        })
+        return {
+            "success": True,
+            "status": "UPLOAD_ONLY",
+            "mission_id": target_mission_id,
+            "heavy_reconstruction_available": False,
+            "message": message,
+        }
 
     worker_url = get_worker_url()
     if not is_pipeline_enabled():
@@ -4888,6 +5201,22 @@ async def process_video(
     mission = MissionData(mission_id)
     if not mission.data:
         raise HTTPException(status_code=404, detail="Mission not found")
+
+    if is_lightweight_profile():
+        message = "Upload complete - heavy reconstruction requires the full compute profile"
+        mission.update({
+            "status": "video_uploaded",
+            "processing_message": message,
+            "processing_profile": "light",
+            "reconstruction": {"status": "DISABLED", "reason": message},
+        })
+        return {
+            "success": True,
+            "status": "UPLOAD_ONLY",
+            "mission_id": mission_id,
+            "heavy_reconstruction_available": False,
+            "message": message,
+        }
 
     worker_url = get_worker_url()
     if not is_pipeline_enabled():
@@ -6767,4 +7096,3 @@ for _route in app.routes:
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
-

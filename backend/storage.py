@@ -180,16 +180,28 @@ class S3ObjectStorage(ObjectStorage):
         content_type: Optional[str] = None,
     ) -> StorageMetadata:
         digest = hashlib.sha256()
-        body = data.read()
-        digest.update(body)
+        start_position = data.tell()
+        size = 0
+        while chunk := data.read(1024 * 1024):
+            digest.update(chunk)
+            size += len(chunk)
+        data.seek(start_position)
         c_type = content_type or mimetypes.guess_type(filename)[0] or "application/octet-stream"
-        self.client.put_object(
-            Bucket=self.bucket,
-            Key=key,
-            Body=body,
-            ContentType=c_type,
+        from boto3.s3.transfer import TransferConfig
+
+        self.client.upload_fileobj(
+            data,
+            self.bucket,
+            key,
+            ExtraArgs={"ContentType": c_type},
+            Config=TransferConfig(
+                multipart_threshold=8 * 1024 * 1024,
+                multipart_chunksize=8 * 1024 * 1024,
+                max_concurrency=1,
+                use_threads=False,
+            ),
         )
-        return StorageMetadata(key, filename, c_type, len(body), digest.hexdigest())
+        return StorageMetadata(key, filename, c_type, size, digest.hexdigest())
 
     def download(self, key: str) -> bytes:
         return self.client.get_object(Bucket=self.bucket, Key=key)["Body"].read()

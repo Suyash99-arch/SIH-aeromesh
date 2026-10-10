@@ -47,10 +47,10 @@ if is_prod_env and (not os.getenv("SECRET_KEY") or os.getenv("SECRET_KEY") == DE
 
 JWT_ALGORITHM = os.getenv("JWT_ALGORITHM", "HS256")
 JWT_EXPIRATION_MINUTES = int(os.getenv("JWT_EXPIRATION_MINUTES", "720"))  # 12 hours (operational shift duration)
-MAX_UPLOAD_SIZE_BYTES = min(
-    int(os.getenv("MAX_UPLOAD_SIZE_BYTES", str(150 * 1024 * 1024))),
-    150 * 1024 * 1024,
-)  # Render-friendly hard cap: 150 MB
+MAX_UPLOAD_SIZE_BYTES = max(
+    1,
+    int(os.getenv("MAX_UPLOAD_SIZE_BYTES", str(200 * 1024 * 1024))),
+)
 
 RATE_LIMIT_PER_MINUTE = int(os.getenv("RATE_LIMIT_PER_MINUTE", "120"))
 AUTH_OPTIONAL_MODE = os.getenv("AEROMESH_AUTH_OPTIONAL", "0").lower() in ("1", "true", "yes")
