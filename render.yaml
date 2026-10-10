@@ -26,7 +26,7 @@ services:
       - key: ALLOWED_ORIGINS
         value: "https://sih-aeromesh-blond.vercel.app,http://localhost:5173"
       - key: PIPELINE_ENABLED
-        value: "true"
+        value: "false"
       - key: PIPELINE_MODE
         value: "light"
       - key: PROFILE

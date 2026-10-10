@@ -1016,10 +1016,12 @@ def is_pipeline_enabled() -> bool:
 
 
 def get_pipeline_mode() -> str:
+    if is_api_profile():
+        return "light"
     configured = os.getenv("PIPELINE_MODE", "").strip().lower()
     if configured in {"light", "heavy"}:
         return configured
-    return "heavy" if is_pipeline_enabled() and not is_api_profile() else "light"
+    return "heavy" if is_pipeline_enabled() else "light"
 
 
 def is_lightweight_profile() -> bool:
@@ -1101,8 +1103,8 @@ def detect_compute_device() -> Dict[str, Any]:
     if _detected_compute_device is not None:
         return _detected_compute_device
 
-    # In API profile, NEVER import torch to avoid pulling heavy CUDA/runtime into memory
-    if is_api_profile():
+    # In lightweight profiles, NEVER import torch into the API process.
+    if is_lightweight_profile():
         _detected_compute_device = {
             "execution_device": "cpu",
             "cuda_available": False,
@@ -1252,8 +1254,8 @@ async def startup_hardware_detection():
                 logger.critical("PRODUCTION STARTUP HALTED: Active PostgreSQL connection required at %s.", masked)
                 raise RuntimeError(f"PRODUCTION STARTUP HALTED: Active PostgreSQL connection required at {masked}.")
 
-    # Keep the API profile free of ML imports and model downloads at startup.
-    if is_api_profile():
+    # Keep lightweight profiles free of ML imports and model downloads at startup.
+    if is_lightweight_profile():
         env_info = {"ffmpeg": check_ffmpeg_environment(strict=False), "opencv": {"available": False}}
         dev = detect_compute_device()
     else:

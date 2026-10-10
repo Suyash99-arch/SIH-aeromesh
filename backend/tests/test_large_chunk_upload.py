@@ -154,6 +154,14 @@ def test_health_and_upload_config_are_lightweight():
     assert engine.status_code == 200
 
 
+def test_api_profile_cannot_be_overridden_to_heavy(monkeypatch):
+    monkeypatch.setenv("PROFILE", "api")
+    monkeypatch.setenv("PIPELINE_MODE", "heavy")
+
+    assert main.get_pipeline_mode() == "light"
+    assert main.is_lightweight_profile() is True
+
+
 def test_vercel_upload_preflight_allows_upload_headers():
     client = TestClient(main.app)
     origin = "https://sih-aeromesh-blond.vercel.app"
