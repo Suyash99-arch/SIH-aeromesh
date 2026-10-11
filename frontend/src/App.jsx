@@ -32,6 +32,7 @@ import ErrorBoundary from "./components/common/ErrorBoundary";
 import { useUI } from "./context/UIContext";
 
 import AmbientCursorGlow from "./components/layout/AmbientCursorGlow";
+import CommandPalette from "./components/layout/CommandPalette";
 
 const getInitialMissionId = () => {
   if (typeof window !== "undefined") {
@@ -69,8 +70,22 @@ export default function App() {
     () => localStorage.getItem("aeromesh-theme") || "dark",
   );
   const [showCreateMission, setShowCreateMission] = useState(false);
+  const [showCommandPalette, setShowCommandPalette] = useState(false);
   const [mission, setMission] = useState(null);
   const { t } = useUI();
+
+  useEffect(() => {
+    const handleShortcut = (event) => {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        setShowCommandPalette((open) => !open);
+      } else if (event.key === "Escape") {
+        setShowCommandPalette(false);
+      }
+    };
+    window.addEventListener("keydown", handleShortcut);
+    return () => window.removeEventListener("keydown", handleShortcut);
+  }, []);
 
   const getPageTitle = (pageKey) => {
     const keyMap = {
@@ -351,6 +366,7 @@ export default function App() {
                 onNavigateDashboard={handleNavigateDashboard}
                 onStartMission={handleStartMission}
                 onOpenAuth={handleOpenAuth}
+                onOpenCommandPalette={() => setShowCommandPalette(true)}
               />
             </ErrorBoundary>
           </motion.div>
@@ -406,6 +422,7 @@ export default function App() {
                 currentUser={currentUser}
                 onOpenProfile={() => navigate("profile")}
                 onOpenAuth={() => setActivePage("auth")}
+                onOpenCommandPalette={() => setShowCommandPalette(true)}
               />
 
               <div className="content">
@@ -432,6 +449,14 @@ export default function App() {
         )}
       </AnimatePresence>
 
+      <CommandPalette
+        open={showCommandPalette}
+        onClose={() => setShowCommandPalette(false)}
+        onNavigate={handleNavigateDashboard}
+        onHome={() => { setShowHomepage(true); setActivePage("overview"); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+        onWorkflow={() => { setShowHomepage(true); setActivePage("overview"); window.setTimeout(() => document.getElementById("workflow")?.scrollIntoView({ behavior: "smooth" }), 80); }}
+      />
+
       {showCreateMission && (
         <CreateMissionModal
           onClose={() => setShowCreateMission(false)}
@@ -442,7 +467,7 @@ export default function App() {
       )}
 
       {toast && (
-        <div className={`toast ${toast.type}`}>
+        <div className={`toast ${toast.type}`} role={toast.type === "error" ? "alert" : "status"} aria-live={toast.type === "error" ? "assertive" : "polite"} aria-atomic="true">
           <span>✓</span>
           {toast.message}
         </div>

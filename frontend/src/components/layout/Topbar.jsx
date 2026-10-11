@@ -3,6 +3,7 @@ import AuthModal from "../auth/AuthModal";
 import { fetchHealthWithRetry } from "../../api/missions";
 import UIControlsToolbar from "./UIControlsToolbar";
 import { useUI } from "../../context/UIContext";
+import { Search } from "lucide-react";
 
 /** Poll /api/v1/health every 30s; returns { ok, label } */
 function useHealthStatus(language) {
@@ -32,6 +33,7 @@ export default function Topbar({
   currentUser,
   onOpenProfile,
   onOpenAuth,
+  onOpenCommandPalette,
 }) {
   const { t, language } = useUI();
   const health = useHealthStatus(language);
@@ -109,6 +111,9 @@ export default function Topbar({
       </div>
 
       <div className="top-actions" style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+        <button className="shell-command-trigger" type="button" onClick={onOpenCommandPalette} aria-label={t("commandPalette.title")} title={t("commandPalette.title")}>
+          <Search size={15} aria-hidden="true" /><span>{t("commandPalette.title")}</span><kbd>{t("commandPalette.shortcut")}</kbd>
+        </button>
         <UIControlsToolbar />
 
         {/* Health badge — driven by /api/v1/health, never hardcoded */}
