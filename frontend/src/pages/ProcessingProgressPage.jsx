@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { fetchHealthWithRetry, getMission, getProcessingStatus, processVideo } from "../api/missions";
 import { useUI } from "../context/UIContext";
+import { getStageStatusLabel } from "../utils/stageStatus";
 import "./ProcessingProgress.css";
 
 const defaultStages = [
@@ -214,7 +215,11 @@ export default function ProcessingProgressPage({ mission, navigate }) {
         >
           {isProcessing && <span className="spinner" />}
           {isQueued && <span style={{ marginRight: "6px" }}>⏳</span>}
-          {(isFailed ? "PIPELINE FAILED" : isQueued ? "QUEUED IN LINE" : missionStatus || "READY").toUpperCase()}
+          {isFailed
+            ? getStageStatusLabel("FAILED", t).toUpperCase()
+            : isQueued
+            ? getStageStatusLabel("QUEUED", t).toUpperCase()
+            : getStageStatusLabel(missionStatus || "READY", t).toUpperCase()}
         </div>
       </div>
 
@@ -523,7 +528,7 @@ export default function ProcessingProgressPage({ mission, navigate }) {
           <div className="info-grid">
             <div className="info-item">
               <label>{t("common.status")}</label>
-              <span className="value">{(statusData?.status || mission.status || "READY").toUpperCase()}</span>
+              <span className="value">{getStageStatusLabel(statusData?.status || mission.status || "READY", t).toUpperCase()}</span>
             </div>
             <div className="info-item">
               <label>{t("dashboard.frames")}</label>

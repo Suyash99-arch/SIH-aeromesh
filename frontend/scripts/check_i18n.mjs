@@ -1,6 +1,7 @@
 import { readFile, readdir } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { STAGE_STATUS_KEYS } from "../src/utils/stageStatus.js";
 
 const frontendRoot = fileURLToPath(new URL("..", import.meta.url));
 const sourceRoot = path.join(frontendRoot, "src");
@@ -34,10 +35,15 @@ const hiKeys = new Set(flattenPaths(hiJson));
 const missingInHindi = [...enKeys].filter((key) => !hiKeys.has(key));
 const missingInEnglish = [...hiKeys].filter((key) => !enKeys.has(key));
 const localeKeys = { en: enKeys, hi: hiKeys };
+const stageStatusLocaleKeys = [...new Set(Object.values(STAGE_STATUS_KEYS))];
+const missingStageStatusKeys = stageStatusLocaleKeys.flatMap((key) =>
+  ["en", "hi"].filter((language) => !localeKeys[language].has(key)).map((language) => `${language}: ${key}`),
+);
 
 const allSourceFiles = await sourceFiles(sourceRoot);
 const codeFiles = allSourceFiles.filter((file) => /\.(?:js|jsx|ts|tsx)$/u.test(file));
 const usedKeys = new Set();
+const dynamicStageLookups = [];
 const translationCall = /\bt\s*\(\s*(["'])([^"']+)\1/gu;
 for (const file of codeFiles) {
   const text = (await readFile(file, "utf8"))
@@ -46,6 +52,9 @@ for (const file of codeFiles) {
   for (const match of text.matchAll(translationCall)) {
     const key = match[2];
     if (!key.includes("${") && !key.endsWith(".")) usedKeys.add(key);
+  }
+  if (/\bt\s*\(\s*`[^`]*\bstages\.\$\{/u.test(text) || /\bt\s*\(\s*["']stages\.["']\s*\+/u.test(text)) {
+    dynamicStageLookups.push(path.relative(frontendRoot, file));
   }
 }
 const missingUsedKeys = [...usedKeys].flatMap((key) =>
@@ -69,6 +78,8 @@ const errors = [];
 if (missingInHindi.length) errors.push(`Missing in Hindi: ${missingInHindi.join(", ")}`);
 if (missingInEnglish.length) errors.push(`Missing in English: ${missingInEnglish.join(", ")}`);
 if (missingUsedKeys.length) errors.push(`t() keys missing from locale files: ${missingUsedKeys.join(", ")}`);
+if (missingStageStatusKeys.length) errors.push(`Stage status keys missing from locale files: ${missingStageStatusKeys.join(", ")}`);
+if (dynamicStageLookups.length) errors.push(`Dynamic stages.* translation lookups must use getStageStatusLabel(): ${dynamicStageLookups.join(", ")}`);
 if (badEncodingFiles.length) errors.push(`Mojibake patterns found in: ${badEncodingFiles.join(", ")}`);
 if (bomFiles.length) errors.push(`UTF-8 BOM found in: ${bomFiles.join(", ")}`);
 if (missingCharset) errors.push("index.html is missing <meta charset=\"utf-8\">");
@@ -78,4 +89,5 @@ if (errors.length) {
   process.exit(1);
 }
 console.log(`Locale parity passed (${enKeys.size} keys per locale); ${usedKeys.size} static t() keys exist in both locales.`);
+console.log(`Stage status map passed (${stageStatusLocaleKeys.length} translated status keys; no dynamic stage lookups).`);
 console.log(`Encoding checks passed (${filesToInspect.length} source/HTML files, UTF-8 without BOM, no mojibake).`);

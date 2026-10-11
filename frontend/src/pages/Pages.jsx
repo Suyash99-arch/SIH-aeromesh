@@ -6,6 +6,7 @@ import { missions, pipelineStages } from "../data/missions";
 import VideoPlayer from "../components/reconstruction/VideoPlayer";
 import MissionAnalysisWorkspace from "../components/analysis/MissionAnalysisWorkspace";
 import { useUI } from "../context/UIContext";
+import { getStageStatusLabel } from "../utils/stageStatus";
 import {
   fetchCalibrations,
   calibrateReferenceDistance,
@@ -307,7 +308,7 @@ export function OverviewPage({ mission, navigate, notice, setMission }) {
             {isRerunningDet ? t("missionCommand.rerunning") : t("missionCommand.rerunDetection")}
           </Button>
           <Status tone={isMissionFailed ? "critical" : isProcessing ? "info" : "success"}>
-            {(t(`stages.${(safeMission.status || "READY").toUpperCase()}`) || (safeMission.status || "READY")).toUpperCase()}
+            {getStageStatusLabel(safeMission.status || "READY", t).toUpperCase()}
           </Status>
         </div>
       </Header>
@@ -763,7 +764,7 @@ export function MissionsPage({ mission, setMission, navigate, notice, onCreateMi
           filteredList.map((m, index) => {
             const isSelected = mission?.id === m.id;
             const isProcessing = m.status === "processing" || m.status === "queued";
-            const statusText = isProcessing ? `${t("stages.PROCESSING")} (${m.progress || 0}%)` : (t(`stages.${(m.status || "READY").toUpperCase()}`) || (m.status || "READY")).toUpperCase();
+            const statusText = isProcessing ? `${t("stages.PROCESSING")} (${m.progress || 0}%)` : getStageStatusLabel(m.status || "READY", t).toUpperCase();
 
             return (
               <motion.div

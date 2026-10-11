@@ -23,6 +23,7 @@ import {
   fetchMissionKeyframes,
 } from "../../api/missions";
 import { useUI } from "../../context/UIContext";
+import { getStageStatusLabel } from "../../utils/stageStatus";
 
 export default function MissionAnalysisWorkspace({ mission, notice }) {
   const { t, language } = useUI();
@@ -636,7 +637,7 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
           </span>
 
           <span className="top-bar-status-pill">
-            <i /> {t("stages." + (mission?.status || "MESH_GENERATED"), mission?.status || "MESH_GENERATED")}
+            <i /> {getStageStatusLabel(mission?.status || "MESH_GENERATED", t)}
           </span>
 
           <span
