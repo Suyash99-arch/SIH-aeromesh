@@ -77,6 +77,22 @@ def test_frame_overlap_and_duplicate_filtering(tmp_path):
     assert is_near_duplicate(frame1, frame3, diff_threshold=2.0) is False
 
 
+def test_colmap_matcher_selection_is_configurable(monkeypatch):
+    from backend.reconstruction import _colmap_matcher_settings
+
+    monkeypatch.delenv("COLMAP_MATCHER", raising=False)
+    monkeypatch.delenv("COLMAP_OVERLAP", raising=False)
+    monkeypatch.delenv("COLMAP_LOOP_DETECTION", raising=False)
+    assert _colmap_matcher_settings(38) == ("sequential", 10, False)
+
+    monkeypatch.setenv("COLMAP_MATCHER", "exhaustive")
+    monkeypatch.setenv("COLMAP_OVERLAP", "6")
+    monkeypatch.setenv("COLMAP_LOOP_DETECTION", "true")
+    assert _colmap_matcher_settings(20) == ("exhaustive", 6, True)
+    # The frame safety limit still forces sequential pairing above 40 images.
+    assert _colmap_matcher_settings(41) == ("sequential", 6, True)
+
+
 def test_monocular_scale_reports_relative_scale():
     from backend.reconstruction import evaluate_scale_and_georeference
     metadata = evaluate_scale_and_georeference(has_gps=False, has_rtk=False, has_gcps=False)

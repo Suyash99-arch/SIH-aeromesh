@@ -102,6 +102,22 @@ KEYFRAME_TARGET_FRAMES = int(os.getenv("KEYFRAME_TARGET_FRAMES", "35"))
 KEYFRAME_MAX_FRAMES = int(os.getenv("RECONSTRUCTION_MAX_FRAMES", os.getenv("KEYFRAME_MAX_FRAMES", "120")))
 
 
+def _colmap_matcher_settings(total_frames: int) -> tuple[str, int, bool]:
+    """Resolve configurable COLMAP pairing for the current image sequence."""
+    matcher = os.getenv("COLMAP_MATCHER", "sequential").strip().lower()
+    overlap = max(1, int(os.getenv("COLMAP_OVERLAP", "10")))
+    loop_detection = os.getenv("COLMAP_LOOP_DETECTION", "false").strip().lower() in {"1", "true", "yes", "on"}
+
+    if total_frames > 40:
+        matcher = "sequential"
+    elif matcher == "auto":
+        # Reconstruction inputs are extracted from video, whose frames are ordered.
+        matcher = "sequential"
+    elif matcher not in {"sequential", "exhaustive"}:
+        matcher = "sequential"
+    return matcher, overlap, loop_detection
+
+
 # ============================================================
 # FRAME QUALITY & OVERLAP FILTERING
 # ============================================================
@@ -711,14 +727,11 @@ def _run_pycolmap_sfm(
 
     try:
         is_mock_seq = hasattr(pycolmap.match_sequential, "mock_calls") or type(pycolmap.match_sequential).__name__ == "MagicMock"
-        matcher_type = os.getenv("COLMAP_MATCHER", "auto").strip().lower()
-        overlap_val = int(os.getenv("COLMAP_OVERLAP", "15"))
+        matcher_type, overlap_val, loop_detection = _colmap_matcher_settings(total_input_frames)
         # Exhaustive matching grows quadratically and can exhaust small instances.
         # Even an explicit config cannot select it above the safe frame threshold.
         if total_input_frames > 40:
             matcher_type = "sequential"
-        elif matcher_type == "auto":
-            matcher_type = "exhaustive"
         if is_mock_seq:
             pycolmap.match_sequential(
                 database_path=str(database_path),
@@ -728,7 +741,7 @@ def _run_pycolmap_sfm(
         elif matcher_type == "sequential":
             seq_opts = pycolmap.SequentialPairingOptions()
             seq_opts.overlap = overlap_val
-            seq_opts.loop_detection = total_input_frames >= 20
+            seq_opts.loop_detection = loop_detection
             pycolmap.match_sequential(
                 database_path=str(database_path),
                 matching_options=matching_options,
@@ -746,7 +759,7 @@ def _run_pycolmap_sfm(
         else:
             seq_opts = pycolmap.SequentialPairingOptions()
             seq_opts.overlap = overlap_val
-            seq_opts.loop_detection = total_input_frames >= 20
+            seq_opts.loop_detection = loop_detection
             pycolmap.match_sequential(
                 database_path=str(database_path), matching_options=matching_options,
                 pairing_options=seq_opts, device=pycolmap.Device.cpu,
