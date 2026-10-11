@@ -24,7 +24,6 @@ import {
   getExportPackageUrl,
   fetchGeoJsonStatus,
   fetchSemanticScene,
-  apiFetch,
 } from "../api/missions";
 import ErrorBoundary from "../components/common/ErrorBoundary";
 
@@ -227,7 +226,7 @@ export function OverviewPage({ mission, navigate, notice, setMission }) {
     try {
       setIsRerunningDet(true);
       if (notice) notice(t("missionCommand.rerunning"));
-      const res = await apiFetch(`/missions/${mId}/rerun-detection`, {
+      const res = await fetch(`/api/v1/missions/${mId}/rerun-detection`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
       });
@@ -236,7 +235,7 @@ export function OverviewPage({ mission, navigate, notice, setMission }) {
         throw new Error(err.detail || `HTTP ${res.status}`);
       }
       if (notice) notice(t("missionCommand.rerunTriggered"));
-      const sumRes = await apiFetch(`/missions/${mId}/summary`);
+      const sumRes = await fetch(`/api/v1/missions/${mId}/summary`);
       if (sumRes.ok) {
         const sumData = await sumRes.json();
         if (setMission) setMission((prev) => ({ ...prev, ...(sumData.summary || sumData) }));
@@ -567,7 +566,7 @@ export function MissionsPage({ mission, setMission, navigate, notice, onCreateMi
       const backendItems = await listMissions();
       setMissionsList(backendItems || []);
       try {
-        const response = await apiFetch("/storage");
+        const response = await fetch("/api/v1/storage");
         if (response.ok) setStorageUsage(await response.json());
       } catch (storageError) {
         console.warn("[MissionsPage] Storage usage is unavailable:", storageError);

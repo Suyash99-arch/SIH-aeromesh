@@ -1,7 +1,8 @@
-/* Locally bundled Space Grotesk, Inter, and JetBrains Mono fonts */
+/* Self-hosted offline Google Fonts (Space Grotesk, Inter, JetBrains Mono, Noto Sans Devanagari) */
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+Devanagari:wght@400;500;600;700&display=swap');
 
 html[lang="hi"], html[lang="hi"] body {
-  font-family: var(--font-body) !important;
+  font-family: 'Noto Sans Devanagari', 'Inter', -apple-system, BlinkMacSystemFont, sans-serif !important;
 }
 
 @font-face {

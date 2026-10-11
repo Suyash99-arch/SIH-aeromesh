@@ -2,7 +2,6 @@ import React, { useRef, useEffect } from 'react';
 import * as THREE from 'three';
 import { useTilt } from '../primitives/hooks.ts';
 import Icon from '../ui/Icon';
-import { useUI } from '../../context/UIContext';
 
 /**
  * HeroCompassReconstruction Component
@@ -11,7 +10,6 @@ import { useUI } from '../../context/UIContext';
  * sitting at the center, combined with useTilt for subtle cursor parallax.
  */
 export default function HeroCompassReconstruction() {
-  const { t } = useUI();
   const tiltRef = useTilt(8);
   const mountRef = useRef(null);
 
@@ -258,13 +256,13 @@ export default function HeroCompassReconstruction() {
             <Icon name="Radar" size={16} />
           </div>
           <div>
-            <div className="hero-compass-name">{t("landing.meshTitle")}</div>
-            <div className="hero-compass-sub">{t("landing.meshDescription")}</div>
+            <div className="hero-compass-name">AERIAL PHOTOGRAMMETRIC MESH</div>
+            <div className="hero-compass-sub">AUTONOMOUS 6-DoF ORBIT · REAL-TIME RECONSTRUCTION</div>
           </div>
         </div>
         <div className="hero-compass-badge">
           <span className="pulse-dot-cyan" />
-          <span>{t("landing.meshBadge")}</span>
+          <span>ILLUSTRATIVE 3D SAMPLE</span>
         </div>
       </div>
 
@@ -274,16 +272,22 @@ export default function HeroCompassReconstruction() {
       {/* Bottom Telemetry Dock */}
       <div className="hero-compass-footer">
         <div className="compass-meta-cell">
-          <span className="compass-meta-label">{t("landing.meshType")}</span>
-          <strong className="compass-meta-val">{t("landing.meshTypeValue")}</strong>
+          <span className="compass-meta-label">REPROJ ERROR (SAMPLE)</span>
+          <strong className="compass-meta-val">0.55 px</strong>
         </div>
         <div className="compass-meta-cell">
-          <span className="compass-meta-label">{t("landing.meshSource")}</span>
-          <strong className="compass-meta-val">{t("landing.meshSourceValue")}</strong>
+          <span className="compass-meta-label">INLIER POINTS (SAMPLE)</span>
+          <strong className="compass-meta-val">12,916 pts</strong>
         </div>
         <div className="compass-meta-cell">
-          <span className="compass-meta-label">{t("landing.meshScale")}</span>
-          <strong className="compass-meta-val">{t("landing.meshScaleValue")}</strong>
+          <span className="compass-meta-label">CAMERA STATIONS</span>
+          <strong className="compass-meta-val">20 / 20 FIXED</strong>
+        </div>
+        <div className="compass-meta-cell">
+          <span className="compass-meta-label">SCALE CALIBRATION</span>
+          <strong className="compass-meta-val" style={{ color: 'var(--cyan)' }}>
+            RELATIVE (UNSCALED)
+          </strong>
         </div>
       </div>
     </div>

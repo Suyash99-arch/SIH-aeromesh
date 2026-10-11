@@ -1159,18 +1159,17 @@ function StageVisualCanvas({ stageIndex }) {
   }
 }
 
-export default function HomePage({ onNavigateDashboard, onStartMission, currentUser, onOpenAuth, onOpenCommandPalette }) {
+export default function HomePage({ onNavigateDashboard, onStartMission, currentUser, onOpenAuth }) {
   const { t, language } = useUI();
   const [activeStep, setActiveStep] = useState(0);
   const [isPlaying, setIsPlaying] = useState(true);
   const [workflowVisible, setWorkflowVisible] = useState(false);
   const [missionsList, setMissionsList] = useState([]);
-  const [missionsLoadState, setMissionsLoadState] = useState("loading");
   const [systemHealth, setSystemHealth] = useState({
     state: "waking",
     online: null,
     status: "Waking up the server…",
-    mode: null,
+    mode: "heavy",
   });
   const timerRef = useRef(null);
   const workflowRef = useRef(null);
@@ -1210,28 +1209,24 @@ export default function HomePage({ onNavigateDashboard, onStartMission, currentU
   useEffect(() => {
     let active = true;
 
-    fetchHealthWithRetry().then(async (data) => {
+    fetchHealthWithRetry((state) => {
+      if (active && state === "waking") {
+        setSystemHealth((current) => ({ ...current, state: "waking", online: null, status: "Waking up the server…" }));
+      }
+    }).then(async (data) => {
       if (!active) return;
       if (!data) {
         setSystemHealth((current) => ({ ...current, state: "offline", online: false, status: "Server unavailable" }));
         return;
       }
-      const reportedMode = String(data.pipeline_mode || data.reconstruction_mode || "").toLowerCase();
       setSystemHealth({
         state: "online",
         online: true,
         status: "Online",
-        mode: ["full", "heavy"].includes(reportedMode) ? "full" : reportedMode === "light" ? "light" : null,
+        mode: data.pipeline_mode || data.reconstruction_mode || "light",
       });
-      try {
-        const missions = await listMissions();
-        if (active) {
-          setMissionsList(missions);
-          setMissionsLoadState("loaded");
-        }
-      } catch {
-        if (active) setMissionsLoadState("error");
-      }
+      const missions = await listMissions();
+      if (active) setMissionsList(missions);
     });
 
     return () => {
@@ -1256,9 +1251,11 @@ export default function HomePage({ onNavigateDashboard, onStartMission, currentU
   return (
     <div className="homepage" id="top">
       {/* 1. TOP NAVIGATION */}
-      <a className="landing-skip-link" href="#landing-main">{t("landing.skipToMain")}</a>
-      <nav className="homepage-nav" aria-label={t("landing.primaryNavigation")}>
-        <a className="nav-brand" href="#hero" aria-label={t("landing.navHome")}>
+      <nav className="homepage-nav">
+        <div
+          className="nav-brand"
+          onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+        >
           <div className="glowing-icon-circle sm">
             <Icon name="Radar" size={18} />
           </div>
@@ -1266,51 +1263,125 @@ export default function HomePage({ onNavigateDashboard, onStartMission, currentU
             <strong>AEROMESH</strong>
             <small>{language === "hi" ? "एरियल 3D इंटेलिजेंस" : "AERIAL 3D INTELLIGENCE"}</small>
           </div>
-        </a>
+        </div>
 
         <div className="nav-menu">
-          <a href="#hero" aria-current="page">{t("landing.navHome")}</a>
-          <button type="button" onClick={() => onNavigateDashboard("overview")}>{t("landing.navCommand")}</button>
-          <button type="button" onClick={() => onNavigateDashboard("missions")}>{t("landing.navHistory")}</button>
-          <a href="#pipeline-narrative">{t("landing.navPipeline")}</a>
-          <a href="#workflow">{t("landing.navWorkflow")}</a>
+          <a href="#hero">{language === "hi" ? "अवलोकन" : "Overview"}</a>
+          <a href="#pipeline-narrative">{language === "hi" ? "पाइपलाइन गति" : "Pipeline Motion"}</a>
+          <a href="#workflow">{language === "hi" ? "11-चरणीय कार्यप्रवाह" : "11-Step Workflow"}</a>
+          <a href="#capabilities">{language === "hi" ? "क्षमताएं" : "Capabilities"}</a>
+          <a href="#security">{language === "hi" ? "संप्रभु सुरक्षा" : "Sovereign Security"}</a>
         </div>
 
         <div className="nav-actions">
           <UIControlsToolbar />
-          <button className="landing-command-trigger" type="button" onClick={onOpenCommandPalette} aria-label={t("commandPalette.title")} title={t("commandPalette.title")}>
-            <Icon name="Search" size={16} aria-hidden="true" /><span>{t("commandPalette.title")}</span><kbd>{t("commandPalette.shortcut")}</kbd>
-          </button>
           {currentUser ? (
-            <div className="nav-session-actions">
+            <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+              <button
+                onClick={() => onNavigateDashboard("profile")}
+                className="status-badge valid"
+                style={{
+                  fontSize: 11,
+                  padding: "4px 12px",
+                  cursor: "pointer",
+                  background: "rgba(14,165,233,0.15)",
+                  border: "1px solid rgba(14,165,233,0.3)",
+                  color: "#38bdf8",
+                  borderRadius: "20px",
+                }}
+                title="View your Operator Profile"
+              >
+                <span className="pulse-dot-cyan" />
+                <span>{currentUser.full_name} ({currentUser.organization_name || currentUser.role})</span>
+              </button>
               <button
                 className="hero-btn-pill hero-btn-pill-primary"
+                style={{ height: 36, padding: "0 18px", fontSize: 12 }}
                 onClick={() => onNavigateDashboard("overview")}
                 id="btn-nav-dashboard"
               >
                 <Icon name="Box" size={13} />
                 {t("nav.dashboard", "Open Dashboard")}
               </button>
-              <button className="nav-profile-link" type="button" onClick={() => onNavigateDashboard("profile")}>
-                {currentUser.full_name || currentUser.email || t("nav.profile")}
+            </div>
+          ) : (
+            <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+              <button
+                onClick={() => onOpenAuth("gov")}
+                id="btn-nav-gov-portal"
+                style={{
+                  background: "rgba(14, 165, 233, 0.15)",
+                  border: "1px solid rgba(14, 165, 233, 0.4)",
+                  color: "#38bdf8",
+                  padding: "6px 14px",
+                  borderRadius: "20px",
+                  fontSize: "12px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                }}
+              >
+                <span>🏛️</span>
+                <span>{t("app.govPortal", "Gov / Org")}</span>
+              </button>
+              <button
+                onClick={() => onOpenAuth("indiv")}
+                id="btn-nav-indiv-portal"
+                style={{
+                  background: "rgba(168, 85, 247, 0.15)",
+                  border: "1px solid rgba(168, 85, 247, 0.4)",
+                  color: "#c084fc",
+                  padding: "6px 14px",
+                  borderRadius: "20px",
+                  fontSize: "12px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                }}
+              >
+                <span>👤</span>
+                <span>{t("app.indivPortal", "Individual")}</span>
+              </button>
+              <button
+                onClick={async () => {
+                  const res = await loginGuest();
+                  if (res.success) onNavigateDashboard("overview");
+                }}
+                id="btn-nav-guest"
+                style={{
+                  background: "rgba(16, 185, 129, 0.15)",
+                  border: "1px solid rgba(16, 185, 129, 0.4)",
+                  color: "#34d399",
+                  padding: "6px 14px",
+                  borderRadius: "20px",
+                  fontSize: "12px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: "6px",
+                }}
+              >
+                <span>⚡</span>
+                <span>{t("app.guestMode", "Guest Mode")}</span>
               </button>
             </div>
-          ) : null}
+          )}
         </div>
       </nav>
 
-      <main id="landing-main">
       {/* 2. CINEMATIC HERO SECTION */}
       <section className="homepage-hero" id="hero">
         <div className="hero-content">
           <div className="hero-text">
-            <div className="hero-eyebrow-row">
-              <span className="hero-badge"><Icon name="Globe2" size={14} />{t("hero.badge")}</span>
-              <span className={`hero-health-chip ${systemHealth.state}`} role="status" aria-live="polite">
-                <span className="hero-health-dot" />
-                {systemHealth.state === "online" ? t("landing.statusOnline") : systemHealth.state === "waking" ? t("landing.statusWaking") : t("landing.statusOffline")}
-              </span>
-            </div>
+            <span className="hero-badge">
+              <span className="pulse-dot-cyan" />
+              {t("hero.badge")}
+            </span>
 
             {/* Glowing AEROMESH Wordmark with Shimmer Sweep */}
             <div className="hero-wordmark-container">
@@ -1326,58 +1397,88 @@ export default function HomePage({ onNavigateDashboard, onStartMission, currentU
               {t("hero.subtitle")}
             </p>
 
-            <div className="portal-entry-grid" aria-label={t("landing.portalChoices")}>
+            {/* Reference-Style Glowing Pill Buttons */}
+            <div className="hero-pill-buttons">
               <button
-                className="portal-entry-card government"
+                className="hero-btn-pill hero-btn-pill-primary"
                 onClick={() => onOpenAuth("gov")}
                 id="btn-hero-gov-portal"
               >
-                <span className="portal-entry-icon"><Icon name="Landmark" size={19} /></span>
-                <span className="portal-entry-copy"><strong>{t("hero.govPortalBtn")}</strong><small>{t("landing.govPortalDetail")}</small></span>
-                <Icon className="portal-entry-arrow" name="ArrowUpRight" size={16} aria-hidden="true" />
+                <span>🏛️</span>
+                <span>{t("hero.govPortalBtn")}</span>
               </button>
 
               <button
-                className="portal-entry-card individual"
+                className="hero-btn-pill hero-btn-pill-secondary"
                 onClick={() => onOpenAuth("indiv")}
                 id="btn-hero-indiv-portal"
               >
-                <span className="portal-entry-icon"><Icon name="UserRound" size={19} /></span>
-                <span className="portal-entry-copy"><strong>{t("hero.indivPortalBtn")}</strong><small>{t("landing.individualPortalDetail")}</small></span>
-                <Icon className="portal-entry-arrow" name="ArrowUpRight" size={16} aria-hidden="true" />
+                <span>👤</span>
+                <span>{t("hero.indivPortalBtn")}</span>
               </button>
 
               <button
-                className="portal-entry-card guest"
+                className="hero-btn-pill hero-btn-pill-secondary"
                 onClick={async () => {
                   const res = await loginGuest();
                   if (res.success) onNavigateDashboard("overview");
                 }}
                 id="btn-hero-guest"
+                style={{
+                  borderColor: "rgba(16, 185, 129, 0.4)",
+                  color: "#34d399",
+                }}
               >
-                <span className="portal-entry-icon"><Icon name="Zap" size={19} /></span>
-                <span className="portal-entry-copy"><strong>{t("hero.tryGuestBtn")}</strong><small>{t("landing.guestPortalDetail")}</small></span>
-                <Icon className="portal-entry-arrow" name="ArrowUpRight" size={16} aria-hidden="true" />
+                <span>⚡</span>
+                <span>{t("hero.tryGuestBtn")}</span>
               </button>
             </div>
 
-            <div className="hero-metrics-strip" aria-label={t("landing.workspaceSummary")}>
-              <div className="hero-stat-item"><span className="hero-stat-val">{missionsLoadState === "loaded" && missionsList.length ? missionsList.length.toLocaleString() : "—"}</span><span className="hero-stat-label">{t("landing.missionRecords")}</span></div>
-              <div className="hero-stat-item"><span className="hero-stat-val">{missionsLoadState === "loaded" && missionsList.length ? missionsList.reduce((acc, m) => acc + (Number(m.reconstruction?.sparse_point_count) || 0), 0).toLocaleString() : "—"}</span><span className="hero-stat-label">{t("hero.statSparsePoints")}</span></div>
-              <div className="hero-stat-item"><span className="hero-stat-val">{missionsLoadState === "loaded" && missionsList.length ? missionsList.reduce((acc, m) => acc + (Number(m.detections?.total_detections) || 0), 0).toLocaleString() : "—"}</span><span className="hero-stat-label">{t("hero.statNeuralDetections")}</span></div>
-              <div className="hero-stat-item"><span className="hero-stat-val" data-status={systemHealth.state} data-mode={systemHealth.mode || "unavailable"}>{systemHealth.mode === "light" ? t("landing.modeLight") : systemHealth.mode === "full" ? t("landing.modeFull") : t("landing.modeUnavailable")}</span><span className="hero-stat-label">{t("landing.reconstructionMode")}</span></div>
-            </div>
-            {missionsLoadState === "loaded" && missionsList.length === 0 && <p className="hero-data-note" role="status">{t("landing.noMissionData")}</p>}
-            {missionsLoadState === "error" && <p className="hero-data-note" role="status">{t("landing.missionDataUnavailable")}</p>}
-            <div className="trust-signals" aria-label={t("landing.trustSignals")}>
-              <span><Icon name="ShieldCheck" size={15} />{t("landing.trustAccess")}</span>
-              <span><Icon name="LockKeyhole" size={15} />{t("landing.trustProtection")}</span>
-              <span><Icon name="FileSearch" size={15} />{t("landing.trustAudit")}</span>
+            {/* Live Metrics Strip */}
+            <div className="hero-metrics-strip">
+              <div className="hero-stat-item">
+                <span className="hero-stat-val">
+                  {missionsList.length > 0 ? missionsList.length : "0"}
+                </span>
+                <span className="hero-stat-label">
+                  {missionsList.length > 0 ? t("hero.statMissionsProcessed") : t("hero.statMissionsIndexed")}
+                </span>
+              </div>
+              <div className="hero-stat-item">
+                <span className="hero-stat-val">
+                  {missionsList.length > 0
+                    ? missionsList.reduce((acc, m) => acc + (m.reconstruction?.sparse_point_count || 0), 0).toLocaleString()
+                    : "18,802"}
+                </span>
+                <span className="hero-stat-label">
+                  {missionsList.length > 0 ? t("hero.statSparsePoints") : t("hero.statSamplePoints")}
+                </span>
+              </div>
+              <div className="hero-stat-item">
+                <span className="hero-stat-val">
+                  {missionsList.length > 0
+                    ? missionsList.reduce((acc, m) => acc + (m.detections?.total_detections || 0), 0).toLocaleString()
+                    : "YOLOv11"}
+                </span>
+                <span className="hero-stat-label">
+                  {missionsList.length > 0 ? t("hero.statNeuralDetections") : t("hero.statDetector")}
+                </span>
+              </div>
+              <div className="hero-stat-item">
+                <span
+                  className="hero-stat-val"
+                  style={{ color: systemHealth.state === "online" ? "var(--status-active)" : systemHealth.state === "waking" ? "#f59e0b" : "#ef4444" }}
+                >
+                  {systemHealth.state === "online" ? "ONLINE" : systemHealth.state === "waking" ? "WAKING" : "OFFLINE"}
+                </span>
+                <span className="hero-stat-label">
+                  {systemHealth.mode === "light" ? t("hero.lightPipeline") : t("hero.heavyPipeline")}
+                </span>
+              </div>
             </div>
             {systemHealth.state === "waking" && (
-              <div className="server-waking-banner" role="status" aria-live="polite">
-                <span className="server-waking-spinner" aria-hidden="true" />
-                <span>{t("landing.serverWaking")}</span>
+              <div role="status" aria-live="polite" style={{ marginTop: 12, color: "#fbbf24", fontSize: 13 }}>
+                Waking up the server. This can take up to about a minute.
               </div>
             )}
           </div>
@@ -1713,13 +1814,17 @@ export default function HomePage({ onNavigateDashboard, onStartMission, currentU
       {/* 6. CALL TO ACTION BANNER */}
       <section className="cta-banner" id="architecture">
         <div className="cta-banner-content">
-          <span className="hero-badge"><Icon name="Compass" size={14} />{t("landing.trustSignals")}</span>
-          <h2>{t("hero.taglineSuffix")}</h2>
-          <p>{t("hero.subtitle")}</p>
+          <span className="hero-badge">AEROMESH DEPLOYMENT READY</span>
+          <h2>Transform Aerial Footage into 3D Intelligence</h2>
+          <p>
+            Experience the complete end-to-end pipeline: video ingestion, neural
+            object tracking, photogrammetric 3D reconstruction, and certified
+            engineering reports.
+          </p>
           <div className="hero-buttons" style={{ justifyContent: "center" }}>
             <button className="hero-btn-primary" onClick={() => onOpenAuth("gov")}>
-              <Icon name="Landmark" size={17} aria-hidden="true" />
-              <span>{t("hero.govPortalBtn")}</span>
+              <span>🏛️</span>
+              <span>Organization Gateway</span>
             </button>
             <button
               className="hero-btn-secondary"
@@ -1728,13 +1833,12 @@ export default function HomePage({ onNavigateDashboard, onStartMission, currentU
                 if (res.success) onNavigateDashboard("overview");
               }}
             >
-              <Icon name="Zap" size={17} aria-hidden="true" />
-              <span>{t("hero.tryGuestBtn")}</span>
+              <span>⚡</span>
+              <span>Launch Guest Sandbox</span>
             </button>
           </div>
         </div>
       </section>
-      </main>
 
       {/* 7. FOOTER */}
       <footer className="homepage-footer">

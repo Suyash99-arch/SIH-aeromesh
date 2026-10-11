@@ -25,13 +25,13 @@
 .mission-radar span,
 .mission-radar small {
   color: var(--text2);
-  font: 9px var(--font-mono);
+  font: 9px ui-monospace;
   letter-spacing: 0.11em;
 }
 .mission-radar b {
   margin: 9px 0;
   color: var(--cyan);
-  font: 48px var(--font-mono);
+  font: 48px ui-monospace;
   text-shadow: 0 0 25px var(--cyan-soft);
 }
 .command-stats {
@@ -126,7 +126,7 @@
 .stat-label {
   display: block;
   color: var(--muted);
-  font: var(--text-xs) var(--font-mono);
+  font: var(--text-xs) ui-monospace;
   text-transform: uppercase;
   letter-spacing: 0.12em;
 }
@@ -135,7 +135,7 @@
   align-items: baseline;
   gap: 5px;
   color: var(--text);
-  font: 600 var(--text-xl) var(--font-mono);
+  font: 600 var(--text-xl) ui-monospace;
   letter-spacing: -0.03em;
 }
 .stat-unit {
@@ -208,7 +208,7 @@
 }
 .command-pipeline b {
   color: var(--cyan);
-  font: 9px var(--font-mono);
+  font: 9px ui-monospace;
 }
 .recommendations {
   padding: 0;
@@ -224,7 +224,7 @@
 }
 .recommendations b {
   color: var(--cyan);
-  font: 10px var(--font-mono);
+  font: 10px ui-monospace;
 }
 .confidence-bars > div {
   display: grid;
@@ -332,7 +332,7 @@
   bottom: 10px;
   padding: 5px;
   background: var(--glass);
-  font: 8px var(--font-mono);
+  font: 8px ui-monospace;
 }
 .raw-label {
   left: 10px;

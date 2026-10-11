@@ -134,7 +134,7 @@
   font-size: 13px;
   font-weight: 600;
   color: var(--cyan);
-  font-family: var(--font-mono);
+  font-family: "Monaco", "Menlo", monospace;
 }
 
 .empty {
@@ -363,7 +363,7 @@
   flex-direction: column;
   gap: 8px;
   font-size: 13px;
-  font-family: var(--font-mono);
+  font-family: "Monaco", "Menlo", "Courier New", monospace;
 }
 
 .log-entry {
