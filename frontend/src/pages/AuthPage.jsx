@@ -6,6 +6,7 @@ import {
   registerUser,
   loginGuest,
   fetchDemoUsers,
+  apiFetch,
 } from "../api/missions";
 
 export default function AuthPage({ onAuthenticated, onCancel, notice, initialPortal = "gov" }) {
@@ -38,7 +39,7 @@ export default function AuthPage({ onAuthenticated, onCancel, notice, initialPor
   const [demoUsers, setDemoUsers] = useState([]);
 
   useEffect(() => {
-    fetch("/api/v1/health")
+    apiFetch("/health")
       .then((r) => (r.ok ? r.json() : {}))
       .then((health) => {
         if (health?.dev_only) {
@@ -146,7 +147,7 @@ export default function AuthPage({ onAuthenticated, onCancel, notice, initialPor
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/v1/auth/google", {
+      const res = await apiFetch("/auth/google", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ id_token: idToken }),
