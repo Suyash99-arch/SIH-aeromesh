@@ -1,15 +1,13 @@
-import { AnimatePresence, motion } from "framer-motion";
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import "./styles/theme.css";
-import "./styles/app.css";
-import "./styles/pages.css";
-import "./styles/sih.css";
-import Sidebar from "./components/layout/Sidebar";
-import Topbar from "./components/layout/Topbar";
-import CreateMissionModal from "./components/missions/CreateMissionModal";
-import HomePage from "./pages/HomePage";
-import AuthPage from "./pages/AuthPage";
-import ProfilePage from "./pages/ProfilePage";
+const Sidebar = lazy(() => import("./components/layout/Sidebar"));
+const Topbar = lazy(() => import("./components/layout/Topbar"));
+const CreateMissionModal = lazy(() => import("./components/missions/CreateMissionModal"));
+const startsOnHome = typeof window !== "undefined" && !new URLSearchParams(window.location.search).has("page") && !new URLSearchParams(window.location.search).has("mission");
+const homePageImport = startsOnHome ? import("./pages/HomePage") : null;
+const HomePage = lazy(() => homePageImport || import("./pages/HomePage"));
+const AuthPage = lazy(() => import("./pages/AuthPage"));
+const ProfilePage = lazy(() => import("./pages/ProfilePage"));
 import { pageTitles } from "./data/navigation";
 import {
   getMission as getApiMission,
@@ -19,21 +17,48 @@ import {
   listMissions,
   markAuthInitializationComplete,
 } from "./api/missions";
-import {
-  OverviewPage,
-  MissionsPage,
-  DronePage,
-  ReconstructionPage,
-  IntelligencePage,
-  ChallengePage,
-  SettingsPage,
-} from "./pages/Pages";
-import ProcessingProgressPage from "./pages/ProcessingProgressPage";
+const loadNamedPage = (name) => () => import("./pages/Pages").then((module) => ({ default: module[name] }));
+const OverviewPage = lazy(loadNamedPage("OverviewPage"));
+const MissionsPage = lazy(loadNamedPage("MissionsPage"));
+const DronePage = lazy(loadNamedPage("DronePage"));
+const ReconstructionPage = lazy(loadNamedPage("ReconstructionPage"));
+const IntelligencePage = lazy(loadNamedPage("IntelligencePage"));
+const ChallengePage = lazy(loadNamedPage("ChallengePage"));
+const SettingsPage = lazy(loadNamedPage("SettingsPage"));
+const ProcessingProgressPage = lazy(() => import("./pages/ProcessingProgressPage"));
 import ErrorBoundary from "./components/common/ErrorBoundary";
 import { useUI } from "./context/UIContext";
 
+let dashboardStylesPromise;
+const loadDashboardStyles = () => {
+  dashboardStylesPromise ||= Promise.all([
+    import("./App.css"),
+    import("./styles/app.css"),
+    import("./styles/pages.css"),
+    import("./styles/sih.css"),
+  ]);
+  return dashboardStylesPromise;
+};
+
 import AmbientCursorGlow from "./components/layout/AmbientCursorGlow";
-import CommandPalette from "./components/layout/CommandPalette";
+const CommandPalette = lazy(() => import("./components/layout/CommandPalette"));
+
+function RouteLoadingSkeleton() {
+  const bar = { display: "block", height: 14, borderRadius: 8, background: "var(--color-surface-overlay, rgba(148,163,184,.14))" };
+  return (
+    <div className="route-loading-skeleton" role="status" aria-label="Loading page" style={{ display: "grid", gap: 16, minHeight: 220, padding: 24, color: "var(--color-text-secondary, #9bb0cc)", background: "var(--color-canvas, #080d16)" }}>
+      <span style={{ ...bar, width: "34%" }} />
+      <span style={{ ...bar, width: "62%", height: 30 }} />
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 12 }}>
+        <span style={{ ...bar, height: 112 }} /><span style={{ ...bar, height: 112 }} /><span style={{ ...bar, height: 112 }} />
+      </div>
+    </div>
+  );
+}
+
+function ChunkLoadError({ onRetry }) {
+  return <section className="chunk-load-error" role="alert" style={{ minHeight: 220, display: "grid", alignContent: "center", justifyItems: "start", gap: 12, padding: 24, color: "var(--color-text-primary, #e8f0f8)", background: "var(--color-surface, #101a2b)", border: "1px solid var(--color-border-default, rgba(148,163,184,.24))", borderRadius: 14 }}><h2 style={{ margin: 0 }}>This page could not be loaded</h2><p style={{ margin: 0, color: "var(--color-text-secondary, #9bb0cc)" }}>Check your connection, then try again.</p><button type="button" onClick={onRetry} style={{ minHeight: 40, padding: "0 18px", color: "#fff", background: "#075985", border: 0, borderRadius: 8, font: "600 14px var(--font-body, sans-serif)", cursor: "pointer" }}>Retry</button></section>;
+}
 
 const getInitialMissionId = () => {
   if (typeof window !== "undefined") {
@@ -56,6 +81,7 @@ export default function App() {
     }
     return true;
   });
+  const [dashboardStylesReady, setDashboardStylesReady] = useState(false);
 
   const [activePage, setActivePage] = useState(() => {
     if (typeof window !== "undefined") {
@@ -165,6 +191,14 @@ export default function App() {
     document.documentElement.dataset.theme = theme;
     localStorage.setItem("aeromesh-theme", theme);
   }, [theme]);
+
+  useEffect(() => {
+    if (!showHomepage) {
+      loadDashboardStyles()
+        .catch((error) => console.error("Dashboard styles failed to load", error))
+        .finally(() => setDashboardStylesReady(true));
+    }
+  }, [showHomepage]);
 
   useEffect(() => {
     if (!toast) return;
@@ -367,42 +401,38 @@ export default function App() {
     setActivePage("auth");
   };
 
+  if (!showHomepage && !dashboardStylesReady) return <RouteLoadingSkeleton />;
+
   return (
     <div className="aeromesh-app-root">
       {/* Soft ambient cursor-follow glow layer */}
       <AmbientCursorGlow />
 
-      <AnimatePresence mode="wait">
+      <>
         {showHomepage ? (
-          <motion.div
+          <div
             key="homepage-view"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+            className="app-view-transition"
           >
             <ErrorBoundary
               sectionName="Homepage"
-              fallbackTitle="Something went wrong displaying this section"
+              fallback={({ error }) => <ChunkLoadError error={error} onRetry={() => window.location.reload()} />}
             >
-              <HomePage
+              <Suspense fallback={<RouteLoadingSkeleton />}><HomePage
                 currentUser={currentUser}
                 onNavigateDashboard={handleNavigateDashboard}
                 onStartMission={handleStartMission}
                 onOpenAuth={handleOpenAuth}
                 onOpenCommandPalette={() => setShowCommandPalette(true)}
-              />
+              /></Suspense>
             </ErrorBoundary>
-          </motion.div>
+          </div>
         ) : activePage === "auth" ? (
-          <motion.div
+          <div
             key="auth-view"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
+            className="app-view-transition"
           >
-            <AuthPage
+            <Suspense fallback={<RouteLoadingSkeleton />}><AuthPage
               initialPortal={authPortal}
               onAuthenticated={(user) => {
                 setCurrentUser(user);
@@ -414,18 +444,14 @@ export default function App() {
                 setActivePage("overview");
               }}
               notice={notice}
-            />
-          </motion.div>
+            /></Suspense>
+          </div>
         ) : (
-          <motion.div
+          <div
             key="dashboard-view"
             className="app-shell"
-            initial={{ opacity: 0, y: 10 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -10 }}
-            transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
           >
-            <Sidebar
+            <Suspense fallback={<div className="sidebar-loading-skeleton" aria-hidden="true" />}><Sidebar
               activePage={activePage}
               navigate={navigate}
               notice={notice}
@@ -433,10 +459,10 @@ export default function App() {
               setMission={setMissionId}
               onCreateMission={() => setShowCreateMission(true)}
               onNavigateHome={() => setShowHomepage(true)}
-            />
+            /></Suspense>
 
             <main className="main">
-              <Topbar
+              <Suspense fallback={<div className="topbar-loading-skeleton" aria-hidden="true" />}><Topbar
                 title={getPageTitle(activePage)}
                 theme={theme}
                 setTheme={setTheme}
@@ -447,47 +473,41 @@ export default function App() {
                 onOpenProfile={() => navigate("profile")}
                 onOpenAuth={() => setActivePage("auth")}
                 onOpenCommandPalette={() => setShowCommandPalette(true)}
-              />
+              /></Suspense>
 
               <div className="content">
-                <AnimatePresence mode="wait">
-                  <motion.div
-                    key={activePage}
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    exit={{ opacity: 0, y: -10 }}
-                    transition={{ duration: 0.18, ease: [0.22, 1, 0.36, 1] }}
-                  >
+                <div className="route-view-transition" key={activePage}>
                     <ErrorBoundary
                       key={`${activePage}-${mission?.id || missionId}`}
                       sectionName={pageTitles[activePage] || activePage}
-                      fallbackTitle="Something went wrong displaying this section"
+                      fallback={({ error }) => <ChunkLoadError error={error} onRetry={() => window.location.reload()} />}
                     >
-                      {page}
+                      <Suspense fallback={<RouteLoadingSkeleton />} key={activePage}>
+                        {page}
+                      </Suspense>
                     </ErrorBoundary>
-                  </motion.div>
-                </AnimatePresence>
+                </div>
               </div>
             </main>
-          </motion.div>
+          </div>
         )}
-      </AnimatePresence>
+      </>
 
-      <CommandPalette
+      {showCommandPalette && <Suspense fallback={null}><CommandPalette
         open={showCommandPalette}
         onClose={() => setShowCommandPalette(false)}
         onNavigate={handleNavigateDashboard}
         onHome={() => { setShowHomepage(true); setActivePage("overview"); window.scrollTo({ top: 0, behavior: "smooth" }); }}
         onWorkflow={() => { setShowHomepage(true); setActivePage("overview"); window.setTimeout(() => document.getElementById("workflow")?.scrollIntoView({ behavior: "smooth" }), 80); }}
-      />
+      /></Suspense>}
 
       {showCreateMission && (
-        <CreateMissionModal
+        <Suspense fallback={<RouteLoadingSkeleton />}><CreateMissionModal
           onClose={() => setShowCreateMission(false)}
           onMissionCreated={handleMissionCreated}
           currentUser={currentUser}
           notice={notice}
-        />
+        /></Suspense>
       )}
 
       {toast && (

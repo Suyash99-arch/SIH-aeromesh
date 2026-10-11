@@ -1,7 +1,6 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import App from "./App.jsx";
-import "./App.css";
 import ErrorBoundary from "./components/common/ErrorBoundary";
 import { UIProvider } from "./context/UIContext";
 

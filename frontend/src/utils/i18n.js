@@ -1,7 +1,6 @@
 // i18n Internationalization & Unit Formatting Engine (English + Hindi)
 // WCAG AA Compliant Locale & Unit Conversion Utility
 import enJson from "../locales/en.json";
-import hiJson from "../locales/hi.json";
 
 export const LANGUAGES = [
   { code: "en", name: "English" },
@@ -32,12 +31,22 @@ function flattenDict(obj, prefix = "") {
 }
 
 const flatEn = flattenDict(enJson);
-const flatHi = flattenDict(hiJson);
-
 export const TRANSLATIONS = {
   en: { ...flatEn },
-  hi: { ...flatHi },
+  hi: { ...flatEn },
 };
+
+let hindiPromise;
+export function loadLocale(lang) {
+  if (lang !== "hi" || hindiPromise) return hindiPromise || Promise.resolve();
+  hindiPromise = import("../locales/hi.json").then(({ default: hiJson }) => {
+    TRANSLATIONS.hi = flattenDict(hiJson);
+  }).catch((error) => {
+    hindiPromise = undefined;
+    throw error;
+  });
+  return hindiPromise;
+}
 
 /**
  * Universal translation resolver supporting:

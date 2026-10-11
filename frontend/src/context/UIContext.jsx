@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from "react";
-import { translate, formatNumber, formatDistance, formatArea, formatDateTime } from "../utils/i18n";
+import { translate, loadLocale, formatNumber, formatDistance, formatArea, formatDateTime } from "../utils/i18n";
 
 const UIContext = createContext();
 
@@ -21,6 +21,10 @@ export function UIProvider({ children }) {
     localStorage.setItem("hexaspark_lang", language);
     localStorage.setItem("aeromesh_lang", language);
     document.documentElement.setAttribute("lang", language);
+  }, [language]);
+
+  useEffect(() => {
+    if (language === "hi") loadLocale(language).catch((error) => console.error("Hindi locale could not be loaded", error));
   }, [language]);
 
   useEffect(() => {

@@ -4,11 +4,30 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="preload" href="/fonts/inter_400_normal_6.woff2" as="font" type="font/woff2" crossorigin />
+    <link rel="preload" href="/fonts/spacegrotesk_600_normal_57.woff2" as="font" type="font/woff2" crossorigin />
     <meta name="description" content="AEROMESH — Tactical aerial intelligence, photogrammetric 3D reconstruction, and spatial object tracking." />
     <title>AEROMESH — Aerial Intelligence</title>
+    <style>
+      .initial-landing { min-height: 100vh; color: #e8f0f8; background: radial-gradient(ellipse at 82% 34%, rgba(79,216,255,.08), transparent 35rem), #080d16; }
+      .initial-landing nav { height: 76px; display: flex; align-items: center; padding: 0 5vw; border-bottom: 1px solid rgba(148,163,184,.16); font: 700 14px/1 Inter,system-ui,sans-serif; letter-spacing: .16em; }
+      .initial-landing main { max-width: 1320px; margin: 0 auto; padding: clamp(74px, 12vh, 142px) 5vw 100px; }
+      .initial-landing h1 { margin: 0 0 24px; color: #e8f0f8; font: 700 clamp(3.1rem, 7vw, 6.4rem)/.98 "Space Grotesk",system-ui,sans-serif; letter-spacing: -.075em; }
+      .initial-landing p { max-width: 610px; margin: 0; color: #9bb0cc; font: 400 clamp(15px, 1.3vw, 17px)/1.6 Inter,system-ui,sans-serif; }
+      .initial-landing .loading-indicator { width: 94px; height: 3px; margin-top: 38px; overflow: hidden; background: rgba(148,163,184,.18); border-radius: 3px; }
+      .initial-landing .loading-indicator::after { content: ""; display: block; width: 35%; height: 100%; background: #4fd8ff; animation: initialLoad 1.2s ease-in-out infinite alternate; }
+      @keyframes initialLoad { to { transform: translateX(185%); } }
+      @media (prefers-color-scheme: light) { .initial-landing { color: #1e293b; background: radial-gradient(ellipse at 82% 34%, rgba(2,132,199,.08), transparent 35rem), #f1f5f9; } .initial-landing h1 { color: #1e293b; } .initial-landing p { color: #334155; } }
+      @media (max-width: 600px) { .initial-landing nav { height: 64px; } .initial-landing main { padding: 74px 20px 80px; } }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div class="initial-landing" aria-busy="true">
+        <nav aria-label="AEROMESH">AEROMESH</nav>
+        <main><h1>AEROMESH</h1><p>Transform uncalibrated single-pass UAV video footage into millimeter-calibrated 3D point clouds, Poisson surface meshes, neural object tracking, and certified GIS engineering reports.</p><div class="loading-indicator" aria-hidden="true"></div></main>
+      </div>
+    </div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

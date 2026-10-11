@@ -1045,6 +1045,11 @@
   color: var(--text);
 }
 /* Shared app-shell refinements for the dashboard and mission workspace */
+.app-view-transition { animation: appViewEnter 180ms ease-out both; }
+.route-view-transition { animation: appViewEnter 180ms ease-out both; }
+@keyframes appViewEnter { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+.sidebar-loading-skeleton { position: fixed; inset: 0 auto 0 0; width: 248px; background: var(--bg-sidebar); }
+.topbar-loading-skeleton { position: sticky; top: 0; z-index: 4; height: 64px; background: var(--bg-page); border-bottom: 1px solid var(--color-border-subtle); }
 .app-shell { background: var(--bg-page); color: var(--text-primary); }
 .sidebar { background: color-mix(in srgb, var(--bg-sidebar) 94%, transparent); border-color: var(--color-border-subtle); box-shadow: var(--shadow-md); }
 .brand>div { border-radius: 10px; box-shadow: var(--shadow-sm), var(--glow-cyan); }

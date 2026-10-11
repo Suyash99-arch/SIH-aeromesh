@@ -8,7 +8,26 @@ const apiProxyTarget = process.env.E2E_API_PROXY_TARGET || "http://127.0.0.1:800
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    {
+      name: "preload-landing-page-assets",
+      transformIndexHtml: {
+        order: "post",
+        handler(html, context) {
+          const bundle = context.bundle;
+          if (!bundle) return html;
+          const homeChunk = Object.values(bundle).find((asset) => asset.type === "chunk" && asset.name === "HomePage");
+          if (!homeChunk) return html;
+        const links = [`<link rel="modulepreload" crossorigin href="/${homeChunk.fileName}">`];
+        for (const cssFile of homeChunk.viteMetadata?.importedCss || []) {
+          links.push(`<link rel="stylesheet" crossorigin href="/${cssFile}">`);
+        }
+          return html.replace("</head>", `${links.join("\n    ")}\n  </head>`);
+        },
+      },
+    },
+  ],
   resolve: {
     alias: [
       {
@@ -38,6 +57,17 @@ export default defineConfig({
     },
   },
   build: {
-    minify: false,
+    cssMinify: false,
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (!id.includes("node_modules")) return;
+          if (/[\\/]node_modules[\\/](react|react-dom|scheduler)[\\/]/.test(id)) return "react-vendor";
+          if (/[\\/]node_modules[\\/](three|@react-three)[\\/]/.test(id)) return "three-vendor";
+          if (/[\\/]node_modules[\\/]lucide-react[\\/]/.test(id)) return "icons-vendor";
+          if (/[\\/]node_modules[\\/](i18next|react-i18next)[\\/]/.test(id)) return "i18n-vendor";
+        },
+      },
+    },
   },
 });
