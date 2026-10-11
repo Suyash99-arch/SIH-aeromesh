@@ -118,6 +118,21 @@ def _colmap_matcher_settings(total_frames: int) -> tuple[str, int, bool]:
     return matcher, overlap, loop_detection
 
 
+def _reconstruction_frame_limit(max_frames: int, reconstruction_quality: Optional[str] = None) -> int:
+    """Apply opt-in preview and environment caps without changing normal defaults."""
+    frame_limit = max(1, int(max_frames))
+    if str(reconstruction_quality or "").strip().lower() == "preview":
+        frame_limit = min(frame_limit, 24)
+
+    configured_limit = os.getenv("RECON_MAX_FRAMES", "").strip()
+    if configured_limit:
+        try:
+            frame_limit = min(frame_limit, max(1, int(configured_limit)))
+        except ValueError:
+            logger.warning("Ignoring invalid RECON_MAX_FRAMES=%r", configured_limit)
+    return frame_limit
+
+
 # ============================================================
 # FRAME QUALITY & OVERLAP FILTERING
 # ============================================================
@@ -2298,6 +2313,7 @@ def run_reconstruction_for_mission(
     max_frames: int = 40,
     target_fps: float = 2.0,
     progress_cb: Optional[Callable[[str, int], None]] = None,
+    reconstruction_quality: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     End-to-end photogrammetric reconstruction workflow for a mission video:
@@ -2308,6 +2324,7 @@ def run_reconstruction_for_mission(
     5. Storage and Database asset registration
     """
     started = time.time()
+    max_frames = _reconstruction_frame_limit(max_frames, reconstruction_quality)
     
     if progress_cb:
         progress_cb("Inspecting video metadata", 5)

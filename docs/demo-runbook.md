@@ -30,6 +30,24 @@ $env:PYTHONUNBUFFERED = '1'
 
 This starts the full local profile on `http://127.0.0.1:8000`, with SQLite and mission data under `C:\aeromesh-data`. Anonymous access is for local demo use only. Confirm `http://127.0.0.1:8000/health` before opening any tunnel.
 
+## Reconstruction speed options
+
+For evaluator demos, use a **pre-processed demo mission** whenever possible. It avoids making the audience wait for CPU reconstruction and avoids creating fresh demo data during the presentation.
+
+For an optional live run, enable the measured 24-frame fast mode before starting the API:
+
+```powershell
+$env:RECON_MAX_FRAMES = '24'
+```
+
+This caps the reconstruction frame selection at 24 across pipeline entry points. Leave it unset to retain the existing per-caller limits. The existing processing request option `reconstruction_quality=preview` also applies a 24-frame cap for that run; it does not add an API field. If both are set, the lower cap wins. Clear the environment override after the demo with `Remove-Item Env:RECON_MAX_FRAMES`.
+
+The benchmark used a locally recreated 20-second slow-motion derivative of `tests/test.mp4` because the earlier rehearsal file had been deleted. It selected 37 frames at a 38-frame cap. Sequential matching with 37 selected frames took **853 s SfM / 901 s reconstruction wall** and produced 13,979 sparse points, 0.262 px mean reprojection error, and a 39,420-vertex mesh. Sequential matching with 24 frames took **398 s SfM / 441 s reconstruction wall**, registered 24/24 frames, and produced 10,098 sparse points, 0.250 px mean reprojection error, and a 27,444-vertex mesh. The fast result has fewer sparse points and mesh vertices; use it when shorter wait time matters more than model density. These are reconstruction-stage measurements, not a full end-to-end rerun.
+
+For context, the earlier full-pipeline rehearsal took about **1,348 s (22.5 min)** total: validation 18 s, quality/keyframe analysis 6 s, detection 20 s, trajectory 2 s, SfM and meshing about 1,293 s, measurement under 0.01 s, spatial fusion under 1 s, with report generation recorded as 0 s in that run. The 24-frame setting is expected to bring a similar end-to-end run to roughly **8–9 minutes**, including validation, detection, and report handling; that total is an estimate from the reconstruction benchmark plus the measured non-SfM stages, not a new full-pipeline measurement. Allow 10–12 minutes for machine and footage variation.
+
+Video defaults to sequential matching with overlap 10 and loop detection off. That is a good fit for ordered forward flight. Orbit footage that revisits the same area can need loop-closure pairs; consider `COLMAP_MATCHER=exhaustive` for a small orbit (up to 40 selected frames). The current safety rule still forces sequential matching above 40 frames, even if exhaustive is configured. Unordered image sets need exhaustive matching because neighboring file order does not represent neighboring camera positions. Exhaustive matching grows quadratically, so use it with a bounded frame set.
+
 To run the frontend locally instead, in another PowerShell window:
 
 ```powershell
@@ -72,7 +90,7 @@ Remove `frontend/.env.local` after local development; it is gitignored.
 - Local `/health` reports the full profile and heavy pipeline mode; confirm the database and data paths are local.
 - Start the API before the tunnel; verify the tunnel reaches local `/health`.
 - Confirm the Preview deployment has the current quick-tunnel URL in both Vite variables; Production remains on Render.
-- Use a previously processed demo mission for a live presentation when possible. A 10-second 4K reconstruction took about **24 minutes** on this laptop. A shorter 1080p clip is a better live-run choice; allow extra time for upload, detection, and report generation.
+- Prefer a pre-processed demo mission for evaluators. For an optional live run, enable 24-frame fast mode, use a short clip with good lateral baseline and overlap, and allow at least 10–12 minutes end to end on this laptop. Include upload, validation, detection, and report handling in the schedule.
 - Use video with real lateral/orbital baseline and substantial frame overlap. The upload motion heuristic can be conservative; inspect quality and reconstruction results rather than promising success from its score alone.
 - Avoid real accounts, sensitive footage, or unnecessary uploads. The quick tunnel exposes the local API publicly while it runs.
 - Keep screenshots or exported reports for a no-network backup.

@@ -93,6 +93,23 @@ def test_colmap_matcher_selection_is_configurable(monkeypatch):
     assert _colmap_matcher_settings(41) == ("sequential", 6, True)
 
 
+def test_reconstruction_frame_limit_is_opt_in_and_preview_is_per_run(monkeypatch):
+    from backend.reconstruction import _reconstruction_frame_limit
+
+    monkeypatch.delenv("RECON_MAX_FRAMES", raising=False)
+    assert _reconstruction_frame_limit(40) == 40
+    assert _reconstruction_frame_limit(40, "medium") == 40
+    assert _reconstruction_frame_limit(40, "preview") == 24
+    assert _reconstruction_frame_limit(20, "preview") == 20
+
+    monkeypatch.setenv("RECON_MAX_FRAMES", "24")
+    assert _reconstruction_frame_limit(40, "medium") == 24
+    assert _reconstruction_frame_limit(20) == 20
+
+    monkeypatch.setenv("RECON_MAX_FRAMES", "invalid")
+    assert _reconstruction_frame_limit(40) == 40
+
+
 def test_monocular_scale_reports_relative_scale():
     from backend.reconstruction import evaluate_scale_and_georeference
     metadata = evaluate_scale_and_georeference(has_gps=False, has_rtk=False, has_gcps=False)

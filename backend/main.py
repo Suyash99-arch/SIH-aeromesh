@@ -4919,7 +4919,12 @@ def run_full_pipeline_task(
             progress_percent=68,
             message="Structure-from-Motion bundle adjustment & Poisson surface meshing",
         )
-        reconstruction_result = run_reconstruction_for_mission(mission_id, video_path, max_frames=40)
+        reconstruction_result = run_reconstruction_for_mission(
+            mission_id,
+            video_path,
+            max_frames=40,
+            reconstruction_quality=reconstruction_quality,
+        )
         completed_stages.append("reconstruction")
         stage_timings["stage_5_pycolmap_sfm_mesh"] = round(time.perf_counter() - t_s5, 3)
 
