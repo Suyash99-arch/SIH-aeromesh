@@ -72,7 +72,7 @@ function fixtureMission(scenario) {
 }
 
 test("all app routes render safely across mission states and responsive themes", async ({ page, context, baseURL }) => {
-  test.setTimeout(600_000);
+  test.setTimeout(900_000);
   const pageErrors = [];
   const consoleErrors = [];
   const webglContextLossWarnings = [];
@@ -85,6 +85,7 @@ test("all app routes render safely across mission states and responsive themes",
   let activeScenario = "not-run-light";
   const videoRequests = [];
   const missionRequests = [];
+  const missionApiPaths = [];
   const refreshRequests = [];
   const countRequestsForMission = (id) => missionRequests.filter((pathname) => pathname.endsWith(`/missions/${id}`)).length;
   await page.addInitScript(() => {
@@ -105,6 +106,7 @@ test("all app routes render safely across mission states and responsive themes",
   await page.route(/\/api\/v1\//u, async (route) => {
     const requestUrl = new URL(route.request().url());
     const pathname = requestUrl.pathname;
+    if (/\/missions\//u.test(pathname)) missionApiPaths.push(pathname);
     const mission = fixtureMission(activeScenario);
     if (pathname.endsWith("/health")) {
       const light = activeScenario === "not-run-light";
@@ -124,7 +126,7 @@ test("all app routes render safely across mission states and responsive themes",
       return route.fulfill({ json: { user: { id: "fixture-review-user", portal_type: "guest", name: "Review Guest" }, success: true } });
     }
     if (/\/missions\/?$/u.test(pathname) && route.request().method() === "GET") {
-      return route.fulfill({ json: [mission] });
+      return route.fulfill({ json: [mission, { ...mission, id: "review-fixture-mission-two", name: "Second review fixture mission" }] });
     }
     if (/\/missions\/[^/]+$/u.test(pathname) && route.request().method() === "GET") {
       missionRequests.push(pathname);
@@ -226,6 +228,26 @@ test("all app routes render safely across mission states and responsive themes",
     expect(await page.locator("body").innerText()).not.toMatch(/STAGES\./u);
     expect(await page.locator("body").innerText()).not.toContain("Sign-in required");
   }
+
+  // Selecting every available mission card must request string IDs, never object stringifications.
+  activeScenario = "not-run-light";
+  missionApiPaths.length = 0;
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.goto(`${baseURL}/?page=overview&mission=${missionId}`, { waitUntil: "domcontentloaded" });
+  for (let index = 0; index < 2; index += 1) {
+    await expect(page.locator(".workspace")).toBeVisible();
+    await page.locator(".workspace").click();
+    const cards = page.locator(".mission-card-body");
+    await expect(cards).toHaveCount(2);
+    await cards.nth(index).click();
+    await expect(page.locator(".mission-selector-modal")).toHaveCount(0);
+  }
+  expect(
+    missionApiPaths.every((pathname) => !/\[object(?:%20|\s)+object\]/iu.test(pathname)),
+    "mission request paths must not contain object coercions",
+  ).toBe(true);
+  expect(missionApiPaths).toContain(`/api/v1/missions/${missionId}`);
+  expect(missionApiPaths).toContain("/api/v1/missions/review-fixture-mission-two");
 
   // A fresh, unauthenticated load must discard a stale mission query without requesting it.
   await page.evaluate(() => {

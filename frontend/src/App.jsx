@@ -398,6 +398,9 @@ export default function App() {
     navigate,
     notice,
     setMission: setMissionId,
+    updateMission: (updates) => {
+      setMission((current) => current ? { ...current, ...updates } : current);
+    },
     onCreateMission: () => {
       setShowCreateMission(true);
     },

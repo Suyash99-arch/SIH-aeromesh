@@ -8,7 +8,7 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "test:url": "node --test src/api/url.test.js e2e/telemetry.test.js src/api/authRecovery.test.js src/components/reconstruction/webglLifecycle.test.js src/utils/stageStatus.test.js",
+    "test:url": "node --test src/api/url.test.js src/api/missionId.test.js e2e/telemetry.test.js src/api/authRecovery.test.js src/components/reconstruction/webglLifecycle.test.js src/utils/stageStatus.test.js",
     "test:fonts": "node scripts/check-font-tokens.mjs && node scripts/test-fonts.mjs",
     "test:e2e": "playwright test",
     "test:smoke": "npm run build && playwright test --config=playwright.smoke.config.js",

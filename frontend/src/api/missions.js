@@ -3,7 +3,7 @@
  * Single source of truth for all mission data
  */
 
-import { missions as seededMissions } from "../data/missions";
+import { missions as seededMissions } from "../data/missions.js";
 import { formatApiError } from "../utils/errorUtils.js";
 import { joinApiUrl } from "./url.js";
 export { formatApiError };
@@ -24,8 +24,38 @@ export function getApiBase() {
 
 
 export const API_BASE = getApiBase();
-export const apiUrl = (endpoint) => joinApiUrl(API_BASE, endpoint);
-export const apiFetch = (endpoint, options) => window.fetch(apiUrl(endpoint), options);
+function rejectObjectMissionPath(endpoint) {
+  let decodedEndpoint = String(endpoint);
+  try {
+    decodedEndpoint = decodeURIComponent(decodedEndpoint);
+  } catch {
+    // Keep the original endpoint for the placeholder check.
+  }
+  if (/\[object\s+object\]/iu.test(decodedEndpoint)) {
+    throw new Error("Invalid mission ID. Please select a mission and try again.");
+  }
+}
+
+export function normalizeMissionId(value) {
+  const candidate = typeof value === "string"
+    ? value
+    : value && typeof value === "object" && !Array.isArray(value)
+      ? (typeof value.id === "string" ? value.id : value.mission_id)
+      : null;
+  if (typeof candidate !== "string" || !candidate.trim() || /\[object\s+object\]/iu.test(candidate)) {
+    throw new Error("Invalid mission ID. Please select a mission and try again.");
+  }
+  return candidate.trim();
+}
+
+export const apiUrl = (endpoint) => {
+  rejectObjectMissionPath(endpoint);
+  return joinApiUrl(API_BASE, endpoint);
+};
+export const apiFetch = (endpoint, options) => {
+  rejectObjectMissionPath(endpoint);
+  return window.fetch(apiUrl(endpoint), options);
+};
 export const BACKEND_URL = API_BASE.replace(/\/api(\/v1)?$/, "");
 
 export function getUploadBase() {
@@ -114,9 +144,9 @@ export function resolveAssetUrl(url) {
 }
 
 export async function fetchArtifactsStatus(missionId) {
-  if (!missionId) return null;
+  const id = normalizeMissionId(missionId);
   try {
-    const res = await apiFetch(`/missions/${missionId}/artifacts`, {
+    const res = await apiFetch(`/missions/${id}/artifacts`, {
       headers: getAuthHeaders(),
     });
     if (!res.ok) return null;
@@ -430,6 +460,7 @@ export async function createMission({ name, missionType, location, operator }) {
 }
 
 async function fetchMission(missionId, forceRefresh = true) {
+  missionId = normalizeMissionId(missionId);
   if (!forceRefresh && missionCache.has(missionId)) {
     const cached = missionCache.get(missionId);
     if (cached && cached.status !== "processing" && cached.canonical_summary) {
@@ -568,6 +599,7 @@ async function fetchMission(missionId, forceRefresh = true) {
 }
 
 export function getMission(missionId, forceRefresh = true) {
+  missionId = normalizeMissionId(missionId);
   if (missionRequestPromises.has(missionId)) {
     return missionRequestPromises.get(missionId);
   }
@@ -582,6 +614,7 @@ export function getMission(missionId, forceRefresh = true) {
 }
 
 export async function uploadVideo(missionId, file) {
+  missionId = normalizeMissionId(missionId);
   if (file.size > 4 * 1024 * 1024) {
     throw new Error("Files larger than 4 MB must use resumable chunked upload.");
   }
@@ -624,6 +657,7 @@ export async function uploadVideo(missionId, file) {
 }
 
 export async function uploadVideoChunk(missionId, file, onProgress, signal, options = {}) {
+  missionId = normalizeMissionId(missionId);
   if (!file.size) throw new Error("The selected video file is empty.");
   const CHUNK_SIZE = 2 * 1024 * 1024; // 2 MB chunks
   const totalChunks = Math.ceil(file.size / CHUNK_SIZE);
@@ -736,6 +770,7 @@ export async function uploadVideoChunk(missionId, file, onProgress, signal, opti
 }
 
 export async function deleteMission(missionId) {
+  missionId = normalizeMissionId(missionId);
   const response = await apiFetch(`/missions/${missionId}`, {
     method: "DELETE",
     headers: getAuthHeaders(),
@@ -800,6 +835,7 @@ export async function createShareLink(missionId, days = 7) {
 }
 
 export async function getProcessingStatus(missionId) {
+  missionId = normalizeMissionId(missionId);
   try {
     const response = await apiFetch(
       `/missions/${missionId}/processing-status`,
@@ -823,6 +859,7 @@ export async function processVideo(
   optionsOrFrameSampling = 2,
   ...rest
 ) {
+  missionId = normalizeMissionId(missionId);
   try {
     let options = {};
     if (typeof optionsOrFrameSampling === "object" && optionsOrFrameSampling !== null) {

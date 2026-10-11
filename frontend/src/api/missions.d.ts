@@ -198,7 +198,9 @@ export function resolveAssetUrl(url: string | null | undefined): string;
 
 export function listMissions(): Promise<Mission[]>;
 
-export function getMission(missionId: string, isPoll?: boolean): Promise<Mission>;
+export type MissionIdentifier = string | Pick<Mission, "id"> | { mission_id: string };
+
+export function getMission(missionId: MissionIdentifier, isPoll?: boolean): Promise<Mission>;
 
 export function createMission(formData: {
   name: string;
@@ -208,7 +210,7 @@ export function createMission(formData: {
   notes?: string;
 }): Promise<Mission>;
 
-export function uploadVideo(missionId: string, file: File): Promise<{
+export function uploadVideo(missionId: MissionIdentifier, file: File): Promise<{
   success: boolean;
   filename: string;
   size_bytes: number;
@@ -230,7 +232,7 @@ export function getUploadConfig(): Promise<{
 }>;
 
 export function uploadVideoChunk(
-  missionId: string,
+  missionId: MissionIdentifier,
   file: File,
   onProgress?: (progress: {
     progress: number;
@@ -246,7 +248,7 @@ export function uploadVideoChunk(
 ): Promise<Record<string, unknown>>;
 
 export function processVideo(
-  missionId: string,
+  missionId: MissionIdentifier,
   frameSampling?: number,
   inferenceResolution?: number,
   detectionConfidence?: number,
@@ -263,7 +265,9 @@ export function processVideo(
   message: string;
 }>;
 
-export function getProcessingStatus(missionId: string): Promise<ProcessingJobStatus>;
+export function getProcessingStatus(missionId: MissionIdentifier): Promise<ProcessingJobStatus>;
+
+export function deleteMission(missionId: MissionIdentifier): Promise<Record<string, unknown>>;
 
 export function getReconstruction(missionId: string): Promise<any>;
 

@@ -216,7 +216,7 @@ function StagePipeline({ navigate, mission }) {
   );
 }
 
-export function OverviewPage({ mission, navigate, notice, setMission }) {
+export function OverviewPage({ mission, navigate, notice, updateMission }) {
   const { t } = useUI();
   const safeMission = mission || {};
   const [isRerunningDet, setIsRerunningDet] = useState(false);
@@ -245,7 +245,7 @@ export function OverviewPage({ mission, navigate, notice, setMission }) {
       const sumRes = await apiFetch(`/missions/${mId}/summary`);
       if (sumRes.ok) {
         const sumData = await sumRes.json();
-        if (setMission) setMission((prev) => ({ ...prev, ...(sumData.summary || sumData) }));
+        updateMission?.(sumData.summary || sumData);
       }
     } catch (e) {
       if (notice) notice(`${t("missionCommand.rerunError")}: ${e.message}`, "error");
