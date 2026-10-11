@@ -11,6 +11,7 @@
     "test:url": "node --test src/api/url.test.js e2e/telemetry.test.js src/api/authRecovery.test.js src/components/reconstruction/webglLifecycle.test.js",
     "test:fonts": "node scripts/check-font-tokens.mjs && node scripts/test-fonts.mjs",
     "test:e2e": "playwright test",
+    "test:smoke": "npm run build && playwright test --config=playwright.smoke.config.js",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -36,7 +37,8 @@
     "@typescript-eslint/parser": "^8.71.0",
     "@vitejs/plugin-react": "^6.1.0",
     "dotenv": "^18.0.7",
-    "eslint": "^10.9.0",
+    "eslint": "^9.39.1",
+    "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-react-refresh": "^0.5.4",
     "globals": "^17.11.0",

@@ -1,0 +1,204 @@
+import { test, expect } from "@playwright/test";
+import path from "node:path";
+
+const missionId = "review-fixture-mission";
+const scenarios = ["not-run-light", "completed", "failed"];
+const viewports = [
+  { width: 1440, height: 1000, theme: "dark", language: "en" },
+  { width: 1440, height: 1000, theme: "light", language: "en" },
+  { width: 390, height: 844, theme: "dark", language: "en" },
+  { width: 390, height: 844, theme: "light", language: "en" },
+];
+const routes = [
+  { name: "Landing", target: "/" },
+  { name: "Auth", target: "/?page=auth" },
+  { name: "Dashboard", target: `/?page=overview&mission=${missionId}` },
+  { name: "Mission Command", target: `/?page=overview&mission=${missionId}` },
+  { name: "Missions", target: `/?page=missions&mission=${missionId}` },
+  { name: "Flight Processing", target: `/?page=drone&mission=${missionId}` },
+  { name: "3D Reconstruction", target: `/?page=reconstruction&mission=${missionId}` },
+  { name: "Scene Intelligence", target: `/?page=analytics&mission=${missionId}` },
+  { name: "Geospatial", target: `/?page=map&mission=${missionId}` },
+  { name: "Reports", target: `/?page=reports&mission=${missionId}` },
+  { name: "Profile", target: `/?page=profile&mission=${missionId}` },
+  { name: "History", target: `/?page=history&mission=${missionId}` },
+  { name: "Pipeline Motion", target: `/?page=pipeline-motion&mission=${missionId}` },
+  { name: "11-Step Workflow", target: "/", workflow: true },
+];
+
+function fixtureMission(scenario) {
+  const common = {
+    id: missionId,
+    name: "Review fixture mission",
+    status: "NOT_RUN",
+    video_name: "fixture.mp4",
+    video: { uploaded: true, size_bytes: 1024, total_frames: 38, duration_seconds: 20, resolution: { width: 1920, height: 1080 } },
+    progress: 0,
+    findings: [],
+    detections: [],
+    detection: { total_detections: 0 },
+    reconstruction: { registered_cameras: 0, point_count: 0, mean_reprojection_error: null },
+    stage_breakdown: { ingest: "COMPLETED" },
+  };
+  if (scenario === "completed") {
+    return {
+      ...common,
+      status: "COMPLETE",
+      progress: 100,
+      detections: [{ id: "fixture-detection-1", class: "vehicle", confidence: 0.93, frame: 7 }],
+      detection: { total_detections: 1 },
+      objects_3d: [{ object_id: "fixture-vehicle", class_name: "vehicle", position_3d: [1, 2, 3], evidence_count: 4 }],
+      reconstruction: { registered_cameras: 38, point_count: 18814, sparse_point_count: 18814, mesh_vertices: 5230, mean_reprojection_error: 0.37 },
+      mesh: { url: `/api/v1/missions/${missionId}/mesh.obj`, vertices: 5230, faces: 9100 },
+      assets: { mesh: `/api/v1/missions/${missionId}/mesh.obj` },
+      report: { url: `/api/v1/missions/${missionId}/report.pdf` },
+      stage_breakdown: Object.fromEntries(["ingest", "quality", "detection", "tracking", "reconstruction", "measurements", "intelligence", "report"].map((key) => [key, "COMPLETED"])),
+    };
+  }
+  if (scenario === "failed") {
+    return {
+      ...common,
+      status: "FAILED",
+      failed_stage: "reconstruction",
+      error: "COLMAP failed: fixture reconstruction error",
+      reconstruction: { registered_cameras: 2, error: "COLMAP failed: fixture reconstruction error" },
+      stage_breakdown: { ingest: "COMPLETED", quality: "COMPLETED", detection: "COMPLETED", reconstruction: "FAILED" },
+    };
+  }
+  return common;
+}
+
+test("all app routes render safely across mission states and responsive themes", async ({ page, context, baseURL }) => {
+  test.setTimeout(600_000);
+  const pageErrors = [];
+  const consoleErrors = [];
+  page.on("pageerror", (error) => pageErrors.push(error.message));
+  page.on("console", (message) => {
+    if (message.type() === "error") consoleErrors.push(message.text());
+  });
+
+  let activeScenario = "not-run-light";
+  const videoRequests = [];
+  await page.route(/\/api\/v1\//u, async (route) => {
+    const requestUrl = new URL(route.request().url());
+    const pathname = requestUrl.pathname;
+    const mission = fixtureMission(activeScenario);
+    if (pathname.endsWith("/health")) {
+      const light = activeScenario === "not-run-light";
+      return route.fulfill({ json: { status: "healthy", pipeline_mode: light ? "light" : "heavy", reconstruction_engine: light ? "disabled" : "available", ai_engine: light ? "disabled" : "available" } });
+    }
+    if (pathname.endsWith("/ai-engine/status")) {
+      return route.fulfill({ json: { detector: { status: "READY", ready: true }, reconstruction: { status: "AVAILABLE", ready: true }, compute: { device: "cpu" }, tiling: { status: "ACTIVE" } } });
+    }
+    if (pathname.endsWith("/processing-status")) {
+      return route.fulfill({ json: { status: activeScenario === "failed" ? "FAILED" : activeScenario === "completed" ? "COMPLETE" : "NOT_RUN", progress_percent: activeScenario === "completed" ? 100 : 0, failed_stage: activeScenario === "failed" ? "reconstruction" : null, error: activeScenario === "failed" ? mission.error : null, stages: [] } });
+    }
+    if (/\/missions\/?$/u.test(pathname) && route.request().method() === "GET") {
+      return route.fulfill({ json: [mission] });
+    }
+    if (pathname.includes(`/missions/${missionId}/video`)) {
+      videoRequests.push(pathname);
+      return route.fulfill({ status: 200, contentType: "video/mp4", body: "" });
+    }
+    if (pathname.endsWith("/mesh.obj")) {
+      return route.fulfill({ status: 200, contentType: "text/plain", body: "o fixture\nv 0 0 0\nv 1 0 0\nv 0 1 0\nf 1 2 3\n" });
+    }
+    if (pathname.endsWith("/semantic-scene")) {
+      return route.fulfill({ json: { semantic_scene: { objects: mission.objects_3d || [] } } });
+    }
+    if (pathname.endsWith("/auth/guest")) {
+      return route.fulfill({ json: { access_token: "fixture-review-token", user: { id: "fixture-review-user", portal_type: "guest", name: "Review Guest" } } });
+    }
+    if (pathname.includes(`/missions/${missionId}`)) {
+      return route.fulfill({ json: { success: true, mission } });
+    }
+    if (/\/auth\//u.test(pathname)) return route.fulfill({ json: { user: null, success: true } });
+    return route.fulfill({ json: { success: true, mission, missions: [mission] } });
+  });
+
+  const screenshotsDir = path.resolve(process.cwd(), "../docs/screenshots");
+  await page.goto(`${baseURL}/`, { waitUntil: "domcontentloaded" });
+  for (const scenario of scenarios) {
+    activeScenario = scenario;
+    for (const route of routes) {
+      for (const viewport of viewports) {
+        pageErrors.length = 0;
+        consoleErrors.length = 0;
+        await page.setViewportSize({ width: viewport.width, height: viewport.height });
+        await page.evaluate(({ theme, language }) => {
+          localStorage.setItem("aeromesh-theme", theme);
+          localStorage.setItem("hexaspark_theme", theme);
+          localStorage.setItem("aeromesh_lang", language);
+          localStorage.setItem("hexaspark_lang", language);
+        }, viewport);
+        const response = await page.goto(`${baseURL}${route.target}`, { waitUntil: "domcontentloaded" });
+        if (response) expect(response.status(), `${route.name} document status`).toBe(200);
+        expect(await page.evaluate(() => document.contentType), `${route.name} content type`).toBe("text/html");
+        await expect.poll(() => page.evaluate(() => document.characterSet)).toBe("UTF-8");
+        if (viewport.language === "hi") await expect(page.locator("html")).toHaveAttribute("lang", "hi");
+        if (route.workflow) {
+          await page.getByRole("link", { name: /11-step workflow/i }).click();
+          await expect(page.locator("#workflow")).toBeAttached();
+          await page.locator("#workflow").scrollIntoViewIfNeeded();
+        } else {
+          await expect(page.locator("#root")).not.toBeEmpty();
+          await expect(page.locator("#root")).not.toContainText("This page could not be loaded");
+        }
+        expect(await page.locator("body").innerText()).not.toContain("STAGES.NOT_RUN");
+        const metricOptionLocator = page.locator("#unit-select option[value='metric']");
+        if (await metricOptionLocator.count()) {
+          expect(await metricOptionLocator.textContent()).not.toContain(String.fromCharCode(0xc2));
+        }
+        if (route.name === "Mission Command" && scenario === "not-run-light") {
+          await expect(page.getByText("Not run. Full 3D reconstruction requires the full compute profile.", { exact: true })).toHaveCount(2);
+          await expect(page.locator(".stage-btn.completed")).toHaveCount(1);
+          await expect(page.locator(".stage-btn.failed")).toHaveCount(0);
+          await expect(page.locator(".pipeline-panel .progress-head")).toContainText("13%");
+        }
+        if (route.name === "Mission Command" && scenario === "failed") {
+          await expect(page.getByText("COLMAP failed: fixture reconstruction error").first()).toBeVisible();
+        }
+        if (route.name === "Mission Command" && scenario === "completed") {
+          await expect(page.locator(".stage-btn.completed")).toHaveCount(8);
+        }
+
+        if (scenario === "not-run-light" && ["Mission Command", "Flight Processing"].includes(route.name)) {
+          const name = route.name === "Mission Command" ? "mission-command" : "flight-processing";
+          const suffix = `${viewport.width}-${viewport.theme}`;
+          await page.screenshot({ path: path.join(screenshotsDir, `review-v2-${name}-${suffix}.png`), fullPage: true, animations: "disabled" });
+        }
+        expect(pageErrors, `${scenario}/${route.name}/${viewport.width}/${viewport.theme} page errors`).toEqual([]);
+        expect(consoleErrors, `${scenario}/${route.name}/${viewport.width}/${viewport.theme} console errors`).toEqual([]);
+        await expect(page.getByText("This page could not be loaded", { exact: true })).toHaveCount(0);
+      }
+    }
+  }
+
+  // Exercise Hindi once on Mission Command and retain a review screenshot.
+  activeScenario = "not-run-light";
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto(`${baseURL}/`, { waitUntil: "domcontentloaded" });
+  await page.evaluate(() => {
+    localStorage.setItem("aeromesh-theme", "light");
+    localStorage.setItem("hexaspark_theme", "light");
+    localStorage.setItem("aeromesh_lang", "hi");
+    localStorage.setItem("hexaspark_lang", "hi");
+  });
+  await page.goto(`${baseURL}/?page=overview&mission=${missionId}`, { waitUntil: "domcontentloaded" });
+  await expect(page.locator("html")).toHaveAttribute("lang", "hi");
+  await page.screenshot({ path: path.join(screenshotsDir, "review-v2-mission-command-390-light-hi.png"), fullPage: true, animations: "disabled" });
+  expect(pageErrors).toEqual([]);
+  expect(consoleErrors).toEqual([]);
+
+  // Landing keyboard palette and guest flow use only the intercepted fixture API.
+  await page.goto(`${baseURL}/`, { waitUntil: "domcontentloaded" });
+  await page.locator("#btn-hero-guest").waitFor({ state: "visible" });
+  await page.keyboard.press("Control+k");
+  await expect(page.getByRole("dialog")).toBeVisible();
+  await page.keyboard.press("Escape");
+  await page.locator("#btn-hero-guest").click();
+  await expect(page.locator(".app-shell")).toBeVisible();
+  expect(pageErrors).toEqual([]);
+  expect(consoleErrors).toEqual([]);
+  expect(videoRequests.length).toBeGreaterThan(0);
+});
