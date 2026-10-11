@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef } from "react";
-import { motion, AnimatePresence } from "framer-motion";
 import Icon from "../components/ui/Icon";
-import HeroCompassReconstruction from "../components/hero/HeroCompassReconstruction";
+import { lazy, Suspense } from "react";
+const HeroCompassReconstruction = lazy(() => import("../components/hero/HeroCompassReconstruction"));
 import FloatingWord from "../components/hero/FloatingWord";
-import NarrativePipelineSequence from "../components/narrative/NarrativePipelineSequence";
+const NarrativePipelineSequence = lazy(() => import("../components/narrative/NarrativePipelineSequence"));
 import { loginGuest, listMissions, fetchHealthWithRetry } from "../api/missions";
 import { useUI } from "../context/UIContext";
 import UIControlsToolbar from "../components/layout/UIControlsToolbar";
@@ -1174,13 +1174,48 @@ export default function HomePage({ onNavigateDashboard, onStartMission, currentU
   });
   const timerRef = useRef(null);
   const workflowRef = useRef(null);
+  const lowerSectionsRef = useRef(null);
+  const [showLowerSections, setShowLowerSections] = useState(false);
+  const [showHeroCanvas, setShowHeroCanvas] = useState(false);
 
   useEffect(() => {
-    const section = workflowRef.current;
-    if (!section || typeof IntersectionObserver === "undefined") {
-      setWorkflowVisible(true);
+    let idleId;
+    let timeoutId;
+    let frameId;
+    const mountAfterIdle = () => {
+      timeoutId = window.setTimeout(() => setShowHeroCanvas(true), 6000);
+    };
+    frameId = requestAnimationFrame(() => {
+      if ("requestIdleCallback" in window) idleId = window.requestIdleCallback(mountAfterIdle, { timeout: 8000 });
+      else timeoutId = window.setTimeout(() => setShowHeroCanvas(true), 6500);
+    });
+    return () => {
+      cancelAnimationFrame(frameId);
+      if (idleId != null && "cancelIdleCallback" in window) window.cancelIdleCallback(idleId);
+      if (timeoutId != null) window.clearTimeout(timeoutId);
+    };
+  }, []);
+
+  useEffect(() => {
+    const target = lowerSectionsRef.current;
+    if (!target || typeof IntersectionObserver === "undefined") {
+      setShowLowerSections(true);
       return undefined;
     }
+    const observer = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) {
+        setShowLowerSections(true);
+        observer.disconnect();
+      }
+    }, { rootMargin: "250px 0px" });
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (!showLowerSections) return undefined;
+    const section = workflowRef.current;
+    if (!section || typeof IntersectionObserver === "undefined") return undefined;
 
     const observer = new IntersectionObserver(
       ([entry]) => setWorkflowVisible(entry.isIntersecting),
@@ -1188,11 +1223,11 @@ export default function HomePage({ onNavigateDashboard, onStartMission, currentU
     );
     observer.observe(section);
     return () => observer.disconnect();
-  }, []);
+  }, [showLowerSections]);
 
   // Auto-play timer for the 11 workflow steps
   useEffect(() => {
-    if (!isPlaying) {
+    if (!isPlaying || !workflowVisible) {
       if (timerRef.current) clearInterval(timerRef.current);
       return;
     }
@@ -1204,7 +1239,7 @@ export default function HomePage({ onNavigateDashboard, onStartMission, currentU
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [isPlaying]);
+  }, [isPlaying, workflowVisible]);
 
   // Load real backend health status and aggregate missions
   useEffect(() => {
@@ -1258,7 +1293,7 @@ export default function HomePage({ onNavigateDashboard, onStartMission, currentU
       {/* 1. TOP NAVIGATION */}
       <a className="landing-skip-link" href="#landing-main">{t("landing.skipToMain")}</a>
       <nav className="homepage-nav" aria-label={t("landing.primaryNavigation")}>
-        <a className="nav-brand" href="#hero" aria-label={t("landing.navHome")}>
+        <a className="nav-brand" href="#hero">
           <div className="glowing-icon-circle sm">
             <Icon name="Radar" size={18} />
           </div>
@@ -1278,7 +1313,7 @@ export default function HomePage({ onNavigateDashboard, onStartMission, currentU
 
         <div className="nav-actions">
           <UIControlsToolbar />
-          <button className="landing-command-trigger" type="button" onClick={onOpenCommandPalette} aria-label={t("commandPalette.title")} title={t("commandPalette.title")}>
+          <button className="landing-command-trigger" type="button" onClick={onOpenCommandPalette} title={t("commandPalette.title")}>
             <Icon name="Search" size={16} aria-hidden="true" /><span>{t("commandPalette.title")}</span><kbd>{t("commandPalette.shortcut")}</kbd>
           </button>
           {currentUser ? (
@@ -1374,24 +1409,26 @@ export default function HomePage({ onNavigateDashboard, onStartMission, currentU
               <span><Icon name="LockKeyhole" size={15} />{t("landing.trustProtection")}</span>
               <span><Icon name="FileSearch" size={15} />{t("landing.trustAudit")}</span>
             </div>
-            {systemHealth.state === "waking" && (
-              <div className="server-waking-banner" role="status" aria-live="polite">
+            <div className="server-waking-slot">
+              {systemHealth.state === "waking" && <div className="server-waking-banner" role="status" aria-live="polite">
                 <span className="server-waking-spinner" aria-hidden="true" />
                 <span>{t("landing.serverWaking")}</span>
-              </div>
-            )}
+              </div>}
+            </div>
           </div>
 
           {/* Central Hero Visual: Auto-rotating 3D Model in Concentric Compass Rings */}
-          <div className="hero-visual-staging">
-            <HeroCompassReconstruction />
+          <div className="hero-visual-staging" onPointerEnter={() => setShowHeroCanvas(true)}>
+            {showHeroCanvas ? <Suspense fallback={<div className="hero-canvas-placeholder" aria-hidden="true" />}><HeroCompassReconstruction /></Suspense> : <div className="hero-canvas-placeholder" aria-hidden="true" />}
           </div>
         </div>
       </section>
 
+      <div ref={lowerSectionsRef} className="landing-lower-sections">
+      {showLowerSections ? <>
       {/* 3. NARRATIVE PIPELINE ANIMATION — THE "WOW" SEQUENCE */}
       <section className="narrative-pipeline-section" id="pipeline-narrative">
-        <NarrativePipelineSequence />
+        <Suspense fallback={<div className="narrative-pipeline-card narrative-pipeline-card-loading" aria-hidden="true" />}><NarrativePipelineSequence /></Suspense>
       </section>
 
       {/* 4. REFERENCE BOTTOM FEATURE CARDS GRID */}
@@ -1402,7 +1439,7 @@ export default function HomePage({ onNavigateDashboard, onStartMission, currentU
             <div className="glowing-icon-circle lg">
               <Icon name="Box" size={24} />
             </div>
-            <h4>3D Reconstruction</h4>
+            <h3>3D Reconstruction</h3>
             <p>
               Autonomous single-pass Structure-from-Motion and dense multi-view stereo generating
               survey-grade 3D point clouds and Poisson surface meshes.
@@ -1414,7 +1451,7 @@ export default function HomePage({ onNavigateDashboard, onStartMission, currentU
             <div className="glowing-icon-circle lg">
               <Icon name="Compass" size={24} />
             </div>
-            <h4>Explore in 360°</h4>
+            <h3>Explore in 360°</h3>
             <p>
               Full 6-DoF spatial orbit navigation, orthographic nadir clipping planes, and real-time
               camera frustum station inspection in high precision.
@@ -1426,7 +1463,7 @@ export default function HomePage({ onNavigateDashboard, onStartMission, currentU
             <div className="glowing-icon-circle lg">
               <Icon name="Radar" size={24} />
             </div>
-            <h4>Detailed Analysis</h4>
+            <h3>Detailed Analysis</h3>
             <p>
               Deep YOLO11 convolutional neural detection coupled with ByteTrack spatio-temporal Kalman
               filtering and ground sampling distance calibration.
@@ -1438,7 +1475,7 @@ export default function HomePage({ onNavigateDashboard, onStartMission, currentU
             <div className="glowing-icon-circle lg">
               <Icon name="Shield" size={24} />
             </div>
-            <h4>Future Ready</h4>
+            <h3>Future Ready</h3>
             <p>
               Certified deliverables pipeline auto-compiling executive PDF engineering reports,
               GeoJSON spatial layers, CSV telemetry, and zipped audit packages.
@@ -1466,7 +1503,6 @@ export default function HomePage({ onNavigateDashboard, onStartMission, currentU
         {/* 11-Step Scrub Bar */}
         <div
           className="workflow-stepper"
-          role="tablist"
           aria-label="Pipeline Stages"
         >
           {WORKFLOW_STAGES.map((stg, idx) => (
@@ -1486,14 +1522,9 @@ export default function HomePage({ onNavigateDashboard, onStartMission, currentU
 
         {/* Dynamic Split Showcase Card with Smooth Transitions */}
         <div className="workflow-stage-card">
-          <AnimatePresence mode="wait">
-            <motion.div
+          <div
               key={currentStage.id}
               className="workflow-stage-inner"
-              initial={{ opacity: 0, y: 14 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -14 }}
-              transition={{ duration: 0.28, ease: [0.16, 1, 0.3, 1] }}
             >
               {/* Left Column: Technical In-Depth Architecture */}
               <div className="stage-info-column">
@@ -1590,8 +1621,7 @@ export default function HomePage({ onNavigateDashboard, onStartMission, currentU
                   <StageVisualCanvas stageIndex={activeStep} />
                 </div>
               </div>
-            </motion.div>
-          </AnimatePresence>
+            </div>
         </div>
       </section>
 
@@ -1672,7 +1702,7 @@ export default function HomePage({ onNavigateDashboard, onStartMission, currentU
             <div className="glowing-icon-circle lg" style={{ marginBottom: "16px" }}>
               <Icon name="Shield" size={24} />
             </div>
-            <h4 style={{ fontSize: "1.15rem", fontWeight: 700, margin: "0 0 10px", color: "#f8fafc" }}>Multi-Tenant Data Isolation</h4>
+            <h3 style={{ fontSize: "1.15rem", fontWeight: 700, margin: "0 0 10px", color: "#f8fafc" }}>Multi-Tenant Data Isolation</h3>
             <p style={{ color: "#94a3b8", fontSize: "0.9rem", lineHeight: "1.6", margin: 0 }}>
               Strict database and object storage partitioning ensures government departments, organizations, and individual analysts operate in isolated, access-controlled security enclaves.
             </p>
@@ -1682,7 +1712,7 @@ export default function HomePage({ onNavigateDashboard, onStartMission, currentU
             <div className="glowing-icon-circle lg" style={{ marginBottom: "16px" }}>
               <Icon name="Lock" size={24} />
             </div>
-            <h4 style={{ fontSize: "1.15rem", fontWeight: 700, margin: "0 0 10px", color: "#f8fafc" }}>Argon2id & httpOnly Auth</h4>
+            <h3 style={{ fontSize: "1.15rem", fontWeight: 700, margin: "0 0 10px", color: "#f8fafc" }}>Argon2id & httpOnly Auth</h3>
             <p style={{ color: "#94a3b8", fontSize: "0.9rem", lineHeight: "1.6", margin: 0 }}>
               Armed with state-of-the-art Argon2id password derivation, dual JWT access and refresh rotation, optional Two-Factor OTP challenges, and secure httpOnly cookie transports.
             </p>
@@ -1692,7 +1722,7 @@ export default function HomePage({ onNavigateDashboard, onStartMission, currentU
             <div className="glowing-icon-circle lg" style={{ marginBottom: "16px" }}>
               <Icon name="Server" size={24} />
             </div>
-            <h4 style={{ fontSize: "1.15rem", fontWeight: 700, margin: "0 0 10px", color: "#f8fafc" }}>Air-Gapped Sovereign Readiness</h4>
+            <h3 style={{ fontSize: "1.15rem", fontWeight: 700, margin: "0 0 10px", color: "#f8fafc" }}>Air-Gapped Sovereign Readiness</h3>
             <p style={{ color: "#94a3b8", fontSize: "0.9rem", lineHeight: "1.6", margin: 0 }}>
               Capable of 100% offline deployment on dedicated GPU workstations, tactical forward operating servers, or private national sovereign clouds with zero external telemetry callbacks.
             </p>
@@ -1702,7 +1732,7 @@ export default function HomePage({ onNavigateDashboard, onStartMission, currentU
             <div className="glowing-icon-circle lg" style={{ marginBottom: "16px" }}>
               <Icon name="FileCheck" size={24} />
             </div>
-            <h4 style={{ fontSize: "1.15rem", fontWeight: 700, margin: "0 0 10px", color: "#f8fafc" }}>Tamper-Evident Audit Trails</h4>
+            <h3 style={{ fontSize: "1.15rem", fontWeight: 700, margin: "0 0 10px", color: "#f8fafc" }}>Tamper-Evident Audit Trails</h3>
             <p style={{ color: "#94a3b8", fontSize: "0.9rem", lineHeight: "1.6", margin: 0 }}>
               Every video ingestion, measurement, team invitation, and spatial model export is cryptographically logged with timestamps and operator signatures for formal compliance verification.
             </p>
@@ -1734,9 +1764,12 @@ export default function HomePage({ onNavigateDashboard, onStartMission, currentU
           </div>
         </div>
       </section>
+      </> : <div className="landing-sections-placeholder" aria-hidden="true" />}
+      </div>
       </main>
 
       {/* 7. FOOTER */}
+      {showLowerSections ? (
       <footer className="homepage-footer">
         <div>
           <strong style={{ color: "#ffffff", letterSpacing: "0.08em" }}>
@@ -1751,6 +1784,7 @@ export default function HomePage({ onNavigateDashboard, onStartMission, currentU
           <span>FastAPI · Three.js · YOLOv11 · COLMAP</span>
         </div>
       </footer>
+      ) : <div className="homepage-footer footer-placeholder" aria-hidden="true" />}
     </div>
   );
 }

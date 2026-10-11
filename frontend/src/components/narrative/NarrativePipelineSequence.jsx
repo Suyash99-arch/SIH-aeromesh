@@ -32,6 +32,7 @@ export default function NarrativePipelineSequence() {
     isPaused: false,
     pauseStartTime: null,
     totalPausedMs: 0,
+    wake: null,
   });
 
   const replay = useCallback(() => {
@@ -43,6 +44,7 @@ export default function NarrativePipelineSequence() {
     setIsPlaying(true);
     setProgress(0);
     setActiveStageIdx(0);
+    animStateRef.current.wake?.();
   }, []);
 
   const togglePause = useCallback(() => {
@@ -88,10 +90,15 @@ export default function NarrativePipelineSequence() {
       ([entry]) => {
         if (entry.isIntersecting) {
           animStateRef.current.inView = true;
+          animStateRef.current.wake?.();
           if (!animStateRef.current.hasAutoStarted) {
             animStateRef.current.hasAutoStarted = true;
             replay();
           }
+        } else {
+          animStateRef.current.inView = false;
+          if (animStateRef.current.rafId !== null) cancelAnimationFrame(animStateRef.current.rafId);
+          animStateRef.current.rafId = null;
         }
       },
       { threshold: 0.3 }
@@ -435,16 +442,24 @@ export default function NarrativePipelineSequence() {
         }
       }
 
-      animStateRef.current.rafId = requestAnimationFrame(render);
+      animStateRef.current.rafId = animStateRef.current.inView && p < 1
+        ? requestAnimationFrame(render)
+        : null;
     };
 
-    animStateRef.current.rafId = requestAnimationFrame(render);
+    animStateRef.current.wake = () => {
+      if (animStateRef.current.rafId === null && animStateRef.current.inView) {
+        animStateRef.current.rafId = requestAnimationFrame(render);
+      }
+    };
 
     return () => {
       window.removeEventListener('resize', resize);
       if (animStateRef.current.rafId) {
         cancelAnimationFrame(animStateRef.current.rafId);
       }
+      animStateRef.current.rafId = null;
+      animStateRef.current.wake = null;
     };
   }, [durationMs]);
 
@@ -463,7 +478,7 @@ export default function NarrativePipelineSequence() {
               <span className="pulse-dot-cyan" />
               <span>{t("processing.narrativeBadge")}</span>
             </div>
-            <h3 className="narrative-heading">{t("processing.narrativeTitle")}</h3>
+            <h2 className="narrative-heading">{t("processing.narrativeTitle")}</h2>
           </div>
         </div>
 

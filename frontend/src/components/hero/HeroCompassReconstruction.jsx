@@ -195,7 +195,7 @@ export default function HeroCompassReconstruction() {
 
       if (!contextLost) {
         renderer.render(scene, camera);
-        rafId = requestAnimationFrame(animate);
+        rafId = elapsed < 4.5 ? requestAnimationFrame(animate) : null;
       }
     };
 

@@ -111,7 +111,7 @@ export default function Topbar({
       </div>
 
       <div className="top-actions" style={{ display: "flex", alignItems: "center", gap: "14px" }}>
-        <button className="shell-command-trigger" type="button" onClick={onOpenCommandPalette} aria-label={t("commandPalette.title")} title={t("commandPalette.title")}>
+        <button className="shell-command-trigger" type="button" onClick={onOpenCommandPalette} title={t("commandPalette.title")}>
           <Search size={15} aria-hidden="true" /><span>{t("commandPalette.title")}</span><kbd>{t("commandPalette.shortcut")}</kbd>
         </button>
         <UIControlsToolbar />
