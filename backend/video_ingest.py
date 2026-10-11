@@ -238,8 +238,12 @@ def create_browser_proxy(
     fps = probe.get("fps") or 25.0
     gop = max(1, round(fps))  # keyframe interval ~1 second
 
-    # Scale filter: cap width at max_width, keep aspect ratio, ensure even dimensions
-    vf = f"scale='min({max_width},iw)':'min({max_width},ih)':force_original_aspect_ratio=decrease"
+    # Scale inside a max_width x max_width box, preserve aspect ratio, and make
+    # both output dimensions even for yuv420p/libx264 on Windows and Linux.
+    vf = (
+        f"scale=w={max_width}:h={max_width}:"
+        "force_original_aspect_ratio=decrease:force_divisible_by=2"
+    )
     proxy_threads = max(1, min(int(os.getenv("VIDEO_PROXY_THREADS", "1")), 2))
 
     cmd = [
