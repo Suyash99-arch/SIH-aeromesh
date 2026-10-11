@@ -92,6 +92,8 @@ export default function App() {
   });
 
   const [missionId, setMissionId] = useState(() => getInitialMissionId());
+  const [authInitialized, setAuthInitialized] = useState(false);
+  const [suppressAutoMission, setSuppressAutoMission] = useState(false);
   const [toast, setToast] = useState(null);
   const [theme, setTheme] = useState(
     () => localStorage.getItem("aeromesh-theme") || "dark",
@@ -159,7 +161,7 @@ export default function App() {
 
   // If no mission is selected, load user's first available mission from the API
   useEffect(() => {
-    if (!missionId) {
+    if (authInitialized && currentUser && !missionId && !suppressAutoMission) {
       listMissions()
         .then((missions) => {
           if (Array.isArray(missions) && missions.length > 0) {
@@ -168,7 +170,7 @@ export default function App() {
         })
         .catch(() => {});
     }
-  }, [missionId, currentUser]);
+  }, [authInitialized, missionId, currentUser, suppressAutoMission]);
 
   // Auto-restore session from backend on mount or refresh
   useEffect(() => {
@@ -186,8 +188,24 @@ export default function App() {
         }
       })
       .catch(() => {})
-      .finally(() => markAuthInitializationComplete());
+      .finally(() => {
+        markAuthInitializationComplete();
+        setAuthInitialized(true);
+      });
   }, []);
+
+  useEffect(() => {
+    if (!authInitialized || currentUser || !missionId) return;
+    setSuppressAutoMission(true);
+    setMissionId("");
+    setMission(null);
+    setActivePage("overview");
+    setShowHomepage(false);
+    setToast({ type: "error", message: "This mission needs you to sign in" });
+    const url = new URL(window.location.href);
+    url.searchParams.delete("mission");
+    window.history.replaceState({}, "", url.toString());
+  }, [authInitialized, currentUser, missionId]);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -215,6 +233,9 @@ export default function App() {
       if (missionId && url.searchParams.get("mission") !== missionId) {
         url.searchParams.set("mission", missionId);
         changed = true;
+      } else if (!missionId && url.searchParams.has("mission")) {
+        url.searchParams.delete("mission");
+        changed = true;
       }
       if (!showHomepage && activePage && activePage !== "overview") {
         if (url.searchParams.get("page") !== activePage) {
@@ -239,6 +260,7 @@ export default function App() {
     const maxPollAttempts = 12;
 
     const fetchMission = async (isPoll = false) => {
+      if (!authInitialized || !currentUser) return;
       if (!missionId) {
         setMission(null);
         return;
@@ -249,19 +271,29 @@ export default function App() {
 
         if (nextMission && !nextMission.hasError) {
           setMission(nextMission);
-        } else if (nextMission?.error === "AUTH_REQUIRED") {
-          setMission(nextMission);
-          return;
         } else {
           setMission(null);
-          // If the mission was not found or forbidden, clear the stale URL param and mission ID
           if (nextMission?.hasError) {
             setMissionId("");
-            if (typeof window !== "undefined") {
-              const url = new URL(window.location.href);
-              url.searchParams.delete("mission");
-              window.history.replaceState({}, "", url.toString());
+            if (nextMission.error === "AUTH_REQUIRED") {
+              setSuppressAutoMission(true);
+              clearAuthToken();
+              setCurrentUser(null);
+              setActivePage("auth");
+              setShowHomepage(false);
+              setToast({ type: "error", message: "This mission needs you to sign in" });
+            } else if (nextMission.error === "MISSION_NOT_FOUND") {
+              setSuppressAutoMission(true);
+              setActivePage("overview");
+              setToast({ type: "error", message: "Mission not found" });
+            } else {
+              setSuppressAutoMission(true);
+              setActivePage("overview");
+              setToast({ type: "error", message: "You do not have access to this mission" });
             }
+            const url = new URL(window.location.href);
+            url.searchParams.delete("mission");
+            window.history.replaceState({}, "", url.toString());
           }
           return; // Stop polling if mission is unavailable / error
         }
@@ -288,7 +320,7 @@ export default function App() {
       active = false;
       if (pollTimer) clearTimeout(pollTimer);
     };
-  }, [missionId]);
+  }, [authInitialized, currentUser, missionId]);
 
   useEffect(() => {
     const refreshMissionAfterUpload = (event) => {
@@ -322,12 +354,15 @@ export default function App() {
   const handleLogout = () => {
     clearAuthToken();
     setCurrentUser(null);
+    setMissionId("");
+    setMission(null);
     setShowHomepage(true);
     setActivePage("overview");
     notice("Logged out successfully. Session revoked.", "info");
   };
 
   const handleMissionCreated = (newMissionId, { pipelineStarted = true } = {}) => {
+    setSuppressAutoMission(false);
     setMissionId(newMissionId);
     setActivePage("pipeline");
     setShowCreateMission(false);
@@ -345,6 +380,17 @@ export default function App() {
     if (typeof targetPage === "string" && targetPage) {
       setActivePage(targetPage);
     }
+  };
+
+  const handleAuthenticated = (user) => {
+    if (String(user?.portal_type || "").toLowerCase() === "guest") {
+      setMissionId("");
+      setMission(null);
+    }
+    setSuppressAutoMission(false);
+    setCurrentUser(user);
+    setShowHomepage(false);
+    setActivePage("overview");
   };
 
   const shared = {
@@ -368,11 +414,7 @@ export default function App() {
     ) : activePage === "auth" ? (
       <AuthPage
         initialPortal={authPortal}
-        onAuthenticated={(user) => {
-          setCurrentUser(user);
-          setShowHomepage(false);
-          setActivePage("overview");
-        }}
+        onAuthenticated={handleAuthenticated}
         onCancel={() => {
           setShowHomepage(true);
           setActivePage("overview");
@@ -436,11 +478,7 @@ export default function App() {
           >
             <Suspense fallback={<RouteLoadingSkeleton />}><AuthPage
               initialPortal={authPortal}
-              onAuthenticated={(user) => {
-                setCurrentUser(user);
-                setShowHomepage(false);
-                setActivePage("overview");
-              }}
+              onAuthenticated={handleAuthenticated}
               onCancel={() => {
                 setShowHomepage(true);
                 setActivePage("overview");

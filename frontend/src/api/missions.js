@@ -6,7 +6,6 @@
 import { missions as seededMissions } from "../data/missions";
 import { formatApiError } from "../utils/errorUtils.js";
 import { joinApiUrl } from "./url.js";
-import { retryUnauthorizedOnce } from "./authRecovery.js";
 export { formatApiError };
 
 export function getApiBase() {
@@ -291,6 +290,7 @@ function normalizeMission(rawMission = {}) {
 
 // Mission state cache and log throttle
 const missionCache = new Map();
+const missionRequestPromises = new Map();
 const loggedMissionStates = new Map();
 let missionListCache = { identity: null, data: null };
 let healthySince = 0;
@@ -429,7 +429,7 @@ export async function createMission({ name, missionType, location, operator }) {
   }
 }
 
-export async function getMission(missionId, forceRefresh = true) {
+async function fetchMission(missionId, forceRefresh = true) {
   if (!forceRefresh && missionCache.has(missionId)) {
     const cached = missionCache.get(missionId);
     if (cached && cached.status !== "processing" && cached.canonical_summary) {
@@ -442,17 +442,10 @@ export async function getMission(missionId, forceRefresh = true) {
       headers: getAuthHeaders(),
       credentials: "include",
     });
-    const tokenUsed = getAuthToken();
-    let response = await requestMission();
-    response = await retryUnauthorizedOnce(response, {
-      waitForAuthReady: () => waitForAuthInitialization(),
-      getCurrentToken: getAuthToken,
-      tokenUsed,
-      refreshAuth: async () => (await refreshSession()).success,
-      retry: requestMission,
-    });
+    const response = await requestMission();
 
     if (response.status === 401) {
+      await refreshSession();
       const lastLogged = loggedMissionStates.get(missionId);
       if (lastLogged !== "AUTH_REQUIRED") {
         loggedMissionStates.set(missionId, "AUTH_REQUIRED");
@@ -572,6 +565,20 @@ export async function getMission(missionId, forceRefresh = true) {
       detail: error.message,
     };
   }
+}
+
+export function getMission(missionId, forceRefresh = true) {
+  if (missionRequestPromises.has(missionId)) {
+    return missionRequestPromises.get(missionId);
+  }
+  const request = fetchMission(missionId, forceRefresh);
+  missionRequestPromises.set(missionId, request);
+  request.finally(() => {
+    if (missionRequestPromises.get(missionId) === request) {
+      missionRequestPromises.delete(missionId);
+    }
+  });
+  return request;
 }
 
 export async function uploadVideo(missionId, file) {
@@ -1306,11 +1313,23 @@ export function setAuthToken(token) {
 export function clearAuthToken() {
   localStorage.removeItem("aeromesh_auth_token");
   localStorage.removeItem("aeromesh_current_user");
-  localStorage.removeItem("aeromesh_active_mission_id");
+  clearRememberedMissionIds();
   missionCache.clear();
+  missionRequestPromises.clear();
   missionListCache = { identity: null, data: null };
   healthySince = 0;
   lastHealthPayload = null;
+}
+
+export function clearRememberedMissionIds() {
+  const missionIdKeys = [
+    "aeromesh_active_mission_id",
+    "aeromesh_mission_id",
+    "aeromesh_last_mission_id",
+  ];
+  for (const storage of [localStorage, globalThis.sessionStorage].filter(Boolean)) {
+    for (const key of missionIdKeys) storage.removeItem(key);
+  }
 }
 
 export function getStoredUser() {
@@ -1411,6 +1430,10 @@ export async function loginUser(email, password, portalType = null, mfaCode = nu
 
 export async function loginGuest() {
   try {
+    clearRememberedMissionIds();
+    missionCache.clear();
+    missionRequestPromises.clear();
+    missionListCache = { identity: null, data: null };
     const response = await apiFetch(`/auth/guest`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },

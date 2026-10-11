@@ -65,6 +65,9 @@ function fixtureMission(scenario) {
       stage_breakdown: { ingest: "COMPLETED", quality: "COMPLETED", detection: "COMPLETED", reconstruction: "FAILED" },
     };
   }
+  if (scenario === "unavailable" || scenario === "disabled") {
+    return { ...common, status: scenario.toUpperCase() };
+  }
   return common;
 }
 
@@ -79,6 +82,24 @@ test("all app routes render safely across mission states and responsive themes",
 
   let activeScenario = "not-run-light";
   const videoRequests = [];
+  const missionRequests = [];
+  const refreshRequests = [];
+  const countRequestsForMission = (id) => missionRequests.filter((pathname) => pathname.endsWith(`/missions/${id}`)).length;
+  await page.addInitScript(() => {
+    window.__guestMissionStorageChecks = [];
+    const originalFetch = window.fetch.bind(window);
+    window.fetch = (input, init) => {
+      const url = typeof input === "string" ? input : input.url;
+      if (url.includes("/auth/guest")) {
+        window.__guestMissionStorageChecks.push([
+          "aeromesh_active_mission_id",
+          "aeromesh_mission_id",
+          "aeromesh_last_mission_id",
+        ].every((key) => !localStorage.getItem(key) && !sessionStorage.getItem(key)));
+      }
+      return originalFetch(input, init);
+    };
+  });
   await page.route(/\/api\/v1\//u, async (route) => {
     const requestUrl = new URL(route.request().url());
     const pathname = requestUrl.pathname;
@@ -91,10 +112,22 @@ test("all app routes render safely across mission states and responsive themes",
       return route.fulfill({ json: { detector: { status: "READY", ready: true }, reconstruction: { status: "AVAILABLE", ready: true }, compute: { device: "cpu" }, tiling: { status: "ACTIVE" } } });
     }
     if (pathname.endsWith("/processing-status")) {
-      return route.fulfill({ json: { status: activeScenario === "failed" ? "FAILED" : activeScenario === "completed" ? "COMPLETE" : "NOT_RUN", progress_percent: activeScenario === "completed" ? 100 : 0, failed_stage: activeScenario === "failed" ? "reconstruction" : null, error: activeScenario === "failed" ? mission.error : null, stages: [] } });
+      return route.fulfill({ json: { status: activeScenario === "failed" ? "FAILED" : activeScenario === "completed" ? "COMPLETE" : activeScenario === "unavailable" || activeScenario === "disabled" ? activeScenario.toUpperCase() : "NOT_RUN", progress_percent: activeScenario === "completed" ? 100 : 0, failed_stage: activeScenario === "failed" ? "reconstruction" : null, error: activeScenario === "failed" ? mission.error : null, stages: [] } });
+    }
+    if (pathname.endsWith("/auth/refresh")) {
+      refreshRequests.push(pathname);
+      return route.fulfill({ json: { access_token: "fixture-refreshed-token", user: { id: "fixture-review-user", portal_type: "guest", name: "Review Guest" } } });
+    }
+    if (pathname.endsWith("/auth/me")) {
+      return route.fulfill({ json: { user: { id: "fixture-review-user", portal_type: "guest", name: "Review Guest" }, success: true } });
     }
     if (/\/missions\/?$/u.test(pathname) && route.request().method() === "GET") {
       return route.fulfill({ json: [mission] });
+    }
+    if (/\/missions\/[^/]+$/u.test(pathname) && route.request().method() === "GET") {
+      missionRequests.push(pathname);
+      if (activeScenario === "expired-token") return route.fulfill({ status: 401, json: { detail: "expired" } });
+      if (activeScenario === "not-found") return route.fulfill({ status: 404, json: { detail: "not found" } });
     }
     if (pathname.includes(`/missions/${missionId}/video`)) {
       videoRequests.push(pathname);
@@ -116,7 +149,7 @@ test("all app routes render safely across mission states and responsive themes",
     return route.fulfill({ json: { success: true, mission, missions: [mission] } });
   });
 
-  const screenshotsDir = path.resolve(process.cwd(), "../docs/screenshots");
+  const screenshotsDir = path.resolve(process.cwd(), "test-results/review-smoke/screenshots");
   await page.goto(`${baseURL}/`, { waitUntil: "domcontentloaded" });
   for (const scenario of scenarios) {
     activeScenario = scenario;
@@ -130,6 +163,8 @@ test("all app routes render safely across mission states and responsive themes",
           localStorage.setItem("hexaspark_theme", theme);
           localStorage.setItem("aeromesh_lang", language);
           localStorage.setItem("hexaspark_lang", language);
+          localStorage.setItem("aeromesh_auth_token", "fixture-review-token");
+          localStorage.setItem("aeromesh_current_user", JSON.stringify({ id: "fixture-review-user", portal_type: "guest", name: "Review Guest" }));
         }, viewport);
         const response = await page.goto(`${baseURL}${route.target}`, { waitUntil: "domcontentloaded" });
         if (response) expect(response.status(), `${route.name} document status`).toBe(200);
@@ -144,7 +179,8 @@ test("all app routes render safely across mission states and responsive themes",
           await expect(page.locator("#root")).not.toBeEmpty();
           await expect(page.locator("#root")).not.toContainText("This page could not be loaded");
         }
-        expect(await page.locator("body").innerText()).not.toContain("STAGES.NOT_RUN");
+        expect(await page.locator("body").innerText()).not.toMatch(/STAGES\./u);
+        expect(await page.locator("body").innerText()).not.toContain("Sign-in required");
         const metricOptionLocator = page.locator("#unit-select option[value='metric']");
         if (await metricOptionLocator.count()) {
           expect(await metricOptionLocator.textContent()).not.toContain(String.fromCharCode(0xc2));
@@ -174,6 +210,64 @@ test("all app routes render safely across mission states and responsive themes",
     }
   }
 
+  // Stage statuses outside the usual mission lifecycle must still resolve to labels.
+  for (const status of ["unavailable", "disabled"]) {
+    activeScenario = status;
+    await page.goto(`${baseURL}/?page=overview&mission=${missionId}`, { waitUntil: "domcontentloaded" });
+    await expect(page.locator("#root")).not.toContainText("This page could not be loaded");
+    await expect(page.getByText(status === "unavailable" ? "UNAVAILABLE" : "DISABLED", { exact: true })).toBeVisible();
+    expect(await page.locator("body").innerText()).not.toMatch(/STAGES\./u);
+    expect(await page.locator("body").innerText()).not.toContain("Sign-in required");
+  }
+
+  // A fresh, unauthenticated load must discard a stale mission query without requesting it.
+  await page.evaluate(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+  });
+  const staleGuestRequestCount = countRequestsForMission("stale-guest-mission");
+  activeScenario = "not-run-light";
+  await page.goto(`${baseURL}/?page=overview&mission=stale-guest-mission`, { waitUntil: "domcontentloaded" });
+  await expect.poll(() => new URL(page.url()).searchParams.has("mission")).toBe(false);
+  await expect(page.locator("#root")).not.toBeEmpty();
+  await expect(page.locator(".toast")).toContainText("This mission needs you to sign in");
+  expect(countRequestsForMission("stale-guest-mission")).toBe(staleGuestRequestCount);
+  expect(await page.locator("body").innerText()).not.toMatch(/STAGES\./u);
+  expect(await page.locator("body").innerText()).not.toContain("Sign-in required");
+
+  // Expired credentials get one refresh attempt, while the mission URL is cleared.
+  await page.evaluate(() => {
+    localStorage.setItem("aeromesh_auth_token", "fixture-expired-token");
+    localStorage.setItem("aeromesh_current_user", JSON.stringify({ id: "fixture-review-user", portal_type: "guest", name: "Review Guest" }));
+  });
+  activeScenario = "expired-token";
+  const missionRequestCountBeforeExpired = countRequestsForMission(missionId);
+  const refreshCountBeforeExpired = refreshRequests.length;
+  await page.goto(`${baseURL}/?page=overview&mission=${missionId}`, { waitUntil: "domcontentloaded" });
+  await expect.poll(() => new URL(page.url()).searchParams.has("mission")).toBe(false);
+  await expect(page.locator(".toast")).toContainText("This mission needs you to sign in");
+  expect(countRequestsForMission(missionId) - missionRequestCountBeforeExpired).toBe(1);
+  expect(refreshRequests.length - refreshCountBeforeExpired).toBe(1);
+  expect(await page.locator("body").innerText()).not.toContain("Sign-in required");
+
+  // A 404 similarly clears the query and shows a useful message without a refresh retry.
+  await page.evaluate(() => {
+    localStorage.setItem("aeromesh_auth_token", "fixture-valid-token");
+    localStorage.setItem("aeromesh_current_user", JSON.stringify({ id: "fixture-review-user", portal_type: "guest", name: "Review Guest" }));
+  });
+  activeScenario = "not-found";
+  const missionRequestCountBefore404 = countRequestsForMission(missionId);
+  const refreshCountBefore404 = refreshRequests.length;
+  await page.goto(`${baseURL}/?page=overview&mission=${missionId}`, { waitUntil: "domcontentloaded" });
+  await expect.poll(() => new URL(page.url()).searchParams.has("mission")).toBe(false);
+  await expect(page.locator(".toast")).toContainText("Mission not found");
+  expect(countRequestsForMission(missionId) - missionRequestCountBefore404).toBe(1);
+  expect(refreshRequests.length - refreshCountBefore404).toBe(0);
+  expect(await page.locator("body").innerText()).not.toContain("Sign-in required");
+
+  pageErrors.length = 0;
+  consoleErrors.length = 0;
+
   // Exercise Hindi once on Mission Command and retain a review screenshot.
   activeScenario = "not-run-light";
   await page.setViewportSize({ width: 390, height: 844 });
@@ -192,12 +286,40 @@ test("all app routes render safely across mission states and responsive themes",
 
   // Landing keyboard palette and guest flow use only the intercepted fixture API.
   await page.goto(`${baseURL}/`, { waitUntil: "domcontentloaded" });
+  await page.evaluate(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+  });
+  await page.reload({ waitUntil: "domcontentloaded" });
   await page.locator("#btn-hero-guest").waitFor({ state: "visible" });
   await page.keyboard.press("Control+k");
   await expect(page.getByRole("dialog")).toBeVisible();
   await page.keyboard.press("Escape");
   await page.locator("#btn-hero-guest").click();
   await expect(page.locator(".app-shell")).toBeVisible();
+  await expect.poll(() => page.evaluate(() => window.__guestMissionStorageChecks.length)).toBeGreaterThan(0);
+  expect(await page.evaluate(() => window.__guestMissionStorageChecks.at(-1))).toBe(true);
+
+  // Logging out and entering as a guest again cannot restore a previous mission ID.
+  await page.evaluate(() => {
+    for (const key of ["aeromesh_active_mission_id", "aeromesh_mission_id", "aeromesh_last_mission_id"]) {
+      localStorage.setItem(key, "previous-session-mission");
+      sessionStorage.setItem(key, "previous-session-mission");
+    }
+  });
+  await page.goto(`${baseURL}/?page=profile`, { waitUntil: "domcontentloaded" });
+  await page.locator("#profile-logout-button").click();
+  await expect(page.locator("#btn-hero-guest")).toBeVisible();
+  await expect.poll(() => page.evaluate(() => [
+    "aeromesh_active_mission_id",
+    "aeromesh_mission_id",
+    "aeromesh_last_mission_id",
+  ].every((key) => !localStorage.getItem(key) && !sessionStorage.getItem(key)))).toBe(true);
+  const guestRequestCountBeforeReentry = await page.evaluate(() => window.__guestMissionStorageChecks.length);
+  await page.locator("#btn-hero-guest").click();
+  await expect(page.locator(".app-shell")).toBeVisible();
+  await expect.poll(() => page.evaluate(() => window.__guestMissionStorageChecks.length)).toBeGreaterThan(guestRequestCountBeforeReentry);
+  expect(await page.evaluate(() => window.__guestMissionStorageChecks.at(-1))).toBe(true);
   expect(pageErrors).toEqual([]);
   expect(consoleErrors).toEqual([]);
   expect(videoRequests.length).toBeGreaterThan(0);
