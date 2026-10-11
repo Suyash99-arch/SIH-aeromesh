@@ -48,4 +48,3 @@ def test_hover_or_rotation_warning_does_not_block_upload_or_processing(
     assert processed.json()["success"] is True
     assert processed.json()["status"] in {"PROCESSING", "QUEUED"}
     assert processed.json().get("job_id")
-
