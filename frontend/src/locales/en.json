@@ -203,6 +203,12 @@
       "capabilitiesUnconfirmed": "Checking server capabilities. Reconstruction controls are unavailable until the server responds."
   },
   "processing": {
+    "loading3d": "Loading 3D viewer…",
+    "authRequiredTitle": "Sign in to continue",
+    "authRequiredBody": "Your session could not be restored. Sign in to view this mission.",
+    "signIn": "Sign in",
+    "pipelineStarted": "Mission created and pipeline initiated.",
+    "lightweightUploadComplete": "Upload complete. Full 3D reconstruction requires the full compute profile.",
     "title": "Pipeline Execution Status",
     "subtitle": "Real-time photogrammetry, neural feature extraction, and spatial fusion",
     "overallProgress": "Overall Pipeline Progress",
@@ -631,6 +637,8 @@
     "MESH_GENERATED": "Mesh Generated"
   },
   "sidebar": {
+    "lightweightMode": "Lightweight mode",
+    "lightweightDescription": "Full 3D reconstruction requires the full compute profile.",
     "brandSubtitle": "AERIAL INTELLIGENCE PLATFORM",
     "activeMission": "ACTIVE MISSION",
     "unknownMission": "Unknown mission",
@@ -648,6 +656,10 @@
     "tiled": "2x2 Tiled",
     "checking": "CHECKING",
     "loading": "Loading…"
+  },
+  "video": {
+    "uploading": "Uploading video…",
+    "notUploaded": "No video uploaded yet."
   },
   "selector": {
     "title": "Active Flight Mission Switcher",

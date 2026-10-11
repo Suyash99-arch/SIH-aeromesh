@@ -1044,7 +1044,6 @@
   font-weight: 700;
   color: var(--text);
 }
-
 /* Shared app-shell refinements for the dashboard and mission workspace */
 .app-shell { background: var(--bg-page); color: var(--text-primary); }
 .sidebar { background: color-mix(in srgb, var(--bg-sidebar) 94%, transparent); border-color: var(--color-border-subtle); box-shadow: var(--shadow-md); }
@@ -1152,6 +1151,8 @@
 
 .mission-reconstruction-disabled > p { margin: 0; color: var(--color-text-secondary, #b9c9d8); }
 .main { min-width: 0; }
+.engine.engine-lightweight { background: rgba(148, 163, 184, 0.04); border-color: var(--border); }
+.engine.engine-lightweight i { background: #94a3b8; box-shadow: none; animation: none; }
 @media (max-width: 500px) {
   .topbar { padding-inline: 8px; }
   .crumbs .crumb-title { display: block; flex: 1 1 0; }

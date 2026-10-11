@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, useMemo, useCallback } from "react";
 import { resolveAssetUrl, fetchArtifactsStatus, uploadVideoChunk, uploadVideo, getMission, getUploadConfig } from "../../api/missions.js";
 import Icon from "../ui/Icon";
+import { useUI } from "../../context/UIContext";
 
 export default function VideoPlayer({
   mission,
@@ -12,6 +13,7 @@ export default function VideoPlayer({
   detections: propDetections,
   semanticObjects: propSemanticObjects,
 }) {
+  const { t } = useUI();
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -23,21 +25,24 @@ export default function VideoPlayer({
   // Prevent the frame→time effect from firing during timeupdate-driven frame updates
   const timeUpdateActiveRef = useRef(false);
 
-  // Determine potential video endpoints
-  const proxyUrl =
+  const missionUploading = ["uploading", "uploading_video", "video_uploading"].includes(String(mission?.status || "").toLowerCase());
+  const videoAvailable = mission?.video?.uploaded === true || (mission?.video?.uploaded !== false && Boolean(
+    mission?.video?.size_bytes > 0 || mission?.video?.size_mb > 0 || mission?.video_path
+  ));
+  // Do not synthesize endpoint URLs until the mission confirms an uploaded video.
+  const proxyUrl = videoAvailable ? (
     mission?.assets?.video_proxy ||
     mission?.video?.proxy_url ||
-    (mission?.id ? `/api/v1/missions/${mission.id}/video/proxy` : "");
+    (mission?.id ? `/api/v1/missions/${mission.id}/video/proxy` : "")) : "";
 
-  const directUrl =
+  const directUrl = videoAvailable ? (
     mission?.assets?.video ||
     mission?.video?.original_url ||
     mission?.video?.url ||
-    (mission?.id ? `/api/v1/missions/${mission.id}/video` : "");
+    (mission?.id ? `/api/v1/missions/${mission.id}/video` : "")) : "";
 
   // Fallback state tracking: 0 = try proxy, 1 = try direct original, 2 = all failed
   const [attemptIndex, setAttemptIndex] = useState(0);
-  const [customOverrideUrl, setCustomOverrideUrl] = useState(null);
 
   // Re-upload state
   const [selectedFile, setSelectedFile] = useState(null);
@@ -60,8 +65,7 @@ export default function VideoPlayer({
   // Compute active candidate URL based on attempt index
   const activeCandidateUrl = useMemo(() => {
     let base = "";
-    if (customOverrideUrl) base = customOverrideUrl;
-    else if (attemptIndex === 0) base = proxyUrl || directUrl;
+    if (attemptIndex === 0) base = proxyUrl || directUrl;
     else if (attemptIndex === 1) base = directUrl;
     if (!base) return "";
     if (retryCount > 0) {
@@ -69,7 +73,7 @@ export default function VideoPlayer({
       return `${base}${sep}_r=${retryCount}`;
     }
     return base;
-  }, [customOverrideUrl, attemptIndex, proxyUrl, directUrl, retryCount]);
+  }, [attemptIndex, proxyUrl, directUrl, retryCount]);
 
   const videoSrc = useMemo(() => {
     return activeCandidateUrl ? resolveAssetUrl(activeCandidateUrl) : "";
@@ -79,7 +83,6 @@ export default function VideoPlayer({
   useEffect(() => {
     setAttemptIndex(0);
     setRetryCount(0);
-    setCustomOverrideUrl(null);
     setFailed(false);
     setErrorMessage("");
     setSelectedFile(null);
@@ -178,16 +181,14 @@ export default function VideoPlayer({
       setUploadProgress(100);
       setUploadStatusMsg("Video uploaded successfully! Initializing player...");
 
-      const newUrl = `/api/v1/missions/${mission.id}/video?t=${Date.now()}`;
-      setCustomOverrideUrl(newUrl);
       setFailed(false);
       setErrorMessage("");
       setShowReplaceModal(false);
       setSelectedFile(null);
 
       try {
-        await getMission(mission.id, true);
-        window.dispatchEvent(new CustomEvent("aeromesh:mission_updated", { detail: { id: mission.id } }));
+        const refreshedMission = await getMission(mission.id, true);
+        window.dispatchEvent(new CustomEvent("aeromesh:mission_updated", { detail: { id: mission.id, mission: refreshedMission } }));
       } catch (refreshError) {
         console.debug("Mission refresh after video upload was unavailable:", refreshError);
       }
@@ -448,7 +449,7 @@ export default function VideoPlayer({
             </div>
 
             <div className="video-alert-title">
-              VIDEO FOOTAGE UNAVAILABLE
+              {missionUploading || isUploading ? t("video.uploading") : t("video.notUploaded")}
             </div>
 
             <div className="video-alert-description">

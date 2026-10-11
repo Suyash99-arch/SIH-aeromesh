@@ -83,14 +83,15 @@ export default function VideoFramesTab({
   onSwitchTo3D,
 }) {
   const { t } = useUI();
-  const videoSrc = resolveAssetUrl(
+  const videoAvailable = mission?.video?.uploaded === true || (mission?.video?.uploaded !== false && Boolean(mission?.video?.size_bytes > 0 || mission?.video_path));
+  const videoSrc = videoAvailable ? resolveAssetUrl(
     mission?.assets?.video_proxy || mission?.video?.proxy_url ||
     (missionId ? `/api/v1/missions/${missionId}/video/proxy` : "")
-  );
-  const directVideoSrc = resolveAssetUrl(
+  ) : "";
+  const directVideoSrc = videoAvailable ? resolveAssetUrl(
     mission?.assets?.video || mission?.video?.original_url || mission?.video?.url ||
     (missionId ? `/api/v1/missions/${missionId}/video` : "")
-  );
+  ) : "";
 
   const videoRef = useRef(null);
   const [playbackSpeed, setPlaybackSpeed] = useState(1.0);

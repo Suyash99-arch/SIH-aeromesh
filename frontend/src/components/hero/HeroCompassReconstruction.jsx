@@ -1,8 +1,9 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import * as THREE from 'three';
 import { useTilt } from '../primitives/hooks.ts';
 import Icon from '../ui/Icon';
 import { useUI } from '../../context/UIContext';
+import { attachWebGLContextHandlers } from '../reconstruction/webglLifecycle.js';
 
 /**
  * HeroCompassReconstruction Component
@@ -14,6 +15,7 @@ export default function HeroCompassReconstruction() {
   const { t } = useUI();
   const tiltRef = useTilt(8);
   const mountRef = useRef(null);
+  const [webglUnavailable, setWebglUnavailable] = useState(false);
 
   useEffect(() => {
     const container = mountRef.current;
@@ -28,13 +30,19 @@ export default function HeroCompassReconstruction() {
     camera.position.set(0, 5.5, 9.5);
     camera.lookAt(0, 0, 0);
 
-    const renderer = new THREE.WebGLRenderer({
+    let renderer;
+    try {
+      renderer = new THREE.WebGLRenderer({
       alpha: true,
       antialias: true,
       powerPreference: 'high-performance',
-    });
+      });
+    } catch {
+      setWebglUnavailable(true);
+      return undefined;
+    }
     renderer.setSize(width, height);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     container.appendChild(renderer.domElement);
 
@@ -158,6 +166,22 @@ export default function HeroCompassReconstruction() {
 
     // 3. 60FPS Animation Loop with Continuous Slow Rotation
     let rafId = null;
+    let contextLost = false;
+    const canvas = renderer.domElement;
+    const onContextLost = () => {
+      contextLost = true;
+      setWebglUnavailable(true);
+      if (rafId !== null) cancelAnimationFrame(rafId);
+    };
+    const onContextRestored = () => {
+      contextLost = false;
+      setWebglUnavailable(false);
+      rafId = requestAnimationFrame(animate);
+    };
+    const detachContextHandlers = attachWebGLContextHandlers(canvas, {
+      onLost: onContextLost,
+      onRestored: onContextRestored,
+    });
     const timer = new THREE.Timer();
 
     const animate = () => {
@@ -169,8 +193,10 @@ export default function HeroCompassReconstruction() {
       modelGroup.rotation.x = Math.sin(elapsed * 0.6) * 0.06;
       modelGroup.position.y = Math.sin(elapsed * 0.8) * 0.08 - 0.2;
 
-      renderer.render(scene, camera);
-      rafId = requestAnimationFrame(animate);
+      if (!contextLost) {
+        renderer.render(scene, camera);
+        rafId = requestAnimationFrame(animate);
+      }
     };
 
     rafId = requestAnimationFrame(animate);
@@ -191,6 +217,7 @@ export default function HeroCompassReconstruction() {
     // Cleanup GPU resources on unmount
     return () => {
       window.removeEventListener('resize', handleResize);
+      detachContextHandlers();
       if (rafId !== null) cancelAnimationFrame(rafId);
       planeGeo.dispose();
       wireframeMat.dispose();
@@ -202,6 +229,7 @@ export default function HeroCompassReconstruction() {
       sphereGeo.dispose();
       sphereMat.dispose();
       renderer.dispose();
+      renderer.forceContextLoss();
       if (renderer.domElement && renderer.domElement.parentNode) {
         renderer.domElement.parentNode.removeChild(renderer.domElement);
       }
@@ -269,7 +297,9 @@ export default function HeroCompassReconstruction() {
       </div>
 
       {/* Central 3D Canvas WebGL Container */}
-      <div className="hero-canvas-viewport" ref={mountRef} />
+      <div className="hero-canvas-viewport" ref={mountRef}>
+        {webglUnavailable && <div className="hero-webgl-fallback" role="status">3D preview is unavailable on this device.</div>}
+      </div>
 
       {/* Bottom Telemetry Dock */}
       <div className="hero-compass-footer">

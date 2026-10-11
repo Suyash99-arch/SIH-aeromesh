@@ -1,5 +1,5 @@
-import { useState, useEffect, useMemo, useCallback, useRef } from "react";
-import ReconstructionViewer from "../reconstruction/ReconstructionViewer";
+import { useState, useEffect, useMemo, useCallback, useRef, lazy, Suspense } from "react";
+const ReconstructionViewer = lazy(() => import("../reconstruction/ReconstructionViewer"));
 import Icon from "../ui/Icon";
 import "../../styles/analysis.css";
 import ViewFiltersSidebar from "./ViewFiltersSidebar";
@@ -829,6 +829,7 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
         )}
 
         {/* Primary 3D Reconstruction Viewer */}
+        <Suspense fallback={<div className="reconstruction-viewer-loading" role="status">{t("processing.loading3d", "Loading 3D viewer…")}</div>}>
         <ReconstructionViewer
           mission={mission}
           meshUrl={
@@ -863,6 +864,7 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
           onSelectMarking={setSelectedMarkingId}
           onSceneClick={handleSceneClick}
         />
+        </Suspense>
 
         {/* Floating Selected Object HUD Badge */}
         {selectedObject && (
