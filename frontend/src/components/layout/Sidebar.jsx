@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import Icon from "../ui/Icon";
 import MissionSelectorPanel from "./MissionSelectorPanel";
 import { useUI } from "../../context/UIContext";
-import { API_BASE, getAuthHeaders } from "../../api/missions";
+import { apiFetch, getAuthHeaders } from "../../api/missions";
 import {
   missionNavigation,
   intelligenceNavigation,
@@ -25,7 +25,7 @@ function useEngineStatus() {
     let cancelled = false;
     const check = async () => {
       try {
-        const res = await fetch(`${API_BASE}/ai-engine/status`, {
+        const res = await apiFetch("/ai-engine/status", {
           headers: getAuthHeaders(),
         });
         if (cancelled) return;

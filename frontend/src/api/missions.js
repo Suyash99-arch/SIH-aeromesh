@@ -24,6 +24,8 @@ export function getApiBase() {
 
 
 export const API_BASE = getApiBase();
+export const apiUrl = (endpoint) => joinApiUrl(API_BASE, endpoint);
+export const apiFetch = (endpoint, options) => window.fetch(apiUrl(endpoint), options);
 export const BACKEND_URL = API_BASE.replace(/\/api(\/v1)?$/, "");
 
 export function getUploadBase() {
@@ -37,7 +39,7 @@ export function getUploadBase() {
 export const UPLOAD_BASE = getUploadBase();
 
 export async function getUploadConfig() {
-  const response = await fetch(`${API_BASE}/config`, { headers: getAuthHeaders() });
+  const response = await apiFetch(`/config`, { headers: getAuthHeaders() });
   const data = await response.json();
   if (!response.ok) {
     throw new Error(formatApiError(data) || "Unable to load video upload limits.");
@@ -96,7 +98,7 @@ export function resolveAssetUrl(url) {
 export async function fetchArtifactsStatus(missionId) {
   if (!missionId) return null;
   try {
-    const res = await fetch(`${API_BASE}/missions/${missionId}/artifacts`, {
+    const res = await apiFetch(`/missions/${missionId}/artifacts`, {
       headers: getAuthHeaders(),
     });
     if (!res.ok) return null;
@@ -282,7 +284,7 @@ export async function fetchHealthWithRetry(onState = () => {}) {
       await wait(backoffMs[attempt]);
     }
     try {
-      const response = await fetch(`${API_BASE}/health`, {
+      const response = await apiFetch(`/health`, {
         headers: getAuthHeaders(),
         credentials: "include",
       });
@@ -331,7 +333,7 @@ export async function listMissions() {
   try {
     const health = await fetchHealthWithRetry();
     if (!health) return missionListCache.identity === identity ? (missionListCache.data || []) : [];
-    const response = await fetch(`${API_BASE}/missions`, {
+    const response = await apiFetch(`/missions`, {
       headers: getAuthHeaders(),
       credentials: "include",
     });
@@ -370,7 +372,7 @@ export async function createMission({ name, missionType, location, operator }) {
       operator: operator || "",
     });
 
-    const response = await fetch(`${API_BASE}/missions?${params}`, {
+    const response = await apiFetch(`/missions?${params}`, {
       method: "POST",
       headers: getAuthHeaders(),
     });
@@ -403,7 +405,7 @@ export async function getMission(missionId, forceRefresh = true) {
   }
 
   try {
-    const response = await fetch(`${API_BASE}/missions/${missionId}`, {
+    const response = await apiFetch(`/missions/${missionId}`, {
       headers: getAuthHeaders(),
     });
 
@@ -523,7 +525,7 @@ export async function uploadVideo(missionId, file) {
     formData.append("file", file);
 
     const uploadBase = getUploadBase();
-    const response = await fetch(joinApiUrl(uploadBase, `/missions/${missionId}/upload`), {
+    const response = await apiFetch(joinApiUrl(uploadBase, `/missions/${missionId}/upload`), {
       method: "POST",
       headers: getAuthHeaders(),
       body: formData,
@@ -562,7 +564,7 @@ export async function uploadVideoChunk(missionId, file, onProgress, signal, opti
   const uploadId = options.uploadId || `upl_${Date.now()}_${Math.random().toString(36).substr(2, 6)}`;
   const uploadBase = getUploadBase();
   const startTime = Date.now();
-  const receivedResponse = await fetch(
+  const receivedResponse = await apiFetch(
     joinApiUrl(uploadBase, `/missions/${missionId}/upload-status?upload_id=${encodeURIComponent(uploadId)}&total_chunks=${totalChunks}`),
     { headers: getAuthHeaders(), signal },
   );
@@ -595,7 +597,7 @@ export async function uploadVideoChunk(missionId, file, onProgress, signal, opti
     for (let attempt = 0; attempt < 60; attempt++) {
       if (signal?.aborted) throw new Error("Upload cancelled by user");
       try {
-        const health = await fetch(healthUrl, { headers: getAuthHeaders(), signal });
+        const health = await apiFetch(healthUrl, { headers: getAuthHeaders(), signal });
         if (health.ok) return;
       } catch (error) {
         if (signal?.aborted) throw error;
@@ -626,7 +628,7 @@ export async function uploadVideoChunk(missionId, file, onProgress, signal, opti
     let data;
     for (let retry = 0; retry <= 6; retry++) {
       try {
-        const response = await fetch(url, {
+        const response = await apiFetch(url, {
           method: "POST",
           headers: getAuthHeaders(),
           body: formData,
@@ -668,7 +670,7 @@ export async function uploadVideoChunk(missionId, file, onProgress, signal, opti
 }
 
 export async function deleteMission(missionId) {
-  const response = await fetch(`${API_BASE}/missions/${missionId}`, {
+  const response = await apiFetch(`/missions/${missionId}`, {
     method: "DELETE",
     headers: getAuthHeaders(),
   });
@@ -681,7 +683,7 @@ export async function deleteMission(missionId) {
 }
 
 export async function compareMissions(baseId, targetId) {
-  const response = await fetch(`${API_BASE}/missions/compare?base_id=${baseId}&target_id=${targetId}`, {
+  const response = await apiFetch(`/missions/compare?base_id=${baseId}&target_id=${targetId}`, {
     headers: getAuthHeaders(),
   });
   const data = await response.json();
@@ -692,7 +694,7 @@ export async function compareMissions(baseId, targetId) {
 }
 
 export async function pauseMission(missionId) {
-  const response = await fetch(`${API_BASE}/missions/${missionId}/pause`, {
+  const response = await apiFetch(`/missions/${missionId}/pause`, {
     method: "POST",
     headers: getAuthHeaders(),
   });
@@ -700,7 +702,7 @@ export async function pauseMission(missionId) {
 }
 
 export async function resumeMission(missionId) {
-  const response = await fetch(`${API_BASE}/missions/${missionId}/resume`, {
+  const response = await apiFetch(`/missions/${missionId}/resume`, {
     method: "POST",
     headers: getAuthHeaders(),
   });
@@ -708,7 +710,7 @@ export async function resumeMission(missionId) {
 }
 
 export async function cancelMission(missionId) {
-  const response = await fetch(`${API_BASE}/missions/${missionId}/cancel`, {
+  const response = await apiFetch(`/missions/${missionId}/cancel`, {
     method: "POST",
     headers: getAuthHeaders(),
   });
@@ -716,7 +718,7 @@ export async function cancelMission(missionId) {
 }
 
 export async function retryMission(missionId) {
-  const response = await fetch(`${API_BASE}/missions/${missionId}/retry`, {
+  const response = await apiFetch(`/missions/${missionId}/retry`, {
     method: "POST",
     headers: getAuthHeaders(),
   });
@@ -724,7 +726,7 @@ export async function retryMission(missionId) {
 }
 
 export async function createShareLink(missionId, days = 7) {
-  const response = await fetch(`${API_BASE}/missions/${missionId}/share?days=${days}`, {
+  const response = await apiFetch(`/missions/${missionId}/share?days=${days}`, {
     method: "POST",
     headers: getAuthHeaders(),
   });
@@ -733,8 +735,8 @@ export async function createShareLink(missionId, days = 7) {
 
 export async function getProcessingStatus(missionId) {
   try {
-    const response = await fetch(
-      `${API_BASE}/missions/${missionId}/processing-status`,
+    const response = await apiFetch(
+      `/missions/${missionId}/processing-status`,
       {
         headers: getAuthHeaders(),
       },
@@ -788,8 +790,8 @@ export async function processVideo(
 
     console.log(`[Process] Starting pipeline processing for mission ${missionId}`, payload);
 
-    const response = await fetch(
-      `${API_BASE}/missions/${missionId}/process`,
+    const response = await apiFetch(
+      `/missions/${missionId}/process`,
       {
         method: "POST",
         headers: {
@@ -873,7 +875,7 @@ export async function rerunDetection(missionId, options = {}) {
       scene_profile: options.sceneProfile ?? options.scene_profile,
       tile_inference: options.tileInference ?? options.tile_inference ?? true,
     };
-    const response = await fetch(`${API_BASE}/missions/${missionId}/rerun-detection`, {
+    const response = await apiFetch(`/missions/${missionId}/rerun-detection`, {
       method: "POST",
       headers: {
         ...getAuthHeaders(),
@@ -895,8 +897,8 @@ export async function rerunDetection(missionId, options = {}) {
 
 export async function generateReconstruction(missionId) {
   try {
-    const response = await fetch(
-      `${API_BASE}/missions/${missionId}/reconstruct`,
+    const response = await apiFetch(
+      `/missions/${missionId}/reconstruct`,
       {
         method: "POST",
         headers: getAuthHeaders(),
@@ -919,7 +921,7 @@ export async function generateReconstruction(missionId) {
 
 export async function generateReport(missionId) {
   try {
-    const response = await fetch(`${API_BASE}/missions/${missionId}/report`, {
+    const response = await apiFetch(`/missions/${missionId}/report`, {
       headers: getAuthHeaders(),
     });
     const data = await response.json();
@@ -934,14 +936,14 @@ export async function generateReport(missionId) {
 }
 
 export function getReportPdfUrl(missionId) {
-  return `${API_BASE}/missions/${missionId}/report/pdf`;
+  return apiUrl(`/missions/${missionId}/report/pdf`);
 }
 
 export async function downloadReportPdf(missionId) {
   try {
-    const url = `${API_BASE}/missions/${missionId}/report/pdf`;
+    const url = `/missions/${missionId}/report/pdf`;
     const headers = getAuthHeaders();
-    const response = await fetch(url, {
+    const response = await apiFetch(url, {
       method: "GET",
       headers,
     });
@@ -985,25 +987,25 @@ export async function downloadReportPdf(missionId) {
 }
 
 export function getExportCsvUrl(missionId) {
-  return `${API_BASE}/missions/${missionId}/export/csv`;
+  return apiUrl(`/missions/${missionId}/export/csv`);
 }
 
 export function getExportJsonUrl(missionId) {
-  return `${API_BASE}/missions/${missionId}/export/json`;
+  return apiUrl(`/missions/${missionId}/export/json`);
 }
 
 export function getExportGeoJsonUrl(missionId) {
-  return `${API_BASE}/missions/${missionId}/export/geojson`;
+  return apiUrl(`/missions/${missionId}/export/geojson`);
 }
 
 export function getExportPackageUrl(missionId) {
-  return `${API_BASE}/missions/${missionId}/export/package`;
+  return apiUrl(`/missions/${missionId}/export/package`);
 }
 
 export async function fetchGeoJsonStatus(missionId) {
   try {
-    const response = await fetch(
-      `${API_BASE}/missions/${missionId}/export/geojson`,
+    const response = await apiFetch(
+      `/missions/${missionId}/export/geojson`,
     );
     return await response.json();
   } catch (error) {
@@ -1022,8 +1024,8 @@ export function getCachedMissions() {
 
 export async function fetchCalibrations(missionId) {
   try {
-    const response = await fetch(
-      `${API_BASE}/missions/${missionId}/calibrations`,
+    const response = await apiFetch(
+      `/missions/${missionId}/calibrations`,
       {
         headers: getAuthHeaders(),
       },
@@ -1037,8 +1039,8 @@ export async function fetchCalibrations(missionId) {
 
 export async function calibrateReferenceDistance(missionId, payload) {
   try {
-    const response = await fetch(
-      `${API_BASE}/missions/${missionId}/calibrations/reference-distance`,
+    const response = await apiFetch(
+      `/missions/${missionId}/calibrations/reference-distance`,
       {
         method: "POST",
         headers: getAuthHeaders({ "Content-Type": "application/json" }),
@@ -1054,8 +1056,8 @@ export async function calibrateReferenceDistance(missionId, payload) {
 
 export async function deactivateCalibrations(missionId) {
   try {
-    const response = await fetch(
-      `${API_BASE}/missions/${missionId}/calibrations/deactivate`,
+    const response = await apiFetch(
+      `/missions/${missionId}/calibrations/deactivate`,
       {
         method: "POST",
         headers: getAuthHeaders(),
@@ -1070,8 +1072,8 @@ export async function deactivateCalibrations(missionId) {
 
 export async function measureDistance3D(missionId, payload) {
   try {
-    const response = await fetch(
-      `${API_BASE}/missions/${missionId}/measurements/distance`,
+    const response = await apiFetch(
+      `/missions/${missionId}/measurements/distance`,
       {
         method: "POST",
         headers: getAuthHeaders({ "Content-Type": "application/json" }),
@@ -1087,8 +1089,8 @@ export async function measureDistance3D(missionId, payload) {
 
 export async function measurePolygon3D(missionId, payload) {
   try {
-    const response = await fetch(
-      `${API_BASE}/missions/${missionId}/measurements/polygon`,
+    const response = await apiFetch(
+      `/missions/${missionId}/measurements/polygon`,
       {
         method: "POST",
         headers: getAuthHeaders({ "Content-Type": "application/json" }),
@@ -1104,8 +1106,8 @@ export async function measurePolygon3D(missionId, payload) {
 
 export async function measureElevation3D(missionId, payload) {
   try {
-    const response = await fetch(
-      `${API_BASE}/missions/${missionId}/measurements/elevation`,
+    const response = await apiFetch(
+      `/missions/${missionId}/measurements/elevation`,
       {
         method: "POST",
         headers: getAuthHeaders({ "Content-Type": "application/json" }),
@@ -1121,8 +1123,8 @@ export async function measureElevation3D(missionId, payload) {
 
 export async function measureObject3D(missionId, objectId, payload = {}) {
   try {
-    const response = await fetch(
-      `${API_BASE}/missions/${missionId}/measurements/object/${objectId}`,
+    const response = await apiFetch(
+      `/missions/${missionId}/measurements/object/${objectId}`,
       {
         method: "POST",
         headers: getAuthHeaders({ "Content-Type": "application/json" }),
@@ -1138,8 +1140,8 @@ export async function measureObject3D(missionId, objectId, payload = {}) {
 
 export async function measureVolume3D(missionId, payload = {}) {
   try {
-    const response = await fetch(
-      `${API_BASE}/missions/${missionId}/measurements/volume`,
+    const response = await apiFetch(
+      `/missions/${missionId}/measurements/volume`,
       {
         method: "POST",
         headers: getAuthHeaders({ "Content-Type": "application/json" }),
@@ -1156,8 +1158,8 @@ export async function measureVolume3D(missionId, payload = {}) {
 export async function fetchSemanticScene(missionId) {
   if (!missionId) return { success: false, semantic_scene: null };
   try {
-    const response = await fetch(
-      `${API_BASE}/missions/${missionId}/semantic-scene?_t=${Date.now()}`,
+    const response = await apiFetch(
+      `/missions/${missionId}/semantic-scene?_t=${Date.now()}`,
       {
         headers: getAuthHeaders(),
         cache: "no-store",
@@ -1174,8 +1176,8 @@ export async function fetchSemanticScene(missionId) {
 export async function fetchObjects3D(missionId) {
   if (!missionId) return { success: false, objects: [] };
   try {
-    const response = await fetch(
-      `${API_BASE}/missions/${missionId}/objects-3d?_t=${Date.now()}`,
+    const response = await apiFetch(
+      `/missions/${missionId}/objects-3d?_t=${Date.now()}`,
       {
         headers: getAuthHeaders(),
         cache: "no-store",
@@ -1192,8 +1194,8 @@ export async function fetchObjects3D(missionId) {
 export async function fetchObjectEvidence(missionId, objectId) {
   if (!missionId || !objectId) return { success: false, error: "Missing missionId or objectId" };
   try {
-    const response = await fetch(
-      `${API_BASE}/missions/${missionId}/objects/${objectId}/evidence?_t=${Date.now()}`,
+    const response = await apiFetch(
+      `/missions/${missionId}/objects/${objectId}/evidence?_t=${Date.now()}`,
       {
         headers: getAuthHeaders(),
         cache: "no-store",
@@ -1210,8 +1212,8 @@ export async function fetchObjectEvidence(missionId, objectId) {
 export async function fetchReconstruction(missionId) {
   if (!missionId) return { success: false, reconstruction: null };
   try {
-    const response = await fetch(
-      `${API_BASE}/missions/${missionId}/reconstruction?_t=${Date.now()}`,
+    const response = await apiFetch(
+      `/missions/${missionId}/reconstruction?_t=${Date.now()}`,
       {
         headers: getAuthHeaders(),
         cache: "no-store",
@@ -1293,7 +1295,7 @@ export async function registerUser(optionsOrEmail, maybePassword, maybeFullName 
           portal_type: "INDIVIDUAL",
         };
 
-    const response = await fetch(`${API_BASE}/auth/register`, {
+    const response = await apiFetch(`/auth/register`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
@@ -1314,7 +1316,7 @@ export async function registerUser(optionsOrEmail, maybePassword, maybeFullName 
 
 export async function loginUser(email, password, portalType = null, mfaCode = null) {
   try {
-    const response = await fetch(`${API_BASE}/auth/login`, {
+    const response = await apiFetch(`/auth/login`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
@@ -1350,7 +1352,7 @@ export async function loginUser(email, password, portalType = null, mfaCode = nu
 
 export async function loginGuest() {
   try {
-    const response = await fetch(`${API_BASE}/auth/guest`, {
+    const response = await apiFetch(`/auth/guest`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
@@ -1370,7 +1372,7 @@ export async function loginGuest() {
 
 export async function refreshSession() {
   try {
-    const response = await fetch(`${API_BASE}/auth/refresh`, {
+    const response = await apiFetch(`/auth/refresh`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
@@ -1389,7 +1391,7 @@ export async function refreshSession() {
 
 export async function logoutUser() {
   try {
-    await fetch(`${API_BASE}/auth/logout`, {
+    await apiFetch(`/auth/logout`, {
       method: "POST",
       credentials: "include",
     });
@@ -1402,7 +1404,7 @@ export async function logoutUser() {
 
 export async function inviteTeamMember(inviteData) {
   try {
-    const response = await fetch(`${API_BASE}/auth/invite`, {
+    const response = await apiFetch(`/auth/invite`, {
       method: "POST",
       headers: getAuthHeaders({ "Content-Type": "application/json" }),
       credentials: "include",
@@ -1421,7 +1423,7 @@ export async function inviteTeamMember(inviteData) {
 
 export async function fetchAuditLog() {
   try {
-    const response = await fetch(`${API_BASE}/auth/audit-log`, {
+    const response = await apiFetch(`/auth/audit-log`, {
       headers: getAuthHeaders(),
       credentials: "include",
     });
@@ -1437,7 +1439,7 @@ export async function fetchCurrentUser() {
   const token = getAuthToken();
   if (!token) return null;
   try {
-    const response = await fetch(`${API_BASE}/auth/me`, {
+    const response = await apiFetch(`/auth/me`, {
       headers: getAuthHeaders(),
       credentials: "include",
     });
@@ -1459,7 +1461,7 @@ export async function fetchCurrentUser() {
 
 export async function fetchDemoUsers() {
   try {
-    const response = await fetch(`${API_BASE}/auth/demo-users`);
+    const response = await apiFetch(`/auth/demo-users`);
     const data = await response.json();
     return data.users || [];
   } catch (error) {
@@ -1470,7 +1472,7 @@ export async function fetchDemoUsers() {
 
 export async function getComputeDevice() {
   try {
-    const response = await fetch(`${API_BASE}/system/compute-device`, {
+    const response = await apiFetch(`/system/compute-device`, {
       headers: getAuthHeaders(),
     });
     if (response.ok) {
@@ -1495,7 +1497,7 @@ export async function getComputeDevice() {
 
 export async function estimatePipelineEtaApi(params = {}) {
   try {
-    const response = await fetch(`${API_BASE}/system/estimate-eta`, {
+    const response = await apiFetch(`/system/estimate-eta`, {
       method: "POST",
       headers: {
         ...getAuthHeaders(),
@@ -1528,7 +1530,7 @@ export async function estimatePipelineEtaApi(params = {}) {
 export async function fetchMissionMarkings(missionId) {
   if (!missionId) return [];
   try {
-    const res = await fetch(`${API_BASE}/missions/${missionId}/markings`, {
+    const res = await apiFetch(`/missions/${missionId}/markings`, {
       headers: getAuthHeaders(),
     });
     if (res.ok) {
@@ -1544,7 +1546,7 @@ export async function fetchMissionMarkings(missionId) {
 export async function createMissionMarking(missionId, markingData) {
   if (!missionId) return null;
   try {
-    const res = await fetch(`${API_BASE}/missions/${missionId}/markings`, {
+    const res = await apiFetch(`/missions/${missionId}/markings`, {
       method: 'POST',
       headers: getAuthHeaders({ 'Content-Type': 'application/json' }),
       body: JSON.stringify(markingData),
@@ -1562,7 +1564,7 @@ export async function createMissionMarking(missionId, markingData) {
 export async function deleteMissionMarking(missionId, markingId) {
   if (!missionId || !markingId) return false;
   try {
-    const res = await fetch(`${API_BASE}/missions/${missionId}/markings/${markingId}`, {
+    const res = await apiFetch(`/missions/${missionId}/markings/${markingId}`, {
       method: 'DELETE',
       headers: getAuthHeaders(),
     });
@@ -1576,7 +1578,7 @@ export async function deleteMissionMarking(missionId, markingId) {
 export async function fetchMissionKeyframes(missionId) {
   if (!missionId) return [];
   try {
-    const res = await fetch(`${API_BASE}/missions/${missionId}/keyframes`, {
+    const res = await apiFetch(`/missions/${missionId}/keyframes`, {
       headers: getAuthHeaders(),
     });
     if (res.ok) {

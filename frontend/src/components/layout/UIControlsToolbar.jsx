@@ -86,6 +86,7 @@ export default function UIControlsToolbar({ className = "" }) {
       {/* Theme Toggle Button */}
       <button
         type="button"
+        className="theme-toggle-control"
         onClick={toggleTheme}
         aria-label={theme === "dark" ? (language === "hi" ? "लाइट मोड" : "Light Mode") : (language === "hi" ? "डार्क मोड" : "Dark Mode")}
         title={theme === "dark" ? (language === "hi" ? "लाइट मोड" : "Light Mode") : (language === "hi" ? "डार्क मोड" : "Dark Mode")}

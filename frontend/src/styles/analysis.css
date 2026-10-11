@@ -11,7 +11,7 @@
   position: relative;
   overflow: hidden;
   background: var(--bg-page, #080c14);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  font-family: var(--font-body);
   color: var(--text-primary, #f8fafc);
   border-radius: var(--radius-md, 8px);
 }
@@ -409,13 +409,13 @@
 .object-hud-id {
   font-size: 12px;
   font-weight: 700;
-  font-family: monospace;
+  font-family: var(--font-mono);
   color: #ffffff;
 }
 
 .object-hud-coords {
   font-size: 10px;
-  font-family: monospace;
+  font-family: var(--font-mono);
   color: var(--text-muted, #94a3b8);
 }
 
@@ -582,7 +582,7 @@
   font-size: 12px;
   font-weight: 700;
   color: #ffffff;
-  font-family: monospace;
+  font-family: var(--font-mono);
 }
 
 .inspector-stat-val.highlight {
@@ -611,7 +611,7 @@
 
 .prop-table td:last-child {
   color: #ffffff;
-  font-family: monospace;
+  font-family: var(--font-mono);
   font-weight: 600;
   text-align: right;
 }
@@ -642,7 +642,7 @@
 
 .coord-cell span {
   font-size: 11px;
-  font-family: monospace;
+  font-family: var(--font-mono);
   font-weight: 600;
   color: #ffffff;
 }
@@ -783,7 +783,7 @@
   font-size: 11px;
   font-weight: 700;
   color: #ffffff;
-  font-family: monospace;
+  font-family: var(--font-mono);
 }
 
 .object-item-meta {
@@ -842,7 +842,7 @@
   font-size: 18px;
   font-weight: 700;
   color: #38bdf8;
-  font-family: monospace;
+  font-family: var(--font-mono);
 }
 
 /* Action Buttons */
@@ -922,7 +922,7 @@
   padding: 6px 8px;
   color: #ffffff;
   font-size: 11px;
-  font-family: monospace;
+  font-family: var(--font-mono);
   outline: none;
 }
 
@@ -1124,7 +1124,7 @@
   font-size: 10px;
   font-weight: 600;
   color: #10b981;
-  font-family: monospace;
+  font-family: var(--font-mono);
 }
 
 .scene-card-heading {
@@ -1442,7 +1442,7 @@
 .marking-coords {
   font-size: 9.5px;
   color: #64748b;
-  font-family: monospace;
+  font-family: var(--font-mono);
 }
 
 .marking-actions {
@@ -1530,7 +1530,7 @@
   font-size: 17px;
   font-weight: 800;
   color: #ffffff;
-  font-family: monospace;
+  font-family: var(--font-mono);
 }
 
 .stat-strip-value.cyan {
@@ -1789,7 +1789,7 @@
 
 .thumb-time {
   color: #64748b;
-  font-family: monospace;
+  font-family: var(--font-mono);
 }
 
 /* Right Rail: Frame Details Panel */
@@ -1897,7 +1897,7 @@
   font-size: 14px;
   font-weight: 700;
   color: #ffffff;
-  font-family: monospace;
+  font-family: var(--font-mono);
 }
 
 .meta-cell-val.cyan {
@@ -1939,7 +1939,7 @@
 .class-count {
   font-weight: 700;
   color: #38bdf8;
-  font-family: monospace;
+  font-family: var(--font-mono);
 }
 
 .detections-scroll {
@@ -1975,13 +1975,13 @@
 .det-conf {
   color: #10b981;
   font-size: 9.5px;
-  font-family: monospace;
+  font-family: var(--font-mono);
 }
 
 .det-bbox {
   color: #64748b;
   font-size: 9px;
-  font-family: monospace;
+  font-family: var(--font-mono);
 }
 
 .switch-to-3d-btn {
@@ -2082,7 +2082,7 @@
   align-items: center;
   gap: 6px;
   font-size: 10px;
-  font-family: var(--font-mono, monospace);
+  font-family: var(--font-mono);
   font-weight: 700;
   letter-spacing: 0.06em;
   color: #94a3b8;
@@ -2103,7 +2103,7 @@
 
 .stat-strip-value {
   font-size: 18px;
-  font-family: var(--font-display, sans-serif);
+  font-family: var(--font-display);
   font-weight: 700;
   line-height: 1.2;
 }

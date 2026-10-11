@@ -9,6 +9,7 @@
     "build": "vite build",
     "lint": "eslint .",
     "test:url": "node --test src/api/url.test.js e2e/telemetry.test.js",
+    "test:fonts": "node scripts/check-font-tokens.mjs",
     "test:e2e": "playwright test",
     "preview": "vite preview"
   },

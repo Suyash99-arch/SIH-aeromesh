@@ -13,7 +13,7 @@ import * as THREE from "three";
 import { PLYLoader } from "three/examples/jsm/loaders/PLYLoader.js";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
-import { resolveAssetUrl, fetchArtifactsStatus, getAuthHeaders } from "../../api/missions.js";
+import { apiFetch, resolveAssetUrl, fetchArtifactsStatus, getAuthHeaders } from "../../api/missions.js";
 import ErrorBoundary from "../common/ErrorBoundary";
 import { useUI } from "../../context/UIContext";
 
@@ -208,7 +208,7 @@ function RealPointCloud({ url, onBoundsComputed, pointSize = 0.22 }) {
           cachedBounds = cached.bounds;
         } else {
           const fetchUrl = url.includes("?") ? `${url}&_t=${Date.now()}` : `${url}?_t=${Date.now()}`;
-          const res = await fetch(fetchUrl, { headers: getAuthHeaders(), cache: "no-store" });
+          const res = await apiFetch(fetchUrl, { headers: getAuthHeaders(), cache: "no-store" });
           if (!res.ok) throw new Error(`HTTP ${res.status}`);
           buffer = await res.arrayBuffer();
           if (!active) return;
@@ -341,7 +341,7 @@ function RealMesh({ url, mode, onBoundsComputed, onError }) {
           cachedBounds = cached.bounds;
         } else {
           const fetchUrl = url.includes("?") ? `${url}&_t=${Date.now()}` : `${url}?_t=${Date.now()}`;
-          const res = await fetch(fetchUrl, { headers: getAuthHeaders(), cache: "no-store" });
+          const res = await apiFetch(fetchUrl, { headers: getAuthHeaders(), cache: "no-store" });
           if (!res.ok) {
             throw new Error(`HTTP ${res.status} fetching mesh`);
           }

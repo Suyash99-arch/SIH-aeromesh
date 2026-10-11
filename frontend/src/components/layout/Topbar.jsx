@@ -3,6 +3,7 @@ import AuthModal from "../auth/AuthModal";
 import { fetchHealthWithRetry } from "../../api/missions";
 import UIControlsToolbar from "./UIControlsToolbar";
 import { useUI } from "../../context/UIContext";
+import { Search } from "lucide-react";
 
 /** Poll /api/v1/health every 30s; returns { ok, label } */
 function useHealthStatus(language) {
@@ -32,6 +33,7 @@ export default function Topbar({
   currentUser,
   onOpenProfile,
   onOpenAuth,
+  onOpenCommandPalette,
 }) {
   const { t, language } = useUI();
   const health = useHealthStatus(language);
@@ -79,10 +81,10 @@ export default function Topbar({
   return (
     <header className="topbar">
       <div className="crumbs">
-        <span style={{ cursor: "pointer" }} onClick={onOpenMissions} title={t("dashboard.allMissions")}>
+        <span className="crumb-home" style={{ cursor: "pointer" }} onClick={onOpenMissions} title={t("dashboard.allMissions")}>
           {t("nav.dashboard")}
         </span>
-        <i>/</i>
+          <i className="crumb-separator">/</i>
         <button
           type="button"
           onClick={onOpenMissions}
@@ -93,7 +95,7 @@ export default function Topbar({
             display: "inline-flex", alignItems: "center", gap: "6px",
           }}
         >
-          <span>{mission?.name || t("nav.activeMission")}</span>
+            <span className="crumb-mission-name">{mission?.name || t("nav.activeMission")}</span>
           {mission?.status === "processing" && (
             <span style={{
               fontSize: "0.65rem", padding: "1px 5px",
@@ -104,11 +106,14 @@ export default function Topbar({
             </span>
           )}
         </button>
-        <i>/</i>
-        <strong>{title}</strong>
+        <i className="crumb-separator">/</i>
+        <strong className="crumb-title">{title}</strong>
       </div>
 
       <div className="top-actions" style={{ display: "flex", alignItems: "center", gap: "14px" }}>
+        <button className="shell-command-trigger" type="button" onClick={onOpenCommandPalette} aria-label={t("commandPalette.title")} title={t("commandPalette.title")}>
+          <Search size={15} aria-hidden="true" /><span>{t("commandPalette.title")}</span><kbd>{t("commandPalette.shortcut")}</kbd>
+        </button>
         <UIControlsToolbar />
 
         {/* Health badge — driven by /api/v1/health, never hardcoded */}
