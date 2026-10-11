@@ -101,6 +101,39 @@ export default function NewIncidentWorkspace({ onClose, onMissionCreated, curren
   const abortControllerRef = useRef(null);
   const uploadIdRef = useRef(null);
   const [uploadFailed, setUploadFailed] = useState(false);
+  const dialogRef = useRef(null);
+
+  useEffect(() => {
+    const dialog = dialogRef.current;
+    if (!dialog) return undefined;
+    const previousFocus = document.activeElement;
+    const focusable = () => [...dialog.querySelectorAll('button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')]
+      .filter((element) => element.getClientRects().length > 0);
+    focusable()[0]?.focus();
+    const handleKeyDown = (event) => {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onClose?.();
+      } else if (event.key === "Tab") {
+        const elements = focusable();
+        if (!elements.length) return;
+        const first = elements[0];
+        const last = elements[elements.length - 1];
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
+      }
+    };
+    dialog.addEventListener("keydown", handleKeyDown);
+    return () => {
+      dialog.removeEventListener("keydown", handleKeyDown);
+      previousFocus?.focus?.();
+    };
+  }, [onClose]);
 
   const updateEtaEstimate = async (file, width = 1920, height = 1080, duration = 30.0) => {
     if (!file) return;
@@ -356,9 +389,13 @@ export default function NewIncidentWorkspace({ onClose, onMissionCreated, curren
   return (
     <div className="incident-workspace-modal-backdrop" onClick={onClose}>
       <div
+        ref={dialogRef}
         className="incident-workspace-container glass"
         onClick={(e) => e.stopPropagation()}
         id="incident-creation-workspace"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="incident-workspace-title"
       >
         <div className="glass-sheen" aria-hidden="true" />
 
@@ -373,7 +410,7 @@ export default function NewIncidentWorkspace({ onClose, onMissionCreated, curren
                 <span className="pulse-dot-cyan" />
                 <span>{t("newMission.workspaceBadge")}</span>
               </div>
-              <h2 className="incident-header-title">{t("newMission.workspaceTitle")}</h2>
+              <h2 className="incident-header-title" id="incident-workspace-title">{t("newMission.workspaceTitle")}</h2>
             </div>
           </div>
 

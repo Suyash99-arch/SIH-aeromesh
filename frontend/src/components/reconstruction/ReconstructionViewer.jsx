@@ -1564,10 +1564,10 @@ class WebGLBoundary extends Component {
           height: "100%",
           textAlign: "center",
           background: "rgba(6, 16, 23, 0.95)",
-          color: "#f87171"
+          color: "var(--color-text-primary, #e6eefb)"
         }}>
           <strong style={{ fontSize: "15px", marginBottom: "8px" }}>3D preview unavailable</strong>
-          <span style={{ fontSize: "12px", color: "rgba(255,255,255,0.7)", maxWidth: "340px", marginBottom: "16px" }}>
+          <span style={{ fontSize: "12px", color: "var(--color-text-secondary, #9bb0cc)", maxWidth: "340px", marginBottom: "16px" }}>
             This device could not start the 3D graphics view. Your mission data is still available.
           </span>
           <button

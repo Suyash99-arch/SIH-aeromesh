@@ -59,6 +59,7 @@
 .mission-skeleton-row > span { max-width: 68%; }
 .mission-skeleton-row > b { max-width: 72px; }
 @keyframes mission-skeleton-shimmer { to { background-position: -200% 0; } }
+@media (prefers-reduced-motion: reduce) { .mission-skeleton-row > * { animation: none; } }
 .mission-row:hover,
 .mission-row.selected {
   background: var(--cyan-soft);
