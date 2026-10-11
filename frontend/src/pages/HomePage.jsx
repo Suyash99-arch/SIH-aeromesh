@@ -1183,11 +1183,11 @@ export default function HomePage({ onNavigateDashboard, onStartMission, currentU
     let timeoutId;
     let frameId;
     const mountAfterIdle = () => {
-      timeoutId = window.setTimeout(() => setShowHeroCanvas(true), 6000);
+      timeoutId = window.setTimeout(() => setShowHeroCanvas(true), 20_000);
     };
     frameId = requestAnimationFrame(() => {
       if ("requestIdleCallback" in window) idleId = window.requestIdleCallback(mountAfterIdle, { timeout: 8000 });
-      else timeoutId = window.setTimeout(() => setShowHeroCanvas(true), 6500);
+      else timeoutId = window.setTimeout(() => setShowHeroCanvas(true), 20_000);
     });
     return () => {
       cancelAnimationFrame(frameId);
@@ -1210,6 +1210,14 @@ export default function HomePage({ onNavigateDashboard, onStartMission, currentU
     }, { rootMargin: "250px 0px" });
     observer.observe(target);
     return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (window.location.hash !== "#workflow") return;
+    setShowLowerSections(true);
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      document.getElementById("workflow")?.scrollIntoView({ behavior: "instant" });
+    }));
   }, []);
 
   useEffect(() => {
@@ -1308,7 +1316,14 @@ export default function HomePage({ onNavigateDashboard, onStartMission, currentU
           <button type="button" onClick={() => onNavigateDashboard("overview")}>{t("landing.navCommand")}</button>
           <button type="button" onClick={() => onNavigateDashboard("missions")}>{t("landing.navHistory")}</button>
           <a href="#pipeline-narrative">{t("landing.navPipeline")}</a>
-          <a href="#workflow">{t("landing.navWorkflow")}</a>
+          <a href="#workflow" onClick={(event) => {
+            event.preventDefault();
+            setShowLowerSections(true);
+            window.history.replaceState(null, "", "#workflow");
+            requestAnimationFrame(() => requestAnimationFrame(() => {
+              document.getElementById("workflow")?.scrollIntoView({ behavior: "instant" });
+            }));
+          }}>{t("landing.navWorkflow")}</a>
         </div>
 
         <div className="nav-actions">

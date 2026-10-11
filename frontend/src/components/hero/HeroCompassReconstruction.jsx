@@ -229,7 +229,7 @@ export default function HeroCompassReconstruction() {
       sphereGeo.dispose();
       sphereMat.dispose();
       renderer.dispose();
-      renderer.forceContextLoss();
+      if (!renderer.getContext()?.isContextLost()) renderer.forceContextLoss();
       if (renderer.domElement && renderer.domElement.parentNode) {
         renderer.domElement.parentNode.removeChild(renderer.domElement);
       }

@@ -19,9 +19,9 @@ export default defineConfig({
           if (!bundle) return html;
           const homeChunk = Object.values(bundle).find((asset) => asset.type === "chunk" && asset.name === "HomePage");
           if (!homeChunk) return html;
-        const links = [`<link rel="modulepreload" crossorigin href="/${homeChunk.fileName}">`];
+        const links = [`<link rel="prefetch" as="script" crossorigin href="/${homeChunk.fileName}">`];
         for (const cssFile of homeChunk.viteMetadata?.importedCss || []) {
-          links.push(`<link rel="stylesheet" crossorigin href="/${cssFile}">`);
+          links.push(`<link rel="prefetch" as="style" crossorigin href="/${cssFile}">`);
         }
           return html.replace("</head>", `${links.join("\n    ")}\n  </head>`);
         },

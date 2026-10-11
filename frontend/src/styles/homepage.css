@@ -1014,40 +1014,12 @@
   text-transform: uppercase;
   margin: 0;
   color: #ffffff;
-  /* Layered soft cyan-violet glow/bloom */
+  /* Keep the above-the-fold wordmark paintable immediately on mobile. */
+  color: #ffffff;
   text-shadow:
     0 0 14px rgba(79, 216, 255, 0.65),
     0 0 38px rgba(79, 216, 255, 0.4),
     0 0 75px rgba(139, 123, 255, 0.32);
-  /* One-time shimmer sweep across text on load */
-  background: linear-gradient(
-    115deg,
-    #ffffff 0%,
-    #dcf4ff 28%,
-    #5ee6ff 48%,
-    #b3a2ff 62%,
-    #ffffff 80%
-  );
-  background-size: 240% 100%;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  animation: hero-wordmark-shimmer 1.8s cubic-bezier(0.16, 1, 0.3, 1) 1 forwards;
-  will-change: background-position, filter;
-}
-
-@keyframes hero-wordmark-shimmer {
-  0% {
-    background-position: -120% 0;
-    filter: drop-shadow(0 0 6px rgba(79, 216, 255, 0.3));
-  }
-  50% {
-    background-position: 50% 0;
-    filter: drop-shadow(0 0 28px rgba(79, 216, 255, 0.75)) drop-shadow(0 0 45px rgba(139, 123, 255, 0.5));
-  }
-  100% {
-    background-position: 220% 0;
-    filter: drop-shadow(0 0 16px rgba(79, 216, 255, 0.55));
-  }
 }
 
 .hero-wordmark-tagline {
