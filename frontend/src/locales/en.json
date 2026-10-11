@@ -103,7 +103,9 @@
     "deleteMission": "Delete",
     "confirmDelete": "Are you sure you want to permanently delete this mission?",
     "storageUsed": "Storage Allocation",
-    "total": "Total"
+    "total": "Total",
+    "sortNewest": "Newest first",
+    "sortOldest": "Oldest first"
   },
   "newMission": {
     "reconstructabilityWarning": "Camera motion looks like a hover or rotation; reconstruction may be incomplete",
@@ -192,15 +194,20 @@
     "uploadLimitUnavailable": "The server upload limit is unavailable. Reconnect and try again.",
     "uploadPreviewAction": "Upload footage for preview",
     "lightModeActionHelp": "Upload and preview are available, but reconstruction and detection require the full compute profile.",
-    "tunnelHelpTitle": "How to connect a local worker via Cloudflare Tunnel:"
+    "tunnelHelpTitle": "How to connect a local worker via Cloudflare Tunnel:",
+    "uploadProgress": "Upload progress",
+    "resumeUpload": "You can resume from the last completed chunk.",
+    "retryUpload": "Retry upload",
+    "nameRequired": "Enter an incident name to continue.",
+    "videoRequired": "Choose a video before starting the pipeline."
   },
   "runtime": {
     "noticeLabel": "Runtime capabilities",
     "lightModeNotice": "Upload and analysis preview are available. Full 3D reconstruction and detection require the full compute profile.",
     "ephemeralStorageNotice": "Uploaded videos may be cleared when the server restarts.",
     "viewerUnavailable": "A 3D reconstruction is not available for this mission in the current compute profile.",
-      "viewUploadedFootage": "View uploaded footage",
-      "capabilitiesUnconfirmed": "Checking server capabilities. Reconstruction controls are unavailable until the server responds."
+    "viewUploadedFootage": "View uploaded footage",
+    "capabilitiesUnconfirmed": "Checking server capabilities. Reconstruction controls are unavailable until the server responds."
   },
   "processing": {
     "loading3d": "Loading 3D viewer…",

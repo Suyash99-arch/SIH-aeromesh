@@ -229,6 +229,23 @@
   gap: 16px;
 }
 
+.upload-progress-panel {
+  margin-top: 16px;
+  padding: 14px 16px;
+  border: 1px solid var(--color-border-subtle);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-overlay);
+  color: var(--color-text-primary);
+}
+.upload-progress-heading, .upload-progress-meta { display: flex; justify-content: space-between; gap: 12px; }
+.upload-progress-heading { font-size: 13px; }
+.upload-progress-heading span { color: var(--cyan); font-family: var(--font-mono); }
+.upload-progress-track { height: 7px; margin: 10px 0 7px; overflow: hidden; border-radius: var(--radius-pill); background: var(--color-border-subtle); }
+.upload-progress-track > span { display: block; height: 100%; border-radius: inherit; background: var(--grad-primary); transition: width var(--motion-standard) var(--ease-standard); }
+.upload-progress-meta, .upload-progress-panel p { color: var(--color-text-secondary); font-size: 11px; }
+.upload-progress-panel p { margin: 8px 0 0; }
+.upload-retry-button { margin-top: 10px; min-height: 36px; padding: 0 12px; border: 1px solid var(--color-border-default); border-radius: var(--radius-sm); background: var(--color-surface-raised); color: var(--color-text-primary); cursor: pointer; }
+
 .video-dropzone {
   min-height: 220px;
   border: 2px dashed rgba(79, 216, 255, 0.3);

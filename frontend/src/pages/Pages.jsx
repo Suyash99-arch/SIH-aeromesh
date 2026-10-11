@@ -618,8 +618,9 @@ export function MissionsPage({ mission, setMission, navigate, notice, onCreateMi
 
     result.sort((a, b) => {
       if (sortBy === "name") return (a.name || "").localeCompare(b.name || "");
-      if (sortBy === "oldest") return (a.id || "").localeCompare(b.id || "");
-      return (b.id || "").localeCompare(a.id || ""); // newest by ID
+      if (sortBy === "oldest") return (a.created_at || a.id || "").localeCompare(b.created_at || b.id || "");
+      if (sortBy === "tracks") return Number(b.objects?.total || 0) - Number(a.objects?.total || 0);
+      return (b.created_at || b.id || "").localeCompare(a.created_at || a.id || "");
     });
 
     return result;
@@ -702,18 +703,31 @@ export function MissionsPage({ mission, setMission, navigate, notice, onCreateMi
               ))}
             </div>
 
-            <input
+            <label className="mission-search-control">
+              <span className="sr-only">{t("dashboard.searchMissions")}</span>
+              <input
+              type="search"
+              aria-label={t("dashboard.searchMissions")}
               value={q}
               onChange={(e) => setQ(e.target.value)}
               placeholder={t("dashboard.searchMissions")}
-              style={{ width: "200px" }}
-            />
+              />
+            </label>
+            <label className="mission-sort-control">
+              <span className="sr-only">{t("dashboard.sortBy")}</span>
+              <select aria-label={t("dashboard.sortBy")} value={sortBy} onChange={(e) => setSortBy(e.target.value)}>
+                <option value="newest">{t("dashboard.sortNewest")}</option>
+                <option value="oldest">{t("dashboard.sortOldest")}</option>
+                <option value="name">{t("dashboard.sortName")}</option>
+                <option value="tracks">{t("dashboard.sortTracks")}</option>
+              </select>
+            </label>
           </div>
         </header>
 
         {loading ? (
-          <div style={{ padding: "40px", textAlign: "center", color: "#94a3b8" }}>
-            {t("selector.loading")}
+          <div className="mission-skeleton-list" aria-label={t("selector.loading")} aria-busy="true">
+            {Array.from({ length: 4 }, (_, index) => <div className="mission-skeleton-row" key={index}><i /><span /><b /></div>)}
           </div>
         ) : filteredList.length === 0 ? (
           <div style={{ padding: "48px 24px", textAlign: "center", background: "rgba(15, 23, 42, 0.4)", borderRadius: "12px", border: "1px dashed rgba(255, 255, 255, 0.12)", margin: "16px 0" }}>

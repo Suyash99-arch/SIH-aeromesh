@@ -256,11 +256,11 @@ export default function NewIncidentWorkspace({ onClose, onMissionCreated, curren
     setErrorMessage("");
     setUploadFailed(false);
     if (!formData.name.trim()) {
-      setErrorMessage("Incident Name is required.");
+      setErrorMessage(t("newMission.nameRequired"));
       return;
     }
     if (!videoFile) {
-      setErrorMessage("Please upload a drone flight video before authorizing the pipeline.");
+      setErrorMessage(t("newMission.videoRequired"));
       return;
     }
 
@@ -438,7 +438,7 @@ export default function NewIncidentWorkspace({ onClose, onMissionCreated, curren
                         }}
                       >
                         <Icon name="RotateCcw" size={14} />
-                        <span>{uploadFailed ? "Retry video upload" : t("newMission.retryPipelineKeepVideo")}</span>
+                        <span>{uploadFailed ? t("newMission.retryUpload") : t("newMission.retryPipelineKeepVideo")}</span>
                       </button>
                     </div>
                   )}
@@ -672,6 +672,23 @@ export default function NewIncidentWorkspace({ onClose, onMissionCreated, curren
                   )}
                 </div>
               </div>
+              {(isSubmitting || uploadFailed || uploadProgress > 0) && (
+                <section className="upload-progress-panel" aria-live="polite">
+                  <div className="upload-progress-heading">
+                    <strong>{uploadFailed ? t("newMission.submissionError") : t("newMission.uploadProgress")}</strong>
+                    <span>{Math.round(uploadProgress)}%</span>
+                  </div>
+                  <div className="upload-progress-track" role="progressbar" aria-label={t("newMission.uploadProgress")} aria-valuemin="0" aria-valuemax="100" aria-valuenow={Math.round(uploadProgress)}>
+                    <span style={{ width: `${Math.min(100, Math.max(0, uploadProgress))}%` }} />
+                  </div>
+                  <div className="upload-progress-meta">
+                    <span>{(videoFile?.size * uploadProgress / 100 / (1024 * 1024) || 0).toFixed(1)} / {(videoFile?.size / (1024 * 1024) || 0).toFixed(1)} MB</span>
+                    <span>{uploadSpeed} MB/s</span>
+                  </div>
+                  <p>{uploadFailed ? t("newMission.resumeUpload") : statusMessage}</p>
+                  {uploadFailed && <button type="button" className="upload-retry-button" onClick={handleLaunchPipeline} disabled={isSubmitting}>{t("newMission.retryUpload")}</button>}
+                </section>
+              )}
             </div>
           </div>
 

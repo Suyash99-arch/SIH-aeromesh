@@ -8,6 +8,7 @@
 }
 .mission-list {
   padding: 0;
+  overflow: hidden;
 }
 .table-tools {
   display: flex;
@@ -49,6 +50,15 @@
   cursor: pointer;
   transition: 0.2s;
 }
+.mission-search-control input { width: clamp(150px, 18vw, 260px); }
+.mission-sort-control select { min-width: 145px; }
+.mission-skeleton-list { padding: 8px 18px; }
+.mission-skeleton-row { display: grid; grid-template-columns: 10px minmax(0, 1fr) 72px; gap: 12px; align-items: center; padding: 15px 0; border-bottom: 1px solid var(--color-border-subtle); }
+.mission-skeleton-row > * { height: 12px; border-radius: var(--radius-pill); background: linear-gradient(90deg, var(--color-surface-raised), var(--color-border-subtle), var(--color-surface-raised)); background-size: 200% 100%; animation: mission-skeleton-shimmer 1.4s ease-in-out infinite; }
+.mission-skeleton-row > i { width: 8px; height: 8px; border-radius: 50%; }
+.mission-skeleton-row > span { max-width: 68%; }
+.mission-skeleton-row > b { max-width: 72px; }
+@keyframes mission-skeleton-shimmer { to { background-position: -200% 0; } }
 .mission-row:hover,
 .mission-row.selected {
   background: var(--cyan-soft);
@@ -882,6 +892,7 @@
   .mission-row {
     grid-template-columns: 9px 1fr 58px;
   }
+  .mission-search-control, .mission-search-control input, .mission-sort-control, .mission-sort-control select { width: 100%; }
   .hero-copy > div {
     flex-direction: column;
     align-items: start;
