@@ -16,6 +16,7 @@ import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
 import { resolveAssetUrl, fetchArtifactsStatus, getAuthHeaders } from "../../api/missions.js";
 import ErrorBoundary from "../common/ErrorBoundary";
 import { useUI } from "../../context/UIContext";
+import { attachWebGLContextHandlers } from "./webglLifecycle.js";
 
 // Global cache for downloaded ArrayBuffers and bounds to eliminate redundant network transfers
 // without holding live GPU-bound BufferGeometry instances across mission switches.
@@ -1494,15 +1495,13 @@ function Scene({
  * permanent context termination, and handles clean disposal on unmount.
  */
 function RendererLifecycleManager({ onContextLost, onContextRestored }) {
-  const { gl } = useThree();
+  const { gl, scene } = useThree();
 
   useEffect(() => {
     const domEl = gl.domElement;
     if (!domEl) return;
 
-    const handleContextLost = (event) => {
-      // Required: prevents browser from permanently discarding the WebGL context
-      event.preventDefault();
+    const handleContextLost = () => {
       console.warn(
         "[ReconstructionViewer] THREE.WebGLRenderer: WebGL Context Lost! Preventing default to allow recovery.",
       );
@@ -1521,14 +1520,23 @@ function RendererLifecycleManager({ onContextLost, onContextRestored }) {
       onContextRestored?.();
     };
 
-    domEl.addEventListener("webglcontextlost", handleContextLost, false);
-    domEl.addEventListener("webglcontextrestored", handleContextRestored, false);
+    const detachContextHandlers = attachWebGLContextHandlers(domEl, {
+      onLost: handleContextLost,
+      onRestored: handleContextRestored,
+    });
 
     return () => {
-      domEl.removeEventListener("webglcontextlost", handleContextLost);
-      domEl.removeEventListener("webglcontextrestored", handleContextRestored);
+      detachContextHandlers();
+      disposeThreeResource(scene);
+      try {
+        gl.renderLists?.dispose?.();
+        gl.dispose();
+        gl.forceContextLoss?.();
+      } catch {
+        /* renderer may already be disposed by React Three Fiber */
+      }
     };
-  }, [gl, onContextLost, onContextRestored]);
+  }, [gl, scene, onContextLost, onContextRestored]);
 
   return null;
 }
@@ -1558,9 +1566,9 @@ class WebGLBoundary extends Component {
           background: "rgba(6, 16, 23, 0.95)",
           color: "#f87171"
         }}>
-          <strong style={{ fontSize: "15px", marginBottom: "8px" }}>3D VIEWER UNAVAILABLE</strong>
+          <strong style={{ fontSize: "15px", marginBottom: "8px" }}>3D preview unavailable</strong>
           <span style={{ fontSize: "12px", color: "rgba(255,255,255,0.7)", maxWidth: "340px", marginBottom: "16px" }}>
-            WebGL could not initialize or encountered a graphics pipeline error on this device.
+            This device could not start the 3D graphics view. Your mission data is still available.
           </span>
           <button
             type="button"
@@ -1619,7 +1627,7 @@ export default function ReconstructionViewer({
   const cameraActionsRef = useRef({});
   const [internalLayers, setInternalLayers] = useState({});
   const [selectedCameraId, setSelectedCameraId] = useState(null);
-  const [contextVersion, setContextVersion] = useState(0);
+  const [contextUnavailable, setContextUnavailable] = useState(false);
   const [currentMode, setCurrentMode] = useState(mode || "textured");
   const [currentTool, setCurrentTool] = useState(activeTool || "orbit");
   const [measurePoints, setMeasurePoints] = useState([]);
@@ -1642,12 +1650,13 @@ export default function ReconstructionViewer({
 
   const handleContextLost = useCallback(() => {
     console.warn("[ReconstructionViewer] WebGL Context Loss event received.");
+    setContextUnavailable(true);
   }, []);
 
   const handleContextRestored = useCallback(() => {
     console.info("[ReconstructionViewer] WebGL Context Restored - triggering clean scene reload.");
     bufferCache.clear();
-    setContextVersion((v) => v + 1);
+    setContextUnavailable(false);
   }, []);
 
   const toggleFullscreen = useCallback(() => {
@@ -1850,7 +1859,6 @@ export default function ReconstructionViewer({
       >
         <WebGLBoundary>
           <Canvas
-            key={contextVersion}
             camera={{ position: [10, 20, 30], fov: 45, near: 0.1, far: 2500 }}
             dpr={[1, 1.5]}
             gl={{ antialias: true, powerPreference: "high-performance", preserveDrawingBuffer: true }}
@@ -1892,6 +1900,7 @@ export default function ReconstructionViewer({
             </Suspense>
           </Canvas>
         </WebGLBoundary>
+        {contextUnavailable && <div role="status" className="reconstruction-webgl-error" style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", background: "var(--surface, #111827)", color: "var(--text, #e5e7eb)" }}>3D preview paused. Restoring graphics…</div>}
 
         {/* Structured State Overlay (Pending, Processing, Failed, No Geometry) */}
         {!hasMesh && !hasPointCloud && (

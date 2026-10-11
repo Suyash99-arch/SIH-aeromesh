@@ -6,6 +6,7 @@
 import { missions as seededMissions } from "../data/missions";
 import { formatApiError } from "../utils/errorUtils.js";
 import { joinApiUrl } from "./url.js";
+import { retryUnauthorizedOnce } from "./authRecovery.js";
 export { formatApiError };
 
 export function getApiBase() {
@@ -35,6 +36,24 @@ export function getUploadBase() {
   return "https://sih-aeromesh.onrender.com/api/v1";
 }
 export const UPLOAD_BASE = getUploadBase();
+
+let authInitializationComplete = false;
+let resolveAuthInitialization;
+const authInitialization = new Promise((resolve) => { resolveAuthInitialization = resolve; });
+
+export function markAuthInitializationComplete() {
+  if (authInitializationComplete) return;
+  authInitializationComplete = true;
+  resolveAuthInitialization(true);
+}
+
+export function waitForAuthInitialization(timeoutMs = 2000) {
+  if (authInitializationComplete) return Promise.resolve(true);
+  return Promise.race([
+    authInitialization,
+    wait(timeoutMs).then(() => false),
+  ]);
+}
 
 export async function getUploadConfig() {
   const response = await fetch(`${API_BASE}/config`, { headers: getAuthHeaders() });
@@ -109,15 +128,28 @@ export async function fetchArtifactsStatus(missionId) {
 function normalizeMission(rawMission = {}) {
   const mId = rawMission.id || rawMission.mission_id || "";
   const baseDefaults = fallbackMission;
-  const videoUrl =
-    rawMission.video?.url ||
-    rawMission.video?.original_url ||
-    rawMission.video?.proxy_url ||
+  const missionStatus = String(rawMission.status || "").toLowerCase();
+  const videoMeta = rawMission.video && typeof rawMission.video === "object" ? rawMission.video : {};
+  const uploadedStatuses = new Set([
+    "video_uploaded", "queued", "processing", "running",
+    "partial", "complete", "completed", "reconstruction_ready",
+  ]);
+  const hasExplicitVideoAsset = Boolean(
+    rawMission.video_path || videoMeta.size_bytes > 0 || videoMeta.size_mb > 0 ||
+    (videoMeta.filename && videoMeta.filename !== "mission_video.mp4" && videoMeta.filename !== "video.mp4") ||
+    [videoMeta.url, videoMeta.original_url, rawMission.videoUrl, rawMission.assets?.video]
+      .some((url) => typeof url === "string" && url && !/\/missions\/[^/]+\/video(?:\/proxy)?(?:\?|$)/.test(url)),
+  );
+  const videoUploaded = uploadedStatuses.has(missionStatus) || hasExplicitVideoAsset;
+  const videoUrl = videoUploaded ? (
+    videoMeta.url ||
+    videoMeta.original_url ||
+    videoMeta.proxy_url ||
     rawMission.videoUrl ||
     rawMission.assets?.video ||
-    (mId && rawMission.status !== "PARTIAL" && rawMission.status !== "pending" && rawMission.status !== "uploading"
+    (mId
       ? `/api/v1/missions/${mId}/video`
-      : "");
+      : "")) : "";
 
   let duration = rawMission.duration;
   const durationSec =
@@ -184,10 +216,11 @@ function normalizeMission(rawMission = {}) {
     duration,
     progress: normalizedProgress,
     video: {
-      ...(rawMission.video || {}),
+      ...videoMeta,
+      uploaded: videoUploaded,
       url: resolveAssetUrl(videoUrl),
-      proxy_url: resolveAssetUrl(rawMission.video?.proxy_url || (mId ? `/api/v1/missions/${mId}/video/proxy` : "")),
-      original_url: resolveAssetUrl(rawMission.video?.original_url || videoUrl),
+      proxy_url: videoUploaded ? resolveAssetUrl(videoMeta.proxy_url || (mId ? `/api/v1/missions/${mId}/video/proxy` : "")) : "",
+      original_url: videoUploaded ? resolveAssetUrl(videoMeta.original_url || videoUrl) : "",
     },
     objects: objectsObj,
     telemetry: (rawMission.telemetry && Object.keys(rawMission.telemetry).length > 0)
@@ -228,8 +261,8 @@ function normalizeMission(rawMission = {}) {
     assets: {
       ...(baseDefaults.assets || {}),
       ...(rawMission.assets || {}),
-      video: resolveAssetUrl(videoUrl || rawMission.assets?.video || ""),
-      video_proxy: resolveAssetUrl(rawMission.assets?.video_proxy || (mId ? `/api/v1/missions/${mId}/video/proxy` : "")),
+      video: videoUploaded ? resolveAssetUrl(videoUrl || rawMission.assets?.video || "") : "",
+      video_proxy: videoUploaded ? resolveAssetUrl(rawMission.assets?.video_proxy || videoMeta.proxy_url || (mId ? `/api/v1/missions/${mId}/video/proxy` : "")) : "",
       pointCloud: resolveAssetUrl(
         rawMission.reconstruction?.point_cloud_url ||
           rawMission.assets?.pointCloud ||
@@ -403,9 +436,35 @@ export async function getMission(missionId, forceRefresh = true) {
   }
 
   try {
-    const response = await fetch(`${API_BASE}/missions/${missionId}`, {
+    const requestMission = () => fetch(`${API_BASE}/missions/${missionId}`, {
       headers: getAuthHeaders(),
+      credentials: "include",
     });
+    const tokenUsed = getAuthToken();
+    let response = await requestMission();
+    response = await retryUnauthorizedOnce(response, {
+      waitForAuthReady: () => waitForAuthInitialization(),
+      getCurrentToken: getAuthToken,
+      tokenUsed,
+      refreshAuth: async () => (await refreshSession()).success,
+      retry: requestMission,
+    });
+
+    if (response.status === 401) {
+      const lastLogged = loggedMissionStates.get(missionId);
+      if (lastLogged !== "AUTH_REQUIRED") {
+        loggedMissionStates.set(missionId, "AUTH_REQUIRED");
+        console.warn(`[Mission] Sign-in required to load mission ${missionId}`);
+      }
+      return {
+        id: missionId,
+        name: "Sign-in required",
+        status: "unavailable",
+        error: "AUTH_REQUIRED",
+        backendUnavailable: false,
+        hasError: true,
+      };
+    }
 
     if (response.status === 404) {
       const lastLogged = loggedMissionStates.get(missionId);

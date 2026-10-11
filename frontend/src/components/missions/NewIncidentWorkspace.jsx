@@ -317,7 +317,7 @@ export default function NewIncidentWorkspace({ onClose, onMissionCreated, curren
           "Upload complete - heavy reconstruction requires the full compute profile";
         setStatusMessage(message);
         notice?.(message, "success");
-        onMissionCreated?.(missionId);
+        onMissionCreated?.(missionId, { pipelineStarted: false });
         setIsSubmitting(false);
         return;
       }
@@ -333,7 +333,7 @@ export default function NewIncidentWorkspace({ onClose, onMissionCreated, curren
 
       notice?.("Pipeline initiated! Streaming progress...", "success");
       if (onMissionCreated) {
-        onMissionCreated(missionId);
+        onMissionCreated(missionId, { pipelineStarted: true });
       }
     } catch (err) {
       if (err.name === "AbortError" || err.message?.includes("cancelled")) {

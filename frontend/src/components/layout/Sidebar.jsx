@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import Icon from "../ui/Icon";
 import MissionSelectorPanel from "./MissionSelectorPanel";
 import { useUI } from "../../context/UIContext";
-import { API_BASE, getAuthHeaders } from "../../api/missions";
+import { API_BASE, fetchHealthWithRetry, getAuthHeaders } from "../../api/missions";
 import {
   missionNavigation,
   intelligenceNavigation,
@@ -19,12 +19,30 @@ function useEngineStatus() {
     compute: null,
     tiling: null,
     overall: null,
+    lightweight: false,
   });
 
   useEffect(() => {
     let cancelled = false;
     const check = async () => {
       try {
+        const health = await fetchHealthWithRetry();
+        if (cancelled) return;
+        if (health?.reconstruction_engine === "disabled" || health?.pipeline_mode === "light") {
+          setStatus({
+            detector: null,
+            detectorStatus: "NOT_APPLICABLE",
+            reconstruction: null,
+            reconstructionStatus: "NOT_APPLICABLE",
+            compute: health?.compute_device?.execution_device || null,
+            computeDevice: health?.compute_device?.execution_device || "cpu",
+            tiling: null,
+            tilingStatus: "NOT_APPLICABLE",
+            overall: "LIGHTWEIGHT",
+            lightweight: true,
+          });
+          return;
+        }
         const res = await fetch(`${API_BASE}/ai-engine/status`, {
           headers: getAuthHeaders(),
         });
@@ -44,6 +62,7 @@ function useEngineStatus() {
             tiling: json?.tiling?.label || "2x2 Tiling",
             tilingStatus: json?.tiling?.status || "ACTIVE",
             overall,
+            lightweight: false,
           });
         } else {
           setStatus({
@@ -172,6 +191,7 @@ export default function Sidebar({
   };
 
   const getOverallLabel = () => {
+    if (engineStatus.lightweight) return t("sidebar.lightweightMode");
     if (language !== "hi") return engineStatus.overall || t("sidebar.checking");
     if (engineStatus.overall === "ONLINE") return "ऑनलाइन";
     if (engineStatus.overall === "PARTIAL") return "आंशिक";
@@ -236,19 +256,23 @@ export default function Sidebar({
         />
         <div className="sidebar-spacer" />
 
-        <div className="engine">
+        <div className={`engine ${engineStatus.lightweight ? "engine-lightweight" : ""}`}>
           <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span>
               <i /> {t("sidebar.aiEngine")}
             </span>
             <b style={{
-              color: engineStatus.overall === "ONLINE" ? '#38bdf8' : engineStatus.overall === null ? '#fbbf24' : '#f87171',
+              color: engineStatus.lightweight ? '#a9b8c9' : engineStatus.overall === "ONLINE" ? '#38bdf8' : engineStatus.overall === null ? '#fbbf24' : '#f87171',
               fontSize: '10px',
             }}>
               {getOverallLabel()}
             </b>
           </header>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '6px' }}>
+          {engineStatus.lightweight ? (
+            <div style={{ marginTop: '8px', color: '#a9b8c9', fontSize: '10px', lineHeight: 1.5 }}>
+              {t("sidebar.lightweightDescription")}
+            </div>
+          ) : <div style={{ display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '6px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '2px 0' }}>
               <span style={{ fontSize: '11px', color: '#94a3b8' }}>{t("sidebar.detection")}</span>
               <b style={{
@@ -297,7 +321,7 @@ export default function Sidebar({
                 {getTilingLabel()}
               </b>
             </div>
-          </div>
+          </div>}
         </div>
 
         <Nav

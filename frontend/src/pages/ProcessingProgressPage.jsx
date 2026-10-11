@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { getMission, getProcessingStatus, processVideo } from "../api/missions";
+import { fetchHealthWithRetry, getMission, getProcessingStatus, processVideo } from "../api/missions";
 import { useUI } from "../context/UIContext";
 import "./ProcessingProgress.css";
 
@@ -26,13 +26,29 @@ export default function ProcessingProgressPage({ mission, navigate }) {
   const [reconstruction, setReconstruction] = useState(mission?.reconstruction);
   const [statusData, setStatusData] = useState(null);
   const [autoRefresh, setAutoRefresh] = useState(true);
+  const [healthConfig, setHealthConfig] = useState(null);
+  const [healthConfigChecked, setHealthConfigChecked] = useState(false);
+  const [authRequired, setAuthRequired] = useState(mission?.error === "AUTH_REQUIRED");
+  const lightweightMode = healthConfig?.reconstruction_engine === "disabled" || healthConfig?.pipeline_mode === "light";
   const missionStatus = (statusData?.status ? (statusData.status === "PROCESSING" ? "processing" : statusData.status === "QUEUED" ? "queued" : statusData.status.toLowerCase()) : null) || mission?.status;
+
+  useEffect(() => {
+    let mounted = true;
+    fetchHealthWithRetry().then((health) => {
+      if (!mounted) return;
+      setHealthConfig(health);
+      setHealthConfigChecked(true);
+    });
+    return () => { mounted = false; };
+  }, []);
 
   // Poll for updates with exponential backoff if still processing or queued
   useEffect(() => {
     let mounted = true;
     let timer = null;
     let delay = 2000;
+    let attempts = 0;
+    const maxAttempts = 12;
 
     const isTerminal = (st) => {
       const s = String(st || "").toLowerCase();
@@ -56,6 +72,11 @@ export default function ProcessingProgressPage({ mission, navigate }) {
         ]);
         if (!mounted) return;
 
+        if (updatedMission?.error === "AUTH_REQUIRED") {
+          setAuthRequired(true);
+          setAutoRefresh(false);
+          return;
+        }
         if (updatedMission && !updatedMission.hasError) {
           setProcessing(updatedMission.processing);
           setDetections(updatedMission.detections);
@@ -75,7 +96,12 @@ export default function ProcessingProgressPage({ mission, navigate }) {
           return; // Stop polling on terminal states
         }
 
-        delay = Math.min(delay * 1.25, 8000);
+        if (attempts >= maxAttempts) {
+          setAutoRefresh(false);
+          return;
+        }
+        attempts += 1;
+        delay = Math.min(delay * 1.7, 20_000);
         timer = setTimeout(fetchStatus, delay);
       } catch (err) {
         console.warn("[ProcessingPage] Poll error:", err);
@@ -83,7 +109,7 @@ export default function ProcessingProgressPage({ mission, navigate }) {
       }
     };
 
-    if (autoRefresh && !isTerminal(missionStatus)) {
+    if (healthConfigChecked && !lightweightMode && !authRequired && autoRefresh && !isTerminal(missionStatus)) {
       fetchStatus();
     }
 
@@ -91,7 +117,7 @@ export default function ProcessingProgressPage({ mission, navigate }) {
       mounted = false;
       if (timer) clearTimeout(timer);
     };
-  }, [mission?.id, autoRefresh]);
+  }, [mission?.id, autoRefresh, healthConfigChecked, lightweightMode, authRequired]);
 
   const isComplete = missionStatus === "complete" || missionStatus === "reconstruction_ready" || missionStatus === "processing_complete";
   const isProcessing = missionStatus === "processing";
@@ -129,6 +155,39 @@ export default function ProcessingProgressPage({ mission, navigate }) {
             <h1>{t("nav.noMissionSelected")}</h1>
             <p>{t("dashboard.uploadPrompt")}</p>
           </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (authRequired || mission.error === "AUTH_REQUIRED") {
+    return (
+      <div className="processing-page">
+        <div className="page-header">
+          <div>
+            <span className="eyebrow">{t("nav.processing")}</span>
+            <h1>{t("processing.authRequiredTitle")}</h1>
+            <p>{t("processing.authRequiredBody")}</p>
+          </div>
+          <button type="button" className="button primary" onClick={() => navigate("auth")}>
+            {t("processing.signIn")}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (healthConfigChecked && lightweightMode) {
+    return (
+      <div className="processing-page">
+        <div className="page-header">
+          <div>
+            <span className="eyebrow">{t("nav.processing")}</span>
+            <h1>{t("processing.title")}</h1>
+          </div>
+        </div>
+        <div className="runtime-capability-notice" role="status">
+          {t("processing.lightweightUploadComplete")}
         </div>
       </div>
     );

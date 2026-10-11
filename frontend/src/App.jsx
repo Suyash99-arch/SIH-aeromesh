@@ -17,6 +17,7 @@ import {
   fetchCurrentUser,
   clearAuthToken,
   listMissions,
+  markAuthInitializationComplete,
 } from "./api/missions";
 import {
   OverviewPage,
@@ -141,7 +142,8 @@ export default function App() {
           setCurrentUser(null);
         }
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => markAuthInitializationComplete());
   }, []);
 
   useEffect(() => {
@@ -182,6 +184,8 @@ export default function App() {
     let active = true;
     let pollTimer = null;
     let backoffMs = 2000;
+    let pollAttempts = 0;
+    const maxPollAttempts = 12;
 
     const fetchMission = async (isPoll = false) => {
       if (!missionId) {
@@ -194,6 +198,9 @@ export default function App() {
 
         if (nextMission && !nextMission.hasError) {
           setMission(nextMission);
+        } else if (nextMission?.error === "AUTH_REQUIRED") {
+          setMission(nextMission);
+          return;
         } else {
           setMission(null);
           // If the mission was not found or forbidden, clear the stale URL param and mission ID
@@ -210,10 +217,11 @@ export default function App() {
 
         // Only poll if the mission is actively processing or queued
         const isLive = nextMission.status === "processing" || nextMission.status === "queued" || nextMission.status === "running";
-        if (isLive) {
+        if (isLive && pollAttempts < maxPollAttempts) {
           pollTimer = setTimeout(() => {
             if (active) {
-              backoffMs = Math.min(backoffMs * 1.25, 8000);
+              pollAttempts += 1;
+              backoffMs = Math.min(backoffMs * 1.7, 20_000);
               fetchMission(true);
             }
           }, backoffMs);
@@ -229,6 +237,22 @@ export default function App() {
       active = false;
       if (pollTimer) clearTimeout(pollTimer);
     };
+  }, [missionId]);
+
+  useEffect(() => {
+    const refreshMissionAfterUpload = (event) => {
+      const id = event.detail?.id;
+      if (!id || id !== missionId) return;
+      if (event.detail?.mission && !event.detail.mission.hasError) {
+        setMission(event.detail.mission);
+        return;
+      }
+      getApiMission(id, true).then((updated) => {
+        if (updated && !updated.hasError) setMission(updated);
+      });
+    };
+    window.addEventListener("aeromesh:mission_updated", refreshMissionAfterUpload);
+    return () => window.removeEventListener("aeromesh:mission_updated", refreshMissionAfterUpload);
   }, [missionId]);
 
   const notice = (message, type = "success") => setToast({ message, type });
@@ -252,11 +276,11 @@ export default function App() {
     notice("Logged out successfully. Session revoked.", "info");
   };
 
-  const handleMissionCreated = (newMissionId) => {
+  const handleMissionCreated = (newMissionId, { pipelineStarted = true } = {}) => {
     setMissionId(newMissionId);
     setActivePage("pipeline");
     setShowCreateMission(false);
-    notice("Pipeline initiated! Streaming 8-stage progress...", "success");
+    notice(pipelineStarted ? t("processing.pipelineStarted") : t("processing.lightweightUploadComplete"), "success");
   };
 
   const handleStartMission = () => {
