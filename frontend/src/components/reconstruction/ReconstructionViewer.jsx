@@ -757,11 +757,11 @@ function MeasurementTool3D({ points = [] }) {
 }
 
 function SemanticObjects3D({ objects, selectedId, onSelect, layers }) {
-  if (!objects || !Array.isArray(objects) || objects.length === 0) return null;
+  const safeObjects = Array.isArray(objects) ? objects : [];
 
   // Runtime logging of actual building transforms & bounds in Three.js scene graph
   useEffect(() => {
-    const blds = objects.filter(
+    const blds = safeObjects.filter(
       (o) =>
         (o.category === "building" ||
           (o.class || "").toLowerCase() === "building" ||
@@ -784,11 +784,11 @@ function SemanticObjects3D({ objects, selectedId, onSelect, layers }) {
       });
       console.groupEnd();
     }
-  }, [objects]);
+  }, [safeObjects]);
 
   return (
     <group>
-      {objects.map((obj, i) => {
+      {safeObjects.map((obj, i) => {
         if (!obj.position_3d || obj.association_status === "REJECTED")
           return null;
 
@@ -1531,7 +1531,7 @@ function RendererLifecycleManager({ onContextLost, onContextRestored }) {
       try {
         gl.renderLists?.dispose?.();
         gl.dispose();
-        gl.forceContextLoss?.();
+        if (!gl.getContext?.()?.isContextLost?.()) gl.forceContextLoss?.();
       } catch {
         /* renderer may already be disposed by React Three Fiber */
       }

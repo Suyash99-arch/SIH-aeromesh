@@ -25,6 +25,7 @@ import {
   fetchGeoJsonStatus,
   fetchSemanticScene,
   apiFetch,
+  fetchHealthWithRetry,
 } from "../api/missions";
 import ErrorBoundary from "../components/common/ErrorBoundary";
 
@@ -156,44 +157,42 @@ function Findings({ mission, onAction }) {
   );
 }
 
-function StagePipeline({ navigate, mission }) {
-  const isProcessing = mission?.status === "processing" || mission?.status === "queued";
-  const isPartial = mission?.status === "PARTIAL" || mission?.status === "partial";
-  const isFailed = mission?.status === "failed" || mission?.status === "RECONSTRUCTION_FAILED";
-  const isComplete = mission?.status === "COMPLETE" || mission?.status === "complete" || mission?.status === "reconstruction_ready";
+function getMissionStageStatuses(mission) {
   const breakdown = mission?.stage_breakdown || {};
-  const regCams = mission?.reconstruction?.registered_cameras || 0;
+  const normalized = (value) => String(value || "").toLowerCase();
+  const completed = (value) => ["completed", "complete", "succeeded", "success"].includes(normalized(value));
+  const hasRealFailure = Boolean(mission?.error || mission?.error_message || mission?.reconstruction?.error);
+  const isFailed = ["failed", "reconstruction_failed"].includes(normalized(mission?.status)) && hasRealFailure;
+  const isProcessing = ["processing", "queued", "running"].includes(normalized(mission?.status));
+  const uploaded = mission?.video?.uploaded === true || Number(mission?.video?.size_bytes || 0) > 0 || Number(mission?.video?.total_frames || 0) > 0 || Boolean(mission?.video_path);
+  const registeredCameras = Number(mission?.reconstruction?.registered_cameras || 0);
+  const meshExists = Boolean(mission?.assets?.mesh || mission?.mesh?.url || mission?.mesh_path || Number(mission?.mesh_vertices || mission?.reconstruction?.mesh_vertices || 0) > 0);
+  const evidence = [
+    completed(breakdown.ingest) || uploaded,
+    completed(breakdown.quality) || Boolean(mission?.quality?.summary),
+    completed(breakdown.detection) || Number(mission?.detection?.total_detections || mission?.detections?.length || 0) > 0,
+    completed(breakdown.tracking) || Number(mission?.tracking?.unique_tracks || 0) > 0,
+    completed(breakdown.reconstruction) || (registeredCameras >= 3 && meshExists),
+    completed(breakdown.measurements) || Number(mission?.measurements?.count || 0) > 0,
+    completed(breakdown.intelligence) || Number(mission?.objects_3d?.length || 0) > 0,
+    completed(breakdown.report) || Boolean(mission?.report?.url || mission?.report_path),
+  ];
+  const keys = ["video", "quality", "detection", "trajectory", "reconstruction", "measurement", "intelligence", "report"];
+  return evidence.map((done, index) => {
+    if (done) return "completed";
+    if (isFailed && (normalized(mission?.failed_stage).includes(keys[index]) || normalized(breakdown[keys[index]]) === "failed")) return "failed";
+    if (isProcessing && (normalized(mission?.current_stage || mission?.stage).includes(keys[index]) || normalized(breakdown[keys[index]]) === "in_progress")) return "in_progress";
+    return "not_run";
+  });
+}
 
+function StagePipeline({ navigate, mission }) {
+  const statuses = getMissionStageStatuses(mission);
   return (
-    <div className="command-pipeline">
+    <div className="command-pipeline" aria-label="Mission stage progression">
       {pipelineStages.map(([label, page], i) => {
         const stageIndex = i + 1;
-        let stageStatus = "pending";
-
-        if (label === "Video") {
-          stageStatus = breakdown.ingest === "COMPLETED" || mission?.video?.total_frames > 0 ? "completed" : isProcessing ? "in_progress" : "pending";
-        } else if (label === "Quality") {
-          stageStatus = mission?.quality?.summary ? "completed" : isProcessing && stageIndex <= 2 ? "in_progress" : "completed";
-        } else if (label === "AI detection") {
-          stageStatus = breakdown.detection === "COMPLETED" || (mission?.detection?.total_detections || 0) > 0 ? "completed" : isProcessing && stageIndex === 3 ? "in_progress" : "pending";
-        } else if (label === "Trajectory") {
-          stageStatus = breakdown.tracking === "COMPLETED" || (mission?.tracking?.unique_tracks || 0) > 0 ? "completed" : isProcessing && stageIndex === 4 ? "in_progress" : "pending";
-        } else if (label === "3D model") {
-          if (breakdown.reconstruction === "FAILED" || (isPartial && regCams < 3) || (isFailed && regCams < 3)) {
-            stageStatus = "failed";
-          } else if (breakdown.reconstruction === "COMPLETED" || regCams >= 3) {
-            stageStatus = "completed";
-          } else if (isProcessing && stageIndex === 5) {
-            stageStatus = "in_progress";
-          } else {
-            stageStatus = "pending";
-          }
-        } else if (label === "Measurements" || label === "Intelligence") {
-          stageStatus = isComplete && regCams >= 3 ? "completed" : (isPartial || isFailed ? "pending" : isProcessing ? "pending" : "completed");
-        } else if (label === "Report") {
-          stageStatus = isComplete || isPartial ? "completed" : "pending";
-        }
-
+        const stageStatus = statuses[i];
         return (
           <button
             key={label}
@@ -220,6 +219,12 @@ export function OverviewPage({ mission, navigate, notice, setMission }) {
   const { t } = useUI();
   const safeMission = mission || {};
   const [isRerunningDet, setIsRerunningDet] = useState(false);
+  const [healthConfig, setHealthConfig] = useState(null);
+  useEffect(() => {
+    let mounted = true;
+    fetchHealthWithRetry().then((health) => { if (mounted) setHealthConfig(health); }).catch(() => {});
+    return () => { mounted = false; };
+  }, []);
 
   const handleRerunDetection = async () => {
     const mId = safeMission?.id || safeMission?._id;
@@ -277,7 +282,11 @@ export function OverviewPage({ mission, navigate, notice, setMission }) {
 
   const isMetricCalibrated = (safeMission?.scale_status || safeMission?.measurements?.scale_status) === "METRIC_CALIBRATED";
   const isProcessing = safeMission.status === "processing";
-  const isMissionFailed = safeMission.status === "failed";
+  const failureMessage = safeMission.error || safeMission.error_message || safeMission.reconstruction?.error || "";
+  const isMissionFailed = ["failed", "reconstruction_failed"].includes(String(safeMission.status || "").toLowerCase()) && Boolean(failureMessage);
+  const lightweightMode = healthConfig?.pipeline_mode === "light" || healthConfig?.reconstruction_engine === "disabled";
+  const notRunReconstruction = lightweightMode || String(safeMission.status || "").toUpperCase() === "NOT_RUN";
+  const stageProgress = Math.round(getMissionStageStatuses(safeMission).filter((status) => status === "completed").length / pipelineStages.length * 100);
 
   return (
     <div className="executive-overview">
@@ -405,16 +414,20 @@ export function OverviewPage({ mission, navigate, notice, setMission }) {
               <Icon name="Box" size={18} />
             </div>
             <span className="dispatch-domain">{t("nav.reconstruction")}</span>
-            <span className={`badge-tag ${isProcessing ? "valid" : (safeMission.reconstruction?.registered_cameras ?? 0) < 3 ? "low-conf" : "valid"}`}>
-              {isProcessing ? t("stages.PROCESSING") : (safeMission.reconstruction?.registered_cameras ?? 0) < 3 ? t("stages.FAILED") : t("reconstruction.modeSolid")}
+            <span className={`badge-tag ${notRunReconstruction ? "not-run" : isProcessing ? "valid" : isMissionFailed ? "low-conf" : "valid"}`}>
+              {notRunReconstruction ? t("stages.NOT_RUN") : isProcessing ? t("stages.PROCESSING") : isMissionFailed ? t("stages.FAILED") : (safeMission.reconstruction?.registered_cameras ?? 0) < 3 ? t("stages.NOT_RUN") : t("reconstruction.modeSolid")}
             </span>
           </div>
           <strong className="dispatch-title">
-            {isProcessing ? t("stages.PROCESSING") : (safeMission.reconstruction?.registered_cameras ?? 0) < 3 ? t("stages.FAILED") : t("missionCommand.reconstructionMetric")}
+            {notRunReconstruction ? t("missionCommand.notRunReconstruction") : isProcessing ? t("stages.PROCESSING") : isMissionFailed ? (safeMission.error || safeMission.error_message || t("stages.FAILED")) : (safeMission.reconstruction?.registered_cameras ?? 0) < 3 ? t("stages.NOT_RUN") : t("missionCommand.reconstructionMetric")}
           </strong>
           <p className="dispatch-meta">
-            {(safeMission.reconstruction?.registered_cameras ?? 0) < 3
-              ? (safeMission.reconstruction?.error || `SfM registered ${safeMission.reconstruction?.registered_cameras ?? 0} cameras — insufficient parallax/overlap`)
+            {notRunReconstruction
+              ? t("missionCommand.notRunReconstruction")
+              : isMissionFailed
+                ? (safeMission.error || safeMission.error_message || safeMission.reconstruction?.error || t("stages.FAILED"))
+                : (safeMission.reconstruction?.registered_cameras ?? 0) < 3
+              ? t("stages.NOT_RUN")
               : `${safeMission.reconstruction?.registered_cameras ?? 0} ${t("missionCommand.registeredCameras")} · ${Number(safeMission.reconstruction?.point_count || safeMission.reconstruction?.sparse_point_count || 0).toLocaleString()} ${t("missionCommand.sparsePoints")}`}
           </p>
           <div className="dispatch-action-link">
@@ -503,9 +516,9 @@ export function OverviewPage({ mission, navigate, notice, setMission }) {
         <StagePipeline navigate={navigate} mission={safeMission} />
         <div className="progress-head">
           <span>Mission processing</span>
-          <b>{safeMission.progress ?? 100}%</b>
+          <b>{stageProgress}%</b>
         </div>
-        <Progress value={safeMission.progress ?? 100} />
+        <Progress value={stageProgress} />
       </Panel>
 
       {/* Operational Recommendations & Findings Dispatch */}
@@ -870,23 +883,17 @@ export function MissionsPage({ mission, setMission, navigate, notice, onCreateMi
 
 export function DronePage({ mission }) {
   const { t } = useUI();
-  if (!mission) {
-    return (
-      <div className="drone-layout" style={{ padding: "40px", textAlign: "center", color: "#94a3b8" }}>
-        {t("common.loading")}
-      </div>
-    );
-  }
-  const [frame, setFrame] = useState(mission.findings?.[0]?.frame || 1);
+
+  const [frame, setFrame] = useState(mission?.findings?.[0]?.frame || 1);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState("1×");
   const [quality, setQuality] = useState("overall");
-  const detect = mission.findings?.[0];
+  const detect = mission?.findings?.[0];
 
   const speedMultiplier = speed === "0.5×" ? 0.5 : speed === "2×" ? 2 : 1;
 
   // Extract samples for quality over time
-  const samples = mission.frameQuality?.samples || mission.quality?.samples || [];
+  const samples = mission?.frameQuality?.samples || mission?.quality?.samples || [];
   const currentSample = React.useMemo(() => {
     if (!samples || samples.length === 0) return null;
     let closest = samples[0];
@@ -901,8 +908,16 @@ export function DronePage({ mission }) {
     return closest;
   }, [samples, frame]);
 
-  const activeQuality = currentSample || mission.quality || {};
-  const telemetry = mission.telemetry || {};
+  const activeQuality = currentSample || mission?.quality || {};
+  const telemetry = mission?.telemetry || {};
+  if (!mission) {
+    return (
+      <div className="drone-layout" style={{ padding: "40px", textAlign: "center", color: "#94a3b8" }}>
+        {t("common.loading")}
+      </div>
+    );
+  }
+
 
   return (
     <>
@@ -1675,6 +1690,102 @@ export function IntelligencePage({ kind, mission, navigate, notice }) {
     t("sceneIntelligence.subtitle", "Spatial and semantic aerial intelligence."),
   ];
 
+  const [sceneObjects, setSceneObjects] = useState(() => mission?.objects_3d || []);
+
+  useEffect(() => {
+    let active = true;
+    if (["analytics", "scene"].includes(kind) && mission?.id) {
+      if (Array.isArray(mission.objects_3d) && mission.objects_3d.length > 0) {
+        setSceneObjects(mission.objects_3d);
+      } else {
+        fetchSemanticScene(mission.id).then((res) => {
+          if (active && res?.semantic_scene?.objects) {
+            setSceneObjects(res.semantic_scene.objects);
+          }
+        }).catch(() => {});
+      }
+    }
+    return () => { active = false; };
+  }, [kind, mission?.id, mission?.objects_3d]);
+
+  const peopleCount = useMemo(() => {
+    if (sceneObjects.length > 0) {
+      return sceneObjects.filter((o) => {
+        const cls = (o.class || o.class_name || "").toLowerCase();
+        return ["person", "pedestrian", "people", "human"].includes(cls);
+      }).length;
+    }
+    return (
+      mission?.objects?.people ||
+      mission?.canonical_summary?.objects?.people ||
+      mission?.tracking?.tracks_by_class?.pedestrian ||
+      0
+    );
+  }, [sceneObjects, mission]);
+
+  const vehiclesCount = useMemo(() => {
+    if (sceneObjects.length > 0) {
+      return sceneObjects.filter((o) => {
+        const cls = (o.class || o.class_name || "").toLowerCase();
+        return ["car", "van", "truck", "bus", "tricycle", "motorcycle", "bicycle", "vehicle"].some((vc) => cls.includes(vc));
+      }).length;
+    }
+    const tr = mission?.tracking?.tracks_by_class || {};
+    const sumTr = (tr.van || 0) + (tr.bus || 0) + (tr.tricycle || 0) + (tr.car || 0) + (tr.truck || 0);
+    return (
+      mission?.objects?.vehicles ||
+      mission?.canonical_summary?.objects?.vehicles ||
+      sumTr ||
+      0
+    );
+  }, [sceneObjects, mission]);
+
+  const structuresCount = useMemo(() => {
+    if (sceneObjects.length > 0) {
+      return sceneObjects.filter((o) => {
+        const cls = (o.class || o.class_name || "").toLowerCase();
+        return ["building", "structure", "house", "tower", "bridge", "roof"].some((sc) => cls.includes(sc));
+      }).length;
+    }
+    return mission?.objects?.structures || mission?.canonical_summary?.objects?.structures || 0;
+  }, [sceneObjects, mission]);
+
+  const hazardsCount = useMemo(() => {
+    if (sceneObjects.length > 0) {
+      return sceneObjects.filter((o) => {
+        const cls = (o.class || o.class_name || "").toLowerCase();
+        return ["hazard", "fire", "smoke", "debris", "flood"].some((hc) => cls.includes(hc));
+      }).length;
+    }
+    return mission?.objects?.hazards || mission?.canonical_summary?.objects?.hazards || 0;
+  }, [sceneObjects, mission]);
+
+  const totalCount = useMemo(() => {
+    return (
+      sceneObjects.length ||
+      mission?.objects?.total ||
+      mission?.canonical_summary?.objects?.total ||
+      mission?.tracking?.unique_tracks ||
+      (peopleCount + vehiclesCount + structuresCount + hazardsCount) ||
+      0
+    );
+  }, [sceneObjects, mission, peopleCount, vehiclesCount, structuresCount, hazardsCount]);
+
+  const confidenceItems = useMemo(() => {
+    if (Array.isArray(mission?.findings) && mission.findings.length > 0) {
+      return mission.findings;
+    }
+    if (sceneObjects.length > 0) {
+      return sceneObjects.slice(0, 10).map((obj) => ({
+        id: obj.object_id || obj.track_id,
+        title: `${obj.track_id || obj.object_id} · ${obj.class || obj.class_name || "object"} (${obj.motion_state || "STATIC"})`,
+        confidence: Math.round((obj.association_confidence || 0.85) * 100),
+      }));
+    }
+    return [];
+  }, [mission?.findings, sceneObjects]);
+
+
   if (kind === "findings") {
     return (
       <>
@@ -1885,100 +1996,6 @@ export function IntelligencePage({ kind, mission, navigate, notice }) {
     );
   }
 
-  const [sceneObjects, setSceneObjects] = useState(() => mission?.objects_3d || []);
-
-  useEffect(() => {
-    let active = true;
-    if (mission?.id) {
-      if (Array.isArray(mission.objects_3d) && mission.objects_3d.length > 0) {
-        setSceneObjects(mission.objects_3d);
-      } else {
-        fetchSemanticScene(mission.id).then((res) => {
-          if (active && res?.semantic_scene?.objects) {
-            setSceneObjects(res.semantic_scene.objects);
-          }
-        }).catch(() => {});
-      }
-    }
-    return () => { active = false; };
-  }, [mission?.id, mission?.objects_3d]);
-
-  const peopleCount = useMemo(() => {
-    if (sceneObjects.length > 0) {
-      return sceneObjects.filter((o) => {
-        const cls = (o.class || o.class_name || "").toLowerCase();
-        return ["person", "pedestrian", "people", "human"].includes(cls);
-      }).length;
-    }
-    return (
-      mission?.objects?.people ||
-      mission?.canonical_summary?.objects?.people ||
-      mission?.tracking?.tracks_by_class?.pedestrian ||
-      0
-    );
-  }, [sceneObjects, mission]);
-
-  const vehiclesCount = useMemo(() => {
-    if (sceneObjects.length > 0) {
-      return sceneObjects.filter((o) => {
-        const cls = (o.class || o.class_name || "").toLowerCase();
-        return ["car", "van", "truck", "bus", "tricycle", "motorcycle", "bicycle", "vehicle"].some((vc) => cls.includes(vc));
-      }).length;
-    }
-    const tr = mission?.tracking?.tracks_by_class || {};
-    const sumTr = (tr.van || 0) + (tr.bus || 0) + (tr.tricycle || 0) + (tr.car || 0) + (tr.truck || 0);
-    return (
-      mission?.objects?.vehicles ||
-      mission?.canonical_summary?.objects?.vehicles ||
-      sumTr ||
-      0
-    );
-  }, [sceneObjects, mission]);
-
-  const structuresCount = useMemo(() => {
-    if (sceneObjects.length > 0) {
-      return sceneObjects.filter((o) => {
-        const cls = (o.class || o.class_name || "").toLowerCase();
-        return ["building", "structure", "house", "tower", "bridge", "roof"].some((sc) => cls.includes(sc));
-      }).length;
-    }
-    return mission?.objects?.structures || mission?.canonical_summary?.objects?.structures || 0;
-  }, [sceneObjects, mission]);
-
-  const hazardsCount = useMemo(() => {
-    if (sceneObjects.length > 0) {
-      return sceneObjects.filter((o) => {
-        const cls = (o.class || o.class_name || "").toLowerCase();
-        return ["hazard", "fire", "smoke", "debris", "flood"].some((hc) => cls.includes(hc));
-      }).length;
-    }
-    return mission?.objects?.hazards || mission?.canonical_summary?.objects?.hazards || 0;
-  }, [sceneObjects, mission]);
-
-  const totalCount = useMemo(() => {
-    return (
-      sceneObjects.length ||
-      mission?.objects?.total ||
-      mission?.canonical_summary?.objects?.total ||
-      mission?.tracking?.unique_tracks ||
-      (peopleCount + vehiclesCount + structuresCount + hazardsCount) ||
-      0
-    );
-  }, [sceneObjects, mission, peopleCount, vehiclesCount, structuresCount, hazardsCount]);
-
-  const confidenceItems = useMemo(() => {
-    if (Array.isArray(mission?.findings) && mission.findings.length > 0) {
-      return mission.findings;
-    }
-    if (sceneObjects.length > 0) {
-      return sceneObjects.slice(0, 10).map((obj) => ({
-        id: obj.object_id || obj.track_id,
-        title: `${obj.track_id || obj.object_id} · ${obj.class || obj.class_name || "object"} (${obj.motion_state || "STATIC"})`,
-        confidence: Math.round((obj.association_confidence || 0.85) * 100),
-      }));
-    }
-    return [];
-  }, [mission?.findings, sceneObjects]);
 
   if (kind === "analytics" || kind === "scene") {
     return (

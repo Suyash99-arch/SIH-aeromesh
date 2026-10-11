@@ -206,6 +206,16 @@
   color: var(--cyan);
   border-color: var(--cyan);
 }
+.command-pipeline button.not_run {
+  color: var(--text2);
+  border-color: var(--border);
+  background: var(--bg);
+}
+.badge-tag.not-run {
+  color: var(--text2);
+  background: var(--surface-muted, rgba(148, 163, 184, 0.12));
+  border-color: var(--border);
+}
 .command-pipeline b {
   color: var(--cyan);
   font: 9px var(--font-mono);

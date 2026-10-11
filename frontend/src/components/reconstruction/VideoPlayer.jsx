@@ -43,6 +43,9 @@ export default function VideoPlayer({
 
   // Fallback state tracking: 0 = try proxy, 1 = try direct original, 2 = all failed
   const [attemptIndex, setAttemptIndex] = useState(0);
+  // Retained for the post-upload player URL override; it is ignored until the
+  // backend confirms that this mission has an uploaded video.
+  const [customOverrideUrl, setCustomOverrideUrl] = useState(null);
 
   // Re-upload state
   const [selectedFile, setSelectedFile] = useState(null);
@@ -65,7 +68,7 @@ export default function VideoPlayer({
   // Compute active candidate URL based on attempt index
   const activeCandidateUrl = useMemo(() => {
     let base = "";
-    if (attemptIndex === 0) base = proxyUrl || directUrl;
+    if (attemptIndex === 0) base = (videoAvailable && customOverrideUrl) || proxyUrl || directUrl;
     else if (attemptIndex === 1) base = directUrl;
     if (!base) return "";
     if (retryCount > 0) {
@@ -73,7 +76,7 @@ export default function VideoPlayer({
       return `${base}${sep}_r=${retryCount}`;
     }
     return base;
-  }, [attemptIndex, proxyUrl, directUrl, retryCount]);
+  }, [attemptIndex, customOverrideUrl, videoAvailable, proxyUrl, directUrl, retryCount]);
 
   const videoSrc = useMemo(() => {
     return activeCandidateUrl ? resolveAssetUrl(activeCandidateUrl) : "";
@@ -83,6 +86,7 @@ export default function VideoPlayer({
   useEffect(() => {
     setAttemptIndex(0);
     setRetryCount(0);
+    setCustomOverrideUrl(null);
     setFailed(false);
     setErrorMessage("");
     setSelectedFile(null);
@@ -188,6 +192,12 @@ export default function VideoPlayer({
 
       try {
         const refreshedMission = await getMission(mission.id, true);
+        const refreshedVideoAvailable = refreshedMission?.video?.uploaded === true || Boolean(
+          refreshedMission?.video?.size_bytes > 0 || refreshedMission?.video?.size_mb > 0 || refreshedMission?.video_path
+        );
+        if (refreshedVideoAvailable) {
+          setCustomOverrideUrl(`/api/v1/missions/${mission.id}/video?t=${Date.now()}`);
+        }
         window.dispatchEvent(new CustomEvent("aeromesh:mission_updated", { detail: { id: mission.id, mission: refreshedMission } }));
       } catch (refreshError) {
         console.debug("Mission refresh after video upload was unavailable:", refreshError);
