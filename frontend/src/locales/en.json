@@ -267,7 +267,8 @@
     "downloadCsv": "Export Objects CSV",
     "downloadZip": "Download Evidence Package",
     "openViewer": "Launch 3D Spatial Viewer",
-    "openScene": "Inspect Scene Intelligence"
+    "openScene": "Inspect Scene Intelligence",
+    "notRunReconstruction": "Not run. Full 3D reconstruction requires the full compute profile."
   },
   "reconstruction": {
     "title": "3D Aerial Spatial Viewer",
@@ -627,6 +628,7 @@
     "person": "person"
   },
   "stages": {
+    "NOT_RUN": "Not run",
     "EXTRACTION": "Keyframe Extraction",
     "CALIBRATION": "Camera Calibration",
     "SFM": "Structure-from-Motion",
@@ -689,7 +691,8 @@
     "loading": "Loading...",
     "na": "N/A",
     "active": "Active",
-    "status": "Status"
+    "status": "Status",
+    "open": "Show"
   },
   "hero": {
     "badge": "COMMERCIAL & DEFENCE AERIAL RECONSTRUCTION",
@@ -782,5 +785,6 @@
     "unreferencedLocal": "Unreferenced (relative units)",
     "unreferencedFrame": "Unreferenced local coordinate frame",
     "reproj": "px reprojection error"
-  }
+  },
+  "language": "Language"
 }

@@ -118,7 +118,9 @@ export default function App() {
     const keyMap = {
       overview: "nav.overview",
       missions: "nav.missions",
+      history: "nav.missions",
       pipeline: "nav.processing",
+      "pipeline-motion": "nav.processing",
       processing: "nav.processing",
       drone: "nav.processing",
       reconstruction: "nav.reconstruction",
@@ -379,9 +381,9 @@ export default function App() {
       />
     ) : activePage === "overview" ? (
       <OverviewPage {...shared} />
-    ) : activePage === "missions" ? (
+    ) : activePage === "missions" || activePage === "history" ? (
       <MissionsPage {...shared} />
-    ) : activePage === "pipeline" || activePage === "processing" ? (
+    ) : activePage === "pipeline" || activePage === "processing" || activePage === "pipeline-motion" ? (
       <ProcessingProgressPage {...shared} />
     ) : activePage === "drone" ? (
       <DronePage {...shared} />

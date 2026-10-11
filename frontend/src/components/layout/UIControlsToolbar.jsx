@@ -1,4 +1,4 @@
-﻿import React from "react";
+import React from "react";
 import { useUI } from "../../context/UIContext";
 import { LANGUAGES, UNITS } from "../../utils/i18n";
 
@@ -57,13 +57,13 @@ export default function UIControlsToolbar({ className = "" }) {
       {/* Unit System Selector */}
       <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
         <label htmlFor="unit-select" className="sr-only" style={{ position: "absolute", width: "1px", height: "1px", padding: 0, margin: "-1px", overflow: "hidden", clip: "rect(0,0,0,0)", border: 0 }}>
-          {language === "hi" ? "à¤‡à¤•à¤¾à¤ˆ à¤ªà¥à¤°à¤£à¤¾à¤²à¥€" : "Unit System"}
+          {language === "hi" ? "इकाई प्रणाली" : "Unit System"}
         </label>
         <select
           id="unit-select"
           value={unitSystem}
           onChange={(e) => setUnitSystem(e.target.value)}
-          aria-label={language === "hi" ? "à¤‡à¤•à¤¾à¤ˆ à¤ªà¥à¤°à¤£à¤¾à¤²à¥€" : "Unit System"}
+          aria-label={language === "hi" ? "इकाई प्रणाली" : "Unit System"}
           style={{
             background: "rgba(0, 0, 0, 0.2)",
             color: "var(--mist)",
@@ -79,8 +79,8 @@ export default function UIControlsToolbar({ className = "" }) {
           {UNITS.map((u) => (
             <option key={u.id} value={u.id} style={{ background: "var(--void)", color: "var(--mist)" }}>
               {u.id === "metric"
-                ? (language === "hi" ? "à¤®à¥€à¤Ÿà¥à¤°à¤¿à¤• (m, kmÂ², km/h)" : "Metric (m, kmÂ², km/h)")
-                : (language === "hi" ? "à¤‡à¤®à¥à¤ªà¥€à¤°à¤¿à¤¯à¤² (ft, sq mi, mph)" : "Imperial (ft, sq mi, mph)")}
+                ? (language === "hi" ? "मीट्रिक (m, km², km/h)" : "Metric (m, km², km/h)")
+                : (language === "hi" ? "इम्पीरियल (ft, sq mi, mph)" : "Imperial (ft, sq mi, mph)")}
             </option>
           ))}
         </select>

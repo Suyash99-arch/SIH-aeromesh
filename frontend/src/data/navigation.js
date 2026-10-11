@@ -14,6 +14,8 @@ export const systemNavigation = [
 export const pageTitles = {
   ...Object.fromEntries([...missionNavigation, ...intelligenceNavigation, ...outputNavigation, ...systemNavigation].map(([id, label]) => [id, label])),
   pipeline: "Autonomous Pipeline Progression",
+  "pipeline-motion": "Autonomous Pipeline Progression",
+  history: "Mission History",
   processing: "Autonomous Pipeline Progression",
   profile: "User Profile & Security",
   auth: "Operator Authentication",
