@@ -312,6 +312,12 @@ export default function NewIncidentWorkspace({ onClose, onMissionCreated, curren
       uploadInProgress = false;
       setUploadFailed(false);
 
+      if (uploadResult.video?.reconstructability?.motion_type === "HOVER_OR_ROTATION") {
+        const warning = t("newMission.reconstructabilityWarning");
+        setStatusMessage(warning);
+        notice?.(warning, "warning");
+      }
+
       if (uploadResult.processing?.heavy_reconstruction_available === false) {
         const message = uploadResult.processing.message ||
           "Upload complete - heavy reconstruction requires the full compute profile";

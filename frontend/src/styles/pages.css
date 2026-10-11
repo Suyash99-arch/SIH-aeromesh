@@ -710,6 +710,9 @@
 .toast.info > span {
   background: var(--cyan);
 }
+.toast.warning > span {
+  background: var(--warning);
+}
 @keyframes pulse {
   50% {
     opacity: 0.45;

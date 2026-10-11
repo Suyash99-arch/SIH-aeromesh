@@ -106,6 +106,7 @@
     "total": "Total"
   },
   "newMission": {
+    "reconstructabilityWarning": "Camera motion looks like a hover or rotation; reconstruction may be incomplete",
     "title": "Initiate New Flight Mission",
     "subtitle": "Ingest aerial video for neural photogrammetry and object tracking",
     "missionName": "Mission Identification",
