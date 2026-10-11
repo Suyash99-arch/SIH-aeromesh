@@ -1,3 +1,5 @@
+const releasedRenderers = new WeakSet();
+
 export function attachWebGLContextHandlers(canvas, { onLost, onRestored } = {}) {
   if (!canvas?.addEventListener || !canvas?.removeEventListener) return () => {};
   const handleLost = (event) => {
@@ -11,4 +13,13 @@ export function attachWebGLContextHandlers(canvas, { onLost, onRestored } = {}) 
     canvas.removeEventListener("webglcontextlost", handleLost, false);
     canvas.removeEventListener("webglcontextrestored", handleRestored, false);
   };
+}
+
+export function releaseWebGLRenderer(renderer) {
+  if (!renderer || releasedRenderers.has(renderer)) return;
+  releasedRenderers.add(renderer);
+
+  const context = renderer.getContext?.();
+  if (!context?.isContextLost?.()) renderer.forceContextLoss?.();
+  renderer.dispose?.();
 }

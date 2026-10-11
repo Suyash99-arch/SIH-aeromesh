@@ -1530,8 +1530,6 @@ function RendererLifecycleManager({ onContextLost, onContextRestored }) {
       disposeThreeResource(scene);
       try {
         gl.renderLists?.dispose?.();
-        gl.dispose();
-        if (!gl.getContext?.()?.isContextLost?.()) gl.forceContextLoss?.();
       } catch {
         /* renderer may already be disposed by React Three Fiber */
       }

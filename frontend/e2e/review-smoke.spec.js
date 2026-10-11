@@ -75,9 +75,11 @@ test("all app routes render safely across mission states and responsive themes",
   test.setTimeout(600_000);
   const pageErrors = [];
   const consoleErrors = [];
+  const webglContextLossWarnings = [];
   page.on("pageerror", (error) => pageErrors.push(error.message));
   page.on("console", (message) => {
     if (message.type() === "error") consoleErrors.push(message.text());
+    if (/context already lost/iu.test(message.text())) webglContextLossWarnings.push(message.text());
   });
 
   let activeScenario = "not-run-light";
@@ -206,6 +208,11 @@ test("all app routes render safely across mission states and responsive themes",
         expect(pageErrors, `${scenario}/${route.name}/${viewport.width}/${viewport.theme} page errors`).toEqual([]);
         expect(consoleErrors, `${scenario}/${route.name}/${viewport.width}/${viewport.theme} console errors`).toEqual([]);
         await expect(page.getByText("This page could not be loaded", { exact: true })).toHaveCount(0);
+        if (await page.locator("canvas").count()) {
+          await page.goto(`${baseURL}/?page=auth`, { waitUntil: "domcontentloaded" });
+          await page.waitForTimeout(100);
+          expect(webglContextLossWarnings, `${scenario}/${route.name}/${viewport.width}/${viewport.theme} WebGL cleanup warnings`).toEqual([]);
+        }
       }
     }
   }

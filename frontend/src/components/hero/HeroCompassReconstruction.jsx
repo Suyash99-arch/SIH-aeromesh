@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { useTilt } from '../primitives/hooks.ts';
 import Icon from '../ui/Icon';
 import { useUI } from '../../context/UIContext';
-import { attachWebGLContextHandlers } from '../reconstruction/webglLifecycle.js';
+import { attachWebGLContextHandlers, releaseWebGLRenderer } from '../reconstruction/webglLifecycle.js';
 
 /**
  * HeroCompassReconstruction Component
@@ -228,8 +228,7 @@ export default function HeroCompassReconstruction() {
       frustumMat.dispose();
       sphereGeo.dispose();
       sphereMat.dispose();
-      renderer.dispose();
-      if (!renderer.getContext()?.isContextLost()) renderer.forceContextLoss();
+      releaseWebGLRenderer(renderer);
       if (renderer.domElement && renderer.domElement.parentNode) {
         renderer.domElement.parentNode.removeChild(renderer.domElement);
       }
