@@ -30,7 +30,7 @@ from reportlab.platypus import (
 logger = logging.getLogger(__name__)
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-DATA_DIR = BASE_DIR / "data"
+DATA_DIR = Path(os.getenv("AEROMESH_DATA_DIR", str(BASE_DIR / "data"))).resolve()
 MISSIONS_DIR = DATA_DIR / "missions"
 OBJECTS_MISSIONS_DIR = DATA_DIR / "objects" / "missions"
 
@@ -373,7 +373,7 @@ def build_mission_report(mission_id: str, mission_data: Any = None) -> dict[str,
                         evidence_items.append({
                             "type": "reprojection_overlay",
                             "filename": p.name,
-                            "relative_path": str(p.relative_to(BASE_DIR)),
+                            "relative_path": str(p.relative_to(DATA_DIR)),
                             "url": f"/api/v1/missions/{mission_id}/evidence/overlays/{p.name}",
                             "description": f"Visual Reprojection Overlay: {p.stem}",
                         })
@@ -391,7 +391,7 @@ def build_mission_report(mission_id: str, mission_data: Any = None) -> dict[str,
                         evidence_items.append({
                             "type": "source_keyframe",
                             "filename": f.name,
-                            "relative_path": str(f.relative_to(BASE_DIR)),
+                            "relative_path": str(f.relative_to(DATA_DIR)),
                             "url": f"/api/v1/missions/{mission_id}/evidence/frames/{f.name}",
                             "description": f"Source Keyframe: {f.name}",
                         })
@@ -1021,7 +1021,7 @@ def generate_mission_pdf(report: dict[str, Any], output: str | Path | BinaryIO) 
     for item in evidence:
         if item.get("type") == "reprojection_overlay":
             rel_path = item.get("relative_path")
-            full_path = BASE_DIR / rel_path
+            full_path = DATA_DIR / rel_path
             if full_path.exists():
                 try:
                     img = RLImage(str(full_path), width=3.2 * inch, height=1.9 * inch)
@@ -1290,7 +1290,7 @@ Contents:
         for item in evidence_items:
             rel_path = item.get("relative_path")
             if rel_path:
-                full_path = BASE_DIR / rel_path
+                full_path = DATA_DIR / rel_path
                 if full_path.exists():
                     try:
                         zf.write(full_path, arcname=f"evidence/{full_path.name}")

@@ -5,6 +5,7 @@ Serves SceneManifest, Detection[], COLMAP points3D, and live telemetry.
 
 import json
 import logging
+import os
 import struct
 from pathlib import Path
 from typing import Dict, Any, List, Optional
@@ -18,7 +19,7 @@ router = APIRouter(tags=["scenes"])
 # Resolve data directories relative to Sih workspace root
 BACKEND_DIR = Path(__file__).resolve().parent
 PROJECT_ROOT = BACKEND_DIR.parent
-DATA_DIR = PROJECT_ROOT / "data"
+DATA_DIR = Path(os.getenv("AEROMESH_DATA_DIR", str(PROJECT_ROOT / "data"))).resolve()
 MISSIONS_DIR = DATA_DIR / "missions"
 
 # Generic scene profiles for flight environment classification

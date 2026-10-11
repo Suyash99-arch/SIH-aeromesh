@@ -20,7 +20,7 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-DATA_DIR = BASE_DIR / "data"
+DATA_DIR = Path(os.getenv("AEROMESH_DATA_DIR", str(BASE_DIR / "data"))).resolve()
 MISSIONS_DIR = DATA_DIR / "missions"
 
 # Detect pycolmap availability
