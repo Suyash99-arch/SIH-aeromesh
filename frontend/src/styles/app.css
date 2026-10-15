@@ -1079,6 +1079,7 @@
   .shell-command-trigger > span, .shell-command-trigger > kbd { display: none; }
 }
 @media (max-width: 780px) {
+  .sidebar { display: none; }
   .topbar { padding-inline: 10px; }
   .crumbs { gap: 6px; font-size: 10px; }
   .crumbs .crumb-home { max-width: 30%; }

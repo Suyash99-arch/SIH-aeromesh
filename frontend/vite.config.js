@@ -4,7 +4,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const apiProxyTarget = process.env.E2E_API_PROXY_TARGET || "http://127.0.0.1:8000";
+const apiProxyTarget = process.env.E2E_API_PROXY_TARGET || "https://sih-aeromesh.onrender.com";
 
 // https://vite.dev/config/
 export default defineConfig({
@@ -41,18 +41,22 @@ export default defineConfig({
       "/api": {
         target: apiProxyTarget,
         changeOrigin: true,
+        secure: true,
       },
       "/missions": {
         target: apiProxyTarget,
         changeOrigin: true,
+        secure: true,
       },
       "/health": {
         target: apiProxyTarget,
         changeOrigin: true,
+        secure: true,
       },
       "/media": {
         target: apiProxyTarget,
         changeOrigin: true,
+        secure: true,
       },
     },
   },

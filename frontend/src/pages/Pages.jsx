@@ -287,7 +287,8 @@ export function OverviewPage({ mission, navigate, notice, updateMission }) {
   const isMissionFailed = ["failed", "reconstruction_failed"].includes(String(safeMission.status || "").toLowerCase()) && Boolean(failureMessage);
   const lightweightMode = healthConfig?.pipeline_mode === "light" || healthConfig?.reconstruction_engine === "disabled";
   const notRunReconstruction = lightweightMode || String(safeMission.status || "").toUpperCase() === "NOT_RUN";
-  const stageProgress = Math.round(getMissionStageStatuses(safeMission).filter((status) => status === "completed").length / pipelineStages.length * 100);
+  const completedStageCount = getMissionStageStatuses(safeMission).filter((status) => status === "completed").length;
+  const stageProgress = Math.round(completedStageCount / pipelineStages.length * 100);
 
   return (
     <div className="executive-overview">
@@ -447,7 +448,9 @@ export function OverviewPage({ mission, navigate, notice, updateMission }) {
               <Icon name="Radar" size={18} />
             </div>
             <span className="dispatch-domain">{t("nav.sceneIntelligence")}</span>
-            <span className="badge-tag valid">VALID (≥2 VIEWS)</span>
+            <span className={`badge-tag ${validObjectsCount > 0 ? "valid" : "insufficient"}`}>
+              {validObjectsCount > 0 ? "VALID (≥2 VIEWS)" : t("missionCommand.noSceneData")}
+            </span>
           </div>
           <strong className="dispatch-title">
             {validObjectsCount} {t("missionCommand.fusedObjects")}
@@ -517,7 +520,7 @@ export function OverviewPage({ mission, navigate, notice, updateMission }) {
         <StagePipeline navigate={navigate} mission={safeMission} />
         <div className="progress-head">
           <span>Mission processing</span>
-          <b>{stageProgress}%</b>
+          <b>{t("missionCommand.stageProgress", { completed: completedStageCount, total: pipelineStages.length })}</b>
         </div>
         <Progress value={stageProgress} />
       </Panel>

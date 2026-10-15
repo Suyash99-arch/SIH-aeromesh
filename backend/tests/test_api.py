@@ -82,6 +82,59 @@ def test_cors_allows_current_vite_origin(client):
     assert response.headers["access-control-allow-origin"] == "http://127.0.0.1:5173"
 
 
+@pytest.mark.parametrize(
+    "origin",
+    [
+        "https://sih-aeromesh-blond.vercel.app",
+        "https://review-preview.vercel.app",
+        "http://localhost:5173",
+    ],
+)
+def test_cors_allows_production_preview_and_local_origins(client, origin):
+    response = client.get("/api/v1/health", headers={"Origin": origin})
+
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == origin
+    assert response.headers["access-control-allow-credentials"] == "true"
+
+
+def test_cors_error_response_includes_request_id(client):
+    origin = "https://review-preview.vercel.app"
+    response = client.get(
+        "/api/v1/missions/mission-that-does-not-exist",
+        headers={"Origin": origin},
+    )
+
+    assert response.status_code == 404
+    assert response.headers["access-control-allow-origin"] == origin
+    assert response.json()["request_id"]
+
+
+def test_delete_mission_removes_local_object_storage_files(tmp_path, monkeypatch):
+    data_dir = tmp_path / "data"
+    missions_dir = data_dir / "missions"
+    object_root = data_dir / "objects"
+    monkeypatch.setattr(main, "DATA_DIR", data_dir)
+    monkeypatch.setattr(main, "MISSIONS_DIR", missions_dir)
+    monkeypatch.setenv("OBJECT_STORAGE_ROOT", str(object_root))
+    monkeypatch.setenv("STORAGE_BACKEND", "local")
+    monkeypatch.setenv("AEROMESH_DISABLE_AUTH", "1")
+    client = TestClient(main.app)
+    mission = create_mission(client, name="Delete stored artifact test")
+    storage_key = f"missions/{mission['id']}/original/source.mp4"
+    stored_video = object_root / storage_key
+    stored_video.parent.mkdir(parents=True)
+    stored_video.write_bytes(b"isolated test video")
+    main.MissionData(mission["id"]).update({
+        "video": {"filename": "source.mp4", "storage_key": storage_key},
+    })
+
+    response = client.delete(f"/api/v1/missions/{mission['id']}")
+
+    assert response.status_code == 200
+    assert not stored_video.exists()
+    assert not (missions_dir / f"{mission['id']}.json").exists()
+
 def test_processing_contract_without_model(client, monkeypatch, tmp_path):
     mission = create_mission(client)
     mission_dir = tmp_path / "missions" / mission["id"]

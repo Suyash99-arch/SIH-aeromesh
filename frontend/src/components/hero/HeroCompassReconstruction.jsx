@@ -3,7 +3,7 @@ import * as THREE from 'three';
 import { useTilt } from '../primitives/hooks.ts';
 import Icon from '../ui/Icon';
 import { useUI } from '../../context/UIContext';
-import { attachWebGLContextHandlers, releaseWebGLRenderer } from '../reconstruction/webglLifecycle.js';
+import { attachWebGLContextHandlers, isSoftwareWebGLRenderer, releaseWebGLRenderer } from '../reconstruction/webglLifecycle.js';
 
 /**
  * HeroCompassReconstruction Component
@@ -33,16 +33,21 @@ export default function HeroCompassReconstruction() {
     let renderer;
     try {
       renderer = new THREE.WebGLRenderer({
-      alpha: true,
-      antialias: true,
-      powerPreference: 'high-performance',
+        alpha: true,
+        antialias: true,
+        powerPreference: 'high-performance',
       });
     } catch {
       setWebglUnavailable(true);
       return undefined;
     }
+    if (isSoftwareWebGLRenderer(renderer)) {
+      releaseWebGLRenderer(renderer);
+      setWebglUnavailable(true);
+      return undefined;
+    }
     renderer.setSize(width, height);
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.5));
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 1.25));
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
     container.appendChild(renderer.domElement);
 
@@ -296,8 +301,16 @@ export default function HeroCompassReconstruction() {
       </div>
 
       {/* Central 3D Canvas WebGL Container */}
-      <div className="hero-canvas-viewport" ref={mountRef}>
-        {webglUnavailable && <div className="hero-webgl-fallback" role="status">3D preview is unavailable on this device.</div>}
+      <div className="hero-canvas-viewport" ref={mountRef} data-webgl-status={webglUnavailable ? "fallback" : "active"}>
+        {webglUnavailable && (
+          <div className="hero-webgl-fallback" role="status">
+            <svg viewBox="0 0 440 300" aria-hidden="true" focusable="false">
+              <path d="m72 216 78-83 61 34 65-82 94 103-95 39-82-28-65 31z" />
+              <path d="m72 216 77 15 71-32 55 28 95-39M150 133l-1 98m62-64 7 32m57-114v142m65-39-2 65M112 173l115 46m-75-86 177 102m-35-150-87 96" />
+            </svg>
+            <span>{t("landing.webglFallback")}</span>
+          </div>
+        )}
       </div>
 
       {/* Bottom Telemetry Dock */}

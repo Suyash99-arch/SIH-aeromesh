@@ -5,25 +5,43 @@ import { execFileSync } from "node:child_process";
 import { formatTelemetryRequestUrl } from "./telemetry.js";
 
 const frontendUrl = process.env.E2E_FRONTEND_URL || "https://sih-aeromesh-blond.vercel.app";
-const backendUrl = "https://sih-aeromesh.onrender.com/api/v1";
+const backendUrl = process.env.E2E_BACKEND_URL || "https://sih-aeromesh.onrender.com/api/v1";
 const evidenceRoot = path.resolve("test-results/live-evidence");
 const individualEmail = process.env.E2E_INDIVIDUAL_EMAIL;
 const individualPassword = process.env.E2E_INDIVIDUAL_PASSWORD;
 const govEmail = process.env.E2E_GOV_EMAIL;
 const govPassword = process.env.E2E_GOV_PASSWORD;
 
-const telemetry = { consoleErrors: [], pageErrors: [], failedRequests: [], httpErrors: [], chunkHttpErrors: [], uploadFailures: [], completedUploads: [] };
+const telemetry = { consoleErrors: [], pageErrors: [], failedRequests: [], httpErrors: [], apiResponses: [], chunkHttpErrors: [], uploadFailures: [], completedUploads: [] };
 const missionIds = new Set();
 const healthPollers = new Set();
 let accountCreated = false;
+let latestAccessToken = null;
 
 function chunkFailureCount() {
   return telemetry.failedRequests.filter((item) => item.includes("/upload/chunk")).length + telemetry.chunkHttpErrors.length;
 }
 
-test.afterEach(() => {
+test.afterEach(async ({ page }) => {
   for (const poller of healthPollers) clearInterval(poller);
   healthPollers.clear();
+
+  if (missionIds.size === 0) return;
+  const statuses = await page.evaluate(async ({ ids, apiBase }) => {
+    const token = localStorage.getItem("aeromesh_auth_token");
+    if (!token) throw new Error("Cannot clean up E2E missions without an authenticated session.");
+    return Promise.all(ids.map(async (id) => {
+      const response = await fetch(`${apiBase}/missions/${encodeURIComponent(id)}`, {
+        method: "DELETE",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      return response.status;
+    }));
+  }, { ids: [...missionIds], apiBase: backendUrl });
+  telemetry.afterEachMissionCleanupStatuses ??= [];
+  telemetry.afterEachMissionCleanupStatuses.push(...statuses);
+  missionIds.clear();
+  expect(statuses.every((status) => [200, 204, 404].includes(status)), "E2E mission cleanup failed").toBeTruthy();
 });
 
 function scrub(value) {
@@ -70,6 +88,13 @@ function attachTelemetry(page) {
   });
   page.on("response", (response) => {
     const responseUrl = new URL(response.url());
+    if (responseUrl.pathname.startsWith("/api/")) {
+      telemetry.apiResponses.push({
+        method: response.request().method(),
+        path: responseUrl.pathname,
+        status: response.status(),
+      });
+    }
     const chunkMatch = responseUrl.pathname.match(/\/missions\/([^/]+)\/upload\/chunk$/);
     if (chunkMatch && response.status() >= 400) {
       const failedChunk = {
@@ -116,6 +141,7 @@ function attachTelemetry(page) {
     }
     if (new URL(response.url()).pathname.endsWith("/auth/login")) {
       response.json().then((body) => {
+        if (typeof body?.access_token === "string") latestAccessToken = body.access_token;
         telemetry.authResponses ??= [];
         telemetry.authResponses.push({
           status: response.status(),
@@ -187,8 +213,18 @@ async function logout(page) {
     if (await profileLink.count()) await profileLink.click();
     else await page.goto(`${frontendUrl}?page=profile`, { waitUntil: "domcontentloaded" });
   }
-  await page.locator("#profile-logout-button").click();
+  const logoutButton = page.locator("#profile-logout-button");
+  await expect(logoutButton).toBeVisible();
+  if (await page.evaluate(() => window.innerWidth <= 780)) {
+    await expect(page.locator(".sidebar")).toBeHidden();
+  }
+  await logoutButton.click({ timeout: 10_000 });
   await expect(page.locator("#btn-hero-indiv-portal")).toBeVisible();
+}
+
+async function waitForDashboardReady(page) {
+  await expect(page.locator("#topbar-operator-btn")).toBeVisible({ timeout: 15_000 });
+  await expect(page.locator(".route-view-transition h1").first()).toBeVisible({ timeout: 15_000 });
 }
 
 async function createVideo(filePath, sizeMb) {
@@ -226,6 +262,15 @@ async function openNewMission(page) {
     return;
   }
 
+  if (await page.evaluate(() => window.innerWidth <= 780)) {
+    await page.goto(`${frontendUrl}?page=missions`, { waitUntil: "domcontentloaded" });
+    const createAction = page.getByRole("button", { name: /new flight mission|create mission|new mission/i }).first();
+    await expect(createAction).toBeVisible({ timeout: 15_000 });
+    await createAction.click();
+    await expect(page.locator("#inc-name")).toBeVisible({ timeout: 15_000 });
+    return;
+  }
+
   const paletteTrigger = page.locator(".shell-command-trigger");
   if (await paletteTrigger.isVisible().catch(() => false)) {
     await paletteTrigger.click();
@@ -237,12 +282,11 @@ async function openNewMission(page) {
     await page.keyboard.press("Escape");
   }
 
-  // The responsive shell hides its desktop sidebar; use the mission list's
-  // create action, which remains available at narrow widths.
   await page.goto(`${frontendUrl}?page=missions`, { waitUntil: "domcontentloaded" });
   const createAction = page.getByRole("button", { name: /new flight mission|create mission|new mission/i }).first();
   await expect(createAction).toBeVisible({ timeout: 15_000 });
   await createAction.click();
+  await expect(page.locator("#inc-name")).toBeVisible({ timeout: 15_000 });
 }
 
 function startHealthPolling(page) {
@@ -259,27 +303,34 @@ function startHealthPolling(page) {
   return poller;
 }
 
-async function waitForUploadOutcome(page, filePath, timeout = 120_000, failedChunkBaseline = 0, completedUploadBaseline = telemetry.completedUploads.length) {
+async function waitForUploadOutcome(page, filePath, timeout = 120_000, failedChunkBaseline = 0, completedUploadBaseline = telemetry.completedUploads.length, missionBaseline = missionIds.size) {
   const progress = page.locator(".status-progress-text");
   const workspace = page.locator("#incident-creation-workspace");
+  const expectedName = path.basename(filePath);
+  const expectedSize = (await fs.stat(filePath)).size;
+  telemetry.lastUploadWait = { expectedName, expectedSize, completedUploadBaseline, missionBaseline };
   await expect.poll(async () => {
-    const statusText = await progress.innerText().catch(() => "");
-    const workspaceText = await workspace.innerText().catch(() => "");
     const chunkFailures = chunkFailureCount();
-    return telemetry.completedUploads.length > completedUploadBaseline ||
-      /upload failed|chunk \d+ failed|failed to fetch|network error/i.test(workspaceText) ||
+    if (telemetry.completedUploads.slice(completedUploadBaseline).some((upload) =>
+      upload.filename === expectedName && Number(upload.sizeBytes) === expectedSize,
+    )) return true;
+    const workspaceText = await workspace.innerText().catch(() => "");
+    return telemetry.completedUploads.slice(completedUploadBaseline).some((upload) =>
+      upload.filename === expectedName && Number(upload.sizeBytes) === expectedSize,
+    ) || /upload failed|chunk \d+ failed|failed to fetch|network error/i.test(workspaceText) ||
       chunkFailures >= failedChunkBaseline + 6;
   }, { timeout, intervals: [500, 1000, 2000] }).toBeTruthy();
   const statusText = await progress.innerText().catch(() => "");
   const workspaceText = await workspace.innerText().catch(() => "");
   const observedChunkFailures = chunkFailureCount() - failedChunkBaseline;
-  const expectedSize = (await fs.stat(filePath)).size;
   const completedUpload = telemetry.completedUploads.slice(completedUploadBaseline).find((upload) =>
-    upload.filename === path.basename(filePath) && Number(upload.sizeBytes) === expectedSize,
+    upload.filename === expectedName && Number(upload.sizeBytes) === expectedSize,
   );
   return {
     complete: Boolean(completedUpload),
-    completedUpload: completedUpload || null,
+    completedUpload: completedUpload
+      ? { missionId: completedUpload.missionId || completedUpload.id, filename: completedUpload.filename, sizeBytes: completedUpload.sizeBytes }
+      : null,
     uiStatus: statusText,
     error: workspaceText.match(/(?:upload failed|chunk \d+ failed|failed to fetch|network error)[^\n]*/i)?.[0] ||
       (observedChunkFailures ? `${observedChunkFailures} chunk request failures` : ""),
@@ -290,40 +341,46 @@ async function waitForUploadOutcome(page, filePath, timeout = 120_000, failedChu
 async function expectLatestMissionHasVideo(page, filePath, missionIdOverride) {
   const expectedName = path.basename(filePath);
   const expectedSize = (await fs.stat(filePath)).size;
-  const token = await page.evaluate(() => localStorage.getItem("aeromesh_auth_token"));
-  let uploadedMission = null;
-  await expect.poll(async () => {
-    const missionId = missionIdOverride || [...missionIds].at(-1);
-    if (!missionId) return false;
-    const response = await page.request.get(`${backendUrl}/missions/${encodeURIComponent(missionId)}`, {
-      headers: token ? { Authorization: `Bearer ${token}` } : {},
-      timeout: 15_000,
-    }).catch(() => null);
-    if (!response?.ok()) return false;
-    const payload = await response.json().catch(() => ({}));
-    const mission = payload.mission || payload;
-    const video = mission.video || {};
-    if (
-      video.filename !== expectedName ||
-      Number(video.size_bytes) !== expectedSize ||
-      !(video.original_url || video.proxy_url || video.url)
-    ) return false;
-    uploadedMission = { id: missionId, name: mission.name, video };
-    return true;
-  }, { timeout: 60_000 }).toBeTruthy();
-  expect(uploadedMission, `Mission record does not show stored upload ${expectedName}`).not.toBeNull();
-  return uploadedMission;
+  const missionId = missionIdOverride || [...missionIds].at(-1);
+  expect(missionId, "Upload completed without a mission ID").toBeTruthy();
+  expect(latestAccessToken, "Mission read-back requires the authenticated access token").toBeTruthy();
+  const response = await page.request.get(`${backendUrl}/missions/${encodeURIComponent(missionId)}`, {
+    headers: { Authorization: `Bearer ${latestAccessToken}` },
+    timeout: 15_000,
+  });
+  telemetry.lastMissionReadbackStatus = response.status;
+  const payload = await response.json().catch(() => ({}));
+  expect(response.ok, `Mission read-back returned HTTP ${response.status}`).toBeTruthy();
+  const mission = payload.mission || payload;
+  const video = mission.video || {};
+  telemetry.lastMissionReadbackVideo = {
+    filename: video.filename || null,
+    sizeBytes: Number(video.size_bytes) || null,
+  };
+  expect(video.filename, "Mission read-back filename mismatch").toBe(expectedName);
+  expect(Number(video.size_bytes), "Mission read-back size mismatch").toBe(expectedSize);
+  expect(
+    video.original_url || video.proxy_url || video.url,
+    "Mission read-back did not include a video URL",
+  ).toBeTruthy();
+  return { id: missionId, name: mission.name, video };
 }
 
-async function waitForUploadedMissionUi(page, missionName, filePath, missionBaseline) {
+async function waitForUploadedMissionUi(page, missionName, filePath, missionBaseline, pipelineMode) {
   const incidentModal = page.locator(".incident-workspace-container");
   const processingPage = page.locator(".processing-page");
   await expect(incidentModal).toBeHidden({ timeout: 120_000 });
   await expect(processingPage).toBeVisible({ timeout: 30_000 });
   await expect(processingPage.locator(".page-header h1")).toHaveText(missionName);
   await expect(processingPage.getByText(path.basename(filePath), { exact: true })).toBeVisible();
-  await expect(page.locator(".sidebar")).toContainText(/full compute profile/i);
-  telemetry.lightProfileNoticeVisible = true;
+  const fullComputeNotice = page.locator(".sidebar").getByText(/full compute profile/i).first();
+  if (pipelineMode === "light") {
+    await expect(fullComputeNotice).toBeVisible();
+    telemetry.lightProfileNoticeVisible = true;
+  } else {
+    await expect(fullComputeNotice).toHaveCount(0);
+    telemetry.lightProfileNoticeVisible = false;
+  }
   await expect.poll(() => missionIds.size, { timeout: 15_000 }).toBeGreaterThan(missionBaseline);
   return expectLatestMissionHasVideo(page, filePath, [...missionIds].at(-1));
 }
@@ -516,6 +573,7 @@ test("D/E/F/H/I: incidents, upload behavior, responsive themes, mission pages, a
     "E2E incident upload small",
     smallVideo,
     smallMissionBaseline,
+    config.pipeline_mode,
   );
   const smallOutcome = {
     complete: true,
@@ -532,8 +590,13 @@ test("D/E/F/H/I: incidents, upload behavior, responsive themes, mission pages, a
   telemetry.smallUpload = smallOutcome;
   await snap(page, "D3-small-upload-complete");
   const lightProfileNotice = page.locator(".sidebar").getByText(/full compute profile/i).first();
-  await expect(lightProfileNotice).toBeVisible();
-  telemetry.lightProfileNoticeVisible = true;
+  if (config.pipeline_mode === "light") {
+    await expect(lightProfileNotice).toBeVisible();
+    telemetry.lightProfileNoticeVisible = true;
+  } else {
+    await expect(lightProfileNotice).toHaveCount(0);
+    telemetry.lightProfileNoticeVisible = false;
+  }
   await snap(page, "F1-light-profile-honest-status");
   await expect(page.locator(".app-shell")).toBeVisible();
   await snap(page, "D3-mission-in-history");
@@ -579,6 +642,7 @@ test("D/E/F/H/I: incidents, upload behavior, responsive themes, mission pages, a
     "E2E incident upload chunk resume",
     largeVideo,
     largeMissionBaseline,
+    config.pipeline_mode,
   );
   const largeOutcome = {
     complete: true,
@@ -655,14 +719,14 @@ test("D/E/F/H/I: incidents, upload behavior, responsive themes, mission pages, a
   await page.locator(".incident-close-btn").click();
   await context.setOffline(false);
   for (const missionId of missionIds) {
-    const deleted = await page.evaluate(async (id) => {
+    const deleted = await page.evaluate(async ({ id, apiBase }) => {
       const token = localStorage.getItem("aeromesh_auth_token");
-      const response = await fetch(`https://sih-aeromesh.onrender.com/api/v1/missions/${encodeURIComponent(id)}`, {
+      const response = await fetch(`${apiBase}/missions/${encodeURIComponent(id)}`, {
         method: "DELETE",
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       return response.status;
-    }, missionId);
+    }, { id: missionId, apiBase: backendUrl });
     telemetry.missionCleanupStatuses ??= [];
     telemetry.missionCleanupStatuses.push(deleted);
   }
@@ -680,6 +744,7 @@ test("H: guest landing and dashboard at 390px in both themes", async ({ page }) 
   await snap(page, "H3-landing-390-dark");
   await page.locator("#btn-hero-guest").click();
   await expect(page.locator(".app-shell")).toBeVisible();
+  await waitForDashboardReady(page);
   await snap(page, "H4-dashboard-390-dark");
   const lightMode = page.getByRole("button", { name: /light mode/i });
   if (await lightMode.count()) await lightMode.click();
@@ -687,23 +752,27 @@ test("H: guest landing and dashboard at 390px in both themes", async ({ page }) 
   await logout(page);
 
   await loginIndividual(page);
+  await waitForDashboardReady(page);
   const filePath = path.join(evidenceRoot, "small.mp4");
   await createVideo(filePath, 5);
   const mobileUploadOutcomes = [];
   for (const theme of ["dark", "light"]) {
-    await openNewMission(page);
     const themeButton = page.getByRole("button", { name: theme === "dark" ? /dark mode/i : /light mode/i });
     if (await themeButton.count()) await themeButton.click();
+    await openNewMission(page);
     await page.locator("#inc-name").fill(`E2E responsive ${theme} upload`);
     await page.locator("#inc-location").fill("E2E test range");
     await page.locator("#inc-desc").fill(`390px ${theme} mode upload verification.`);
-    await page.locator("#inc-video-file-input").setInputFiles(filePath);
     const failureBaseline = chunkFailureCount();
     const completedUploadBaseline = telemetry.completedUploads.length;
+    const missionBaseline = missionIds.size;
+    telemetry.mobileUploadBaselines ??= [];
+    telemetry.mobileUploadBaselines.push({ theme, completedUploadBaseline, missionBaseline });
+    await page.locator("#inc-video-file-input").setInputFiles(filePath);
     await page.locator("#btn-launch-incident-pipeline").click();
     await expect(page.locator(".status-progress-text")).toBeVisible();
     await snap(page, `H-${theme}-390-upload-progress`);
-    const outcome = await waitForUploadOutcome(page, filePath, 120_000, failureBaseline, completedUploadBaseline);
+    const outcome = await waitForUploadOutcome(page, filePath, 120_000, failureBaseline, completedUploadBaseline, missionBaseline);
     if (outcome.complete) {
       outcome.missionShowsVideo = Boolean(await expectLatestMissionHasVideo(page, filePath, outcome.completedUpload.missionId));
     }
@@ -712,14 +781,14 @@ test("H: guest landing and dashboard at 390px in both themes", async ({ page }) 
     await page.getByRole("button", { name: /close/i }).last().click();
   }
   for (const missionId of missionIds) {
-    const deleted = await page.evaluate(async (id) => {
+    const deleted = await page.evaluate(async ({ id, apiBase }) => {
       const token = localStorage.getItem("aeromesh_auth_token");
-      const response = await fetch(`https://sih-aeromesh.onrender.com/api/v1/missions/${encodeURIComponent(id)}`, {
+      const response = await fetch(`${apiBase}/missions/${encodeURIComponent(id)}`, {
         method: "DELETE",
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
       return response.status;
-    }, missionId);
+    }, { id: missionId, apiBase: backendUrl });
     telemetry.missionCleanupStatuses ??= [];
     telemetry.missionCleanupStatuses.push(deleted);
   }

@@ -225,8 +225,9 @@ export default function Sidebar({
           <span>
             <small>{t("sidebar.activeMission")}</small>
             <strong>
-              {mission?.name || t("sidebar.unknownMission")} ·{" "}
-              {mission?.sector || t("sidebar.newMission")}
+              {mission?.name
+                ? `${mission.name} · ${mission.sector || t("sidebar.newMission")}`
+                : t("nav.noMissionSelected")}
             </strong>
           </span>
         </button>
