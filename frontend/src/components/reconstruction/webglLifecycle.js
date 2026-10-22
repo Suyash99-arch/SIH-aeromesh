@@ -20,6 +20,16 @@ export function releaseWebGLRenderer(renderer) {
   releasedRenderers.add(renderer);
 
   const context = renderer.getContext?.();
-  if (!context?.isContextLost?.()) renderer.forceContextLoss?.();
-  renderer.dispose?.();
+  if (!context?.isContextLost?.()) {
+    try {
+      renderer.forceContextLoss?.();
+    } catch {
+      /* ignore context loss error */
+    }
+  }
+  try {
+    renderer.dispose?.();
+  } catch {
+    /* ignore dispose error */
+  }
 }

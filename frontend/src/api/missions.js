@@ -1,3 +1,15 @@
+export function cleanMissionId(id) {
+  if (!id) return "";
+  if (typeof id === "object" && id !== null) {
+    return cleanMissionId(id.id || id.mission_id || id.missionId);
+  }
+  const s = String(id).trim();
+  if (s === "[object Object]" || s === "{missionId}" || s === "undefined" || s === "null" || !s) {
+    return "";
+  }
+  return s;
+}
+
 /**
  * Shared mission state management
  * Single source of truth for all mission data
@@ -127,7 +139,7 @@ export async function fetchArtifactsStatus(missionId) {
 }
 
 function normalizeMission(rawMission = {}) {
-  const mId = rawMission.id || rawMission.mission_id || "";
+  const mId = cleanMissionId(rawMission.id || rawMission.mission_id || "");
   const baseDefaults = fallbackMission;
   const missionStatus = String(rawMission.status || "").toLowerCase();
   const videoMeta = rawMission.video && typeof rawMission.video === "object" ? rawMission.video : {};
@@ -429,7 +441,11 @@ export async function createMission({ name, missionType, location, operator }) {
   }
 }
 
-async function fetchMission(missionId, forceRefresh = true) {
+async function fetchMission(rawMissionId, forceRefresh = true) {
+  const missionId = cleanMissionId(rawMissionId);
+  if (!missionId) {
+    return Promise.resolve(null);
+  }
   if (!forceRefresh && missionCache.has(missionId)) {
     const cached = missionCache.get(missionId);
     if (cached && cached.status !== "processing" && cached.canonical_summary) {
@@ -567,7 +583,11 @@ async function fetchMission(missionId, forceRefresh = true) {
   }
 }
 
-export function getMission(missionId, forceRefresh = true) {
+export function getMission(rawMissionId, forceRefresh = true) {
+  const missionId = cleanMissionId(rawMissionId);
+  if (!missionId) {
+    return Promise.resolve(null);
+  }
   if (missionRequestPromises.has(missionId)) {
     return missionRequestPromises.get(missionId);
   }
@@ -799,7 +819,9 @@ export async function createShareLink(missionId, days = 7) {
   return response.json();
 }
 
-export async function getProcessingStatus(missionId) {
+export async function getProcessingStatus(rawMissionId) {
+  const missionId = cleanMissionId(rawMissionId);
+  if (!missionId) return null;
   try {
     const response = await apiFetch(
       `/missions/${missionId}/processing-status`,
@@ -819,10 +841,12 @@ export async function getProcessingStatus(missionId) {
 }
 
 export async function processVideo(
-  missionId,
+  rawMissionId,
   optionsOrFrameSampling = 2,
   ...rest
 ) {
+  const missionId = cleanMissionId(rawMissionId);
+  if (!missionId) return { success: false, error: "Invalid mission ID" };
   try {
     let options = {};
     if (typeof optionsOrFrameSampling === "object" && optionsOrFrameSampling !== null) {
@@ -1609,7 +1633,8 @@ export async function estimatePipelineEtaApi(params = {}) {
 
 
 
-export async function fetchMissionMarkings(missionId) {
+export async function fetchMissionMarkings(rawMissionId) {
+  const missionId = cleanMissionId(rawMissionId);
   if (!missionId) return [];
   try {
     const res = await apiFetch(`/missions/${missionId}/markings`, {
@@ -1657,7 +1682,8 @@ export async function deleteMissionMarking(missionId, markingId) {
   }
 }
 
-export async function fetchMissionKeyframes(missionId) {
+export async function fetchMissionKeyframes(rawMissionId) {
+  const missionId = cleanMissionId(rawMissionId);
   if (!missionId) return [];
   try {
     const res = await apiFetch(`/missions/${missionId}/keyframes`, {

@@ -141,11 +141,11 @@ def test_reconstruction_pipeline_mocked_success(tmp_path):
         Path(path).write_text("ply\nformat ascii 1.0\nelement vertex 1250\nend_header\n")
     mock_recon.export_PLY = fake_export_ply
 
+    mock_pycolmap = MagicMock()
+    mock_pycolmap.incremental_mapping.return_value = {0: mock_recon}
+    mock_pycolmap.poisson_meshing.side_effect = Exception("CPU no normals")
     with patch("backend.reconstruction.has_pycolmap", True), \
-         patch("backend.reconstruction.pycolmap.extract_features") as mock_extract, \
-         patch("backend.reconstruction.pycolmap.match_sequential") as mock_match, \
-         patch("backend.reconstruction.pycolmap.incremental_mapping", return_value={0: mock_recon}), \
-         patch("backend.reconstruction.pycolmap.poisson_meshing", side_effect=Exception("CPU no normals")):
+         patch("backend.reconstruction.pycolmap", mock_pycolmap):
 
         result = run_reconstruction_pipeline(
             mission_id="test-recon-1",
@@ -172,10 +172,10 @@ def test_reconstruction_pipeline_failure_when_sfm_yields_no_points(tmp_path):
     output_dir = tmp_path / "recon"
     output_dir.mkdir()
 
+    mock_pycolmap = MagicMock()
+    mock_pycolmap.incremental_mapping.return_value = {}
     with patch("backend.reconstruction.has_pycolmap", True), \
-         patch("backend.reconstruction.pycolmap.extract_features"), \
-         patch("backend.reconstruction.pycolmap.match_sequential"), \
-         patch("backend.reconstruction.pycolmap.incremental_mapping", return_value={}):
+         patch("backend.reconstruction.pycolmap", mock_pycolmap):
 
         result = run_reconstruction_pipeline(
             mission_id="test-recon-fail",

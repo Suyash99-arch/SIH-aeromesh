@@ -217,7 +217,6 @@ export default function HeroCompassReconstruction() {
     // Cleanup GPU resources on unmount
     return () => {
       window.removeEventListener('resize', handleResize);
-      detachContextHandlers();
       if (rafId !== null) cancelAnimationFrame(rafId);
       planeGeo.dispose();
       wireframeMat.dispose();
@@ -229,6 +228,7 @@ export default function HeroCompassReconstruction() {
       sphereGeo.dispose();
       sphereMat.dispose();
       releaseWebGLRenderer(renderer);
+      detachContextHandlers();
       if (renderer.domElement && renderer.domElement.parentNode) {
         renderer.domElement.parentNode.removeChild(renderer.domElement);
       }

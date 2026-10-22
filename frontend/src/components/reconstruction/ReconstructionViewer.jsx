@@ -16,7 +16,7 @@ import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
 import { apiFetch, resolveAssetUrl, fetchArtifactsStatus, getAuthHeaders } from "../../api/missions.js";
 import ErrorBoundary from "../common/ErrorBoundary";
 import { useUI } from "../../context/UIContext";
-import { attachWebGLContextHandlers } from "./webglLifecycle.js";
+import { attachWebGLContextHandlers, releaseWebGLRenderer } from "./webglLifecycle.js";
 
 // Global cache for downloaded ArrayBuffers and bounds to eliminate redundant network transfers
 // without holding live GPU-bound BufferGeometry instances across mission switches.
@@ -1530,6 +1530,7 @@ function RendererLifecycleManager({ onContextLost, onContextRestored }) {
       disposeThreeResource(scene);
       try {
         gl.renderLists?.dispose?.();
+        releaseWebGLRenderer(gl);
       } catch {
         /* renderer may already be disposed by React Three Fiber */
       }

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import "./styles/theme.css";
 const Sidebar = lazy(() => import("./components/layout/Sidebar"));
 const Topbar = lazy(() => import("./components/layout/Topbar"));
@@ -11,6 +11,7 @@ const ProfilePage = lazy(() => import("./pages/ProfilePage"));
 import { pageTitles } from "./data/navigation";
 import {
   getMission as getApiMission,
+  cleanMissionId,
   getStoredUser,
   fetchCurrentUser,
   clearAuthToken,
@@ -144,9 +145,14 @@ export default function App() {
     const syncFromUrl = () => {
       if (typeof window === "undefined") return;
       const params = new URLSearchParams(window.location.search);
-      const m = params.get("mission");
+      const rawM = params.get("mission");
+      const m = cleanMissionId(rawM);
       if (m && m !== missionId) {
         setMissionId(m);
+      } else if (rawM && !m) {
+        params.delete("mission");
+        const newSearch = params.toString();
+        window.history.replaceState({}, "", window.location.pathname + (newSearch ? "?" + newSearch : ""));
       }
       const p = params.get("page");
       if (p && p !== activePage) {
@@ -393,11 +399,31 @@ export default function App() {
     setActivePage("overview");
   };
 
+  const handleSetMission = useCallback((val) => {
+    if (typeof val === "function") {
+      setMission(val);
+      return;
+    }
+    if (val && typeof val === "object") {
+      const id = cleanMissionId(val.id || val.mission_id);
+      if (id) {
+        setMissionId(id);
+      }
+      setMission(val);
+      return;
+    }
+    const id = cleanMissionId(val);
+    setMissionId(id);
+    if (!id) {
+      setMission(null);
+    }
+  }, []);
+
   const shared = {
     mission,
     navigate,
     notice,
-    setMission: setMissionId,
+    setMission: handleSetMission,
     onCreateMission: () => {
       setShowCreateMission(true);
     },
@@ -496,7 +522,7 @@ export default function App() {
               navigate={navigate}
               notice={notice}
               mission={mission}
-              setMission={setMissionId}
+              setMission={handleSetMission}
               onCreateMission={() => setShowCreateMission(true)}
               onNavigateHome={() => setShowHomepage(true)}
             /></Suspense>

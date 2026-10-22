@@ -281,7 +281,7 @@ class UserRecord:
         }
 
 
-DEV_ONLY = os.getenv("DEV_ONLY", "0").lower() in ("1", "true", "yes")
+DEV_ONLY = os.getenv("DEV_ONLY", "1" if os.getenv("ENVIRONMENT") == "development" else "0").lower() in ("1", "true", "yes")
 
 # Demo Users seeded only if explicit DEV_ONLY environment flag is enabled (defaults to False)
 DEMO_USERS: Dict[str, UserRecord] = {}
@@ -539,9 +539,35 @@ def get_current_user(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_security),
 ) -> UserRecord:
     """Enforce authenticated user requirement."""
-    user = get_current_user_optional(request, credentials)
-    if user is not None:
-        return user
+    token = None
+    if credentials and credentials.credentials:
+        token = credentials.credentials
+    elif request and request.cookies.get("access_token"):
+        token = request.cookies.get("access_token")
+
+    if token:
+        payload = decode_access_token(token)
+        email = payload.get("sub") or payload.get("email")
+        if not email:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid authentication token",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
+        user = find_user_by_email(email)
+        if user:
+            return user
+        return UserRecord(
+            id=payload.get("user_id", f"usr_{hashlib.sha256(email.encode()).hexdigest()[:8]}"),
+            email=email,
+            full_name=payload.get("name", email.split("@")[0].title()),
+            role=payload.get("role", ROLE_OPERATOR),
+            portal_type=payload.get("portal_type", PORTAL_INDIVIDUAL),
+            organization_name=payload.get("organization_name"),
+            department=payload.get("department"),
+            hashed_password="",
+            is_active=True,
+        )
 
     if AUTH_OPTIONAL_MODE and "admin@aeromesh.internal" in DEMO_USERS:
         return DEMO_USERS["admin@aeromesh.internal"]

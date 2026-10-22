@@ -217,6 +217,7 @@ def test_unhandled_chunk_error_includes_cors_request_id_and_traceback(monkeypatc
     handler.setFormatter(logging.Formatter("%(levelname)s %(name)s: %(message)s"))
     handler.addFilter(main._CredentialRedactionFilter())
     main.logger.addHandler(handler)
+    main.logger.addHandler(caplog.handler)
     try:
         response = client.post(
             f"/api/v1/missions/{mission_id}/upload/chunk",
@@ -231,6 +232,7 @@ def test_unhandled_chunk_error_includes_cors_request_id_and_traceback(monkeypatc
         )
     finally:
         main.logger.removeHandler(handler)
+        main.logger.removeHandler(caplog.handler)
         handler.close()
     emitted_log = output.getvalue()
 

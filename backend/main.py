@@ -234,7 +234,7 @@ _CREDENTIAL_TEXT_PATTERNS = (
 def _redact_log_text(value: str) -> str:
     redacted = value
     for key, secret in os.environ.items():
-        if secret and _REDACT_ENV_SECRET_KEYS.search(key):
+        if secret and len(secret) >= 4 and _REDACT_ENV_SECRET_KEYS.search(key) and not key.endswith(("_DAYS", "_MINUTES", "_HOURS", "_SECONDS")):
             redacted = redacted.replace(secret, "[REDACTED]")
     for pattern in _CREDENTIAL_TEXT_PATTERNS:
         if pattern.pattern.startswith("\\beyJ"):
@@ -3700,6 +3700,9 @@ def ranged_file_response(file_path: Path, request: Request, content_type: str = 
     Supports 206 Partial Content, seeking, 200 full stream, 416 Range Not Satisfiable.
     Streams in 64KB chunks to prevent loading entire video files into memory.
     """
+    if not file_path.exists() or not file_path.is_file():
+        raise HTTPException(status_code=404, detail="Requested media file not found")
+
     stat_res = file_path.stat()
     file_size = stat_res.st_size
 
@@ -3713,7 +3716,7 @@ def ranged_file_response(file_path: Path, request: Request, content_type: str = 
 
     range_header = request.headers.get("range") or request.headers.get("Range")
 
-    if not range_header or not range_header.strip().startswith("bytes="):
+    if not range_header or not range_header.strip().lower().startswith("bytes="):
         def iter_full():
             with open(file_path, "rb") as f:
                 while chunk := f.read(64 * 1024):
@@ -3726,24 +3729,43 @@ def ranged_file_response(file_path: Path, request: Request, content_type: str = 
         }
         return StreamingResponse(iter_full(), status_code=200, media_type=content_type, headers=headers)
 
-    # Parse Range: bytes=start-end
-    range_val = range_header.replace("bytes=", "").strip()
-    parts = range_val.split("-")
+    # 0-byte representations cannot satisfy any byte range (RFC 7233 section 4.4)
+    if file_size == 0:
+        return Response(
+            status_code=416,
+            headers={"Content-Range": "bytes */0", "Accept-Ranges": "bytes"}
+        )
+
+    # Parse Range: bytes=start-end (RFC 7233)
+    raw_range = range_header.strip()
+    prefix_idx = raw_range.lower().find("bytes=") + len("bytes=")
+    range_val = raw_range[prefix_idx:].strip()
+
+    # If multipart range set is provided, take the first range as single range response
+    if "," in range_val:
+        range_val = range_val.split(",")[0].strip()
+
+    parts = [p.strip() for p in range_val.split("-")]
     try:
+        if len(parts) < 2:
+            return Response(status_code=416, headers={"Content-Range": f"bytes */{file_size}"})
+
         if parts[0] == "":
             suffix_len = int(parts[1])
+            if suffix_len <= 0:
+                return Response(status_code=416, headers={"Content-Range": f"bytes */{file_size}"})
             start = max(0, file_size - suffix_len)
             end = file_size - 1
         else:
             start = int(parts[0])
-            end = int(parts[1]) if len(parts) > 1 and parts[1] != "" else file_size - 1
-    except ValueError:
+            end = int(parts[1]) if parts[1] != "" else file_size - 1
+    except (ValueError, IndexError):
         return Response(
             status_code=416,
             headers={"Content-Range": f"bytes */{file_size}"}
         )
 
-    if start >= file_size or end < start or start < 0:
+    if start < 0 or start >= file_size or end < start:
         return Response(
             status_code=416,
             headers={"Content-Range": f"bytes */{file_size}"}
@@ -4122,7 +4144,7 @@ async def get_mission_video_proxy(mission_id: str, request: Request):
                 if p_raw.is_file() and is_safe(p_raw):
                     original_path = p_raw
 
-    if not original_path:
+    if not original_path or not original_path.is_file() or original_path.stat().st_size == 0:
         return get_artifact_status_response(mission, "video")
 
     # Look for existing proxy in all potential mission directories
@@ -4191,7 +4213,7 @@ async def create_processing_job(
     mission = MissionData(target_mission_id)
     if not mission.data:
         raise HTTPException(status_code=404, detail="Mission not found")
-    if is_lightweight_profile():
+    if is_lightweight_profile() and not get_worker_url():
         message = "Upload complete - heavy reconstruction requires the full compute profile"
         mission.update({
             "status": "video_uploaded",
@@ -5491,7 +5513,7 @@ async def process_video(
     if not mission.data:
         raise HTTPException(status_code=404, detail="Mission not found")
 
-    if is_lightweight_profile():
+    if is_lightweight_profile() and not get_worker_url():
         message = "Upload complete - heavy reconstruction requires the full compute profile"
         mission.update({
             "status": "video_uploaded",
@@ -7397,6 +7419,7 @@ app = CORSMiddleware(
         "Authorization",
         "Content-Type",
         "Origin",
+        "Range",
         "X-Requested-With",
         "X-Chunk-Index",
         "X-Total-Chunks",

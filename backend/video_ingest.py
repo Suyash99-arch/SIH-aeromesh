@@ -1,3 +1,4 @@
+import uuid
 import json
 import logging
 import os
@@ -246,6 +247,8 @@ def create_browser_proxy(
     )
     proxy_threads = max(1, min(int(os.getenv("VIDEO_PROXY_THREADS", "1")), 2))
 
+    # Atomic write to temporary file to avoid partial/0-byte reads during active ffmpeg encoding
+    temp_output_path = output_path.with_name(f"{output_path.stem}.tmp_{uuid.uuid4().hex[:8]}.mp4")
     cmd = [
         ffmpeg_bin,
         "-y",
@@ -263,7 +266,7 @@ def create_browser_proxy(
         "-b:a", "128k",
         "-ac", "2",                     # stereo
         "-movflags", "+faststart",      # ← moves moov atom to front → enables immediate seeking
-        str(output_path),
+        str(temp_output_path),
     ]
 
     logger.info("Creating browser proxy: %s → %s", input_path, output_path)
@@ -281,8 +284,18 @@ def create_browser_proxy(
 
     retcode = process.poll()
     if retcode != 0:
+        if temp_output_path.exists():
+            try:
+                temp_output_path.unlink()
+            except Exception:
+                pass
         err_msg = "".join(stderr_output)
         raise RuntimeError(f"Browser proxy creation failed (code {retcode}): {err_msg[-800:]}")
+
+    if temp_output_path.exists() and temp_output_path.stat().st_size > 0:
+        os.replace(temp_output_path, output_path)
+    else:
+        raise RuntimeError("Browser proxy creation produced an empty or missing output file.")
 
     if progress_callback:
         progress_callback(100.0)

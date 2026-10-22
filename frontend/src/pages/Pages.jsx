@@ -882,16 +882,16 @@ export function MissionsPage({ mission, setMission, navigate, notice, onCreateMi
   );
 }
 
-export function DronePage({ mission }) {
+export function DronePage({ mission, navigate }) {
   const { t } = useUI();
 
   const [frame, setFrame] = useState(mission?.findings?.[0]?.frame || 1);
   const [playing, setPlaying] = useState(false);
-  const [speed, setSpeed] = useState("1×");
+  const [speed, setSpeed] = useState("1x");
   const [quality, setQuality] = useState("overall");
   const detect = mission?.findings?.[0];
 
-  const speedMultiplier = speed === "0.5×" ? 0.5 : speed === "2×" ? 2 : 1;
+  const speedMultiplier = speed === "0.5x" ? 0.5 : speed === "2x" ? 2 : 1;
 
   // Extract samples for quality over time
   const samples = mission?.frameQuality?.samples || mission?.quality?.samples || [];
@@ -913,12 +913,24 @@ export function DronePage({ mission }) {
   const telemetry = mission?.telemetry || {};
   if (!mission) {
     return (
-      <div className="drone-layout" style={{ padding: "40px", textAlign: "center", color: "#94a3b8" }}>
-        {t("common.loading")}
+      <div className="drone-layout" style={{ padding: "60px 20px", textAlign: "center", color: "var(--text-secondary, #94a3b8)" }}>
+        <h2 style={{ fontSize: "1.25rem", color: "var(--text, #f8fafc)", marginBottom: "8px" }}>
+          {t("nav.noMissionSelected", "No Flight Mission Selected")}
+        </h2>
+        <p style={{ maxWidth: "480px", margin: "0 auto 20px auto", lineHeight: "1.5" }}>
+          {t("dashboard.uploadPrompt", "Select an active mission from the mission list or upload new flight footage to view processing telemetry and video analysis.")}
+        </p>
+        <div style={{ display: "flex", gap: "12px", justifyContent: "center" }}>
+          <Button variant="primary" icon="Folder" onClick={() => navigate?.("missions")}>
+            {t("nav.missions", "Open Missions")}
+          </Button>
+          <Button variant="secondary" icon="RefreshCw" onClick={() => window.location.reload()}>
+            {t("common.retry", "Refresh")}
+          </Button>
+        </div>
       </div>
     );
   }
-
 
   return (
     <>

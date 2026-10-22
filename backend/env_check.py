@@ -57,6 +57,31 @@ def check_ffmpeg_environment(strict: bool = False) -> Dict[str, Any]:
     """Check ffmpeg and ffprobe binary availability. Enforces in worker/pipeline mode, warns in API mode."""
     ffmpeg_path = shutil.which("ffmpeg")
     ffprobe_path = shutil.which("ffprobe")
+
+    if not (ffmpeg_path and ffprobe_path):
+        from pathlib import Path as _Path
+        local_app_data = os.environ.get("LOCALAPPDATA", "")
+        if local_app_data:
+            winget_path = _Path(local_app_data) / r"Microsoft\WinGet\Packages"
+            if winget_path.exists():
+                if not ffmpeg_path:
+                    matches = list(winget_path.glob("**/ffmpeg.exe"))
+                    if matches:
+                        ffmpeg_path = str(matches[0])
+                if not ffprobe_path:
+                    matches = list(winget_path.glob("**/ffprobe.exe"))
+                    if matches:
+                        ffprobe_path = str(matches[0])
+            links_path = _Path(local_app_data) / r"Microsoft\WinGet\Links"
+            if links_path.exists():
+                if not ffmpeg_path and (links_path / "ffmpeg.exe").exists():
+                    ffmpeg_path = str(links_path / "ffmpeg.exe")
+                if not ffprobe_path and (links_path / "ffprobe.exe").exists():
+                    ffprobe_path = str(links_path / "ffprobe.exe")
+
+        if ffmpeg_path and os.path.dirname(ffmpeg_path) not in os.environ.get("PATH", ""):
+            os.environ["PATH"] = os.path.dirname(ffmpeg_path) + os.pathsep + os.environ.get("PATH", "")
+
     is_available = bool(ffmpeg_path and ffprobe_path)
 
     pipeline_enabled = os.getenv("PIPELINE_ENABLED", "false").lower() in ("true", "1", "yes")
