@@ -56,6 +56,33 @@ export const apiFetch = (endpoint, options) => {
   rejectObjectMissionPath(endpoint);
   return window.fetch(apiUrl(endpoint), options);
 };
+
+/**
+ * Safely parse a fetch Response as JSON.
+ * Handles: empty body, 204 No Content, non-JSON content types, parse errors.
+ * Returns fallback (default: null) on any parsing failure.
+ */
+export async function safeJsonParse(response, fallback = null) {
+  if (!response) return fallback;
+  if (!response.ok) {
+    console.warn(`[API] Response HTTP ${response.status} for ${response.url}`);
+    // Try to parse error body for detail
+    try {
+      const text = await response.text();
+      if (text) return JSON.parse(text);
+    } catch { /* ignore */ }
+    return fallback;
+  }
+  try {
+    const text = await response.text();
+    if (!text || !text.trim()) return fallback;
+    return JSON.parse(text);
+  } catch (err) {
+    console.warn(`[API] JSON parse failed for ${response.url}:`, err);
+    return fallback;
+  }
+}
+
 export const BACKEND_URL = API_BASE.replace(/\/api(\/v1)?$/, "");
 
 export function getUploadBase() {
@@ -1110,7 +1137,7 @@ export async function fetchGeoJsonStatus(missionId) {
     const response = await apiFetch(
       `/missions/${missionId}/export/geojson`,
     );
-    return await response.json();
+    return await safeJsonParse(response);
   } catch (error) {
     console.error("GeoJSON status error:", error);
     return { available: false, reason: "GeoJSON query failed" };
@@ -1133,7 +1160,13 @@ export async function fetchCalibrations(missionId) {
         headers: getAuthHeaders(),
       },
     );
-    return await response.json();
+    if (!response.ok) {
+      console.warn(`[API] fetchCalibrations returned HTTP ${response.status}`);
+      return { success: false, scale_status: "RELATIVE_SCALE", calibrations: [] };
+    }
+    const text = await response.text();
+    if (!text) return { success: false, scale_status: "RELATIVE_SCALE", calibrations: [] };
+    return JSON.parse(text);
   } catch (error) {
     console.error("fetchCalibrations error:", error);
     return { success: false, scale_status: "RELATIVE_SCALE", calibrations: [] };
@@ -1150,7 +1183,7 @@ export async function calibrateReferenceDistance(missionId, payload) {
         body: JSON.stringify(payload),
       },
     );
-    return await response.json();
+    return await safeJsonParse(response);
   } catch (error) {
     console.error("calibrateReferenceDistance error:", error);
     throw error;
@@ -1166,7 +1199,7 @@ export async function deactivateCalibrations(missionId) {
         headers: getAuthHeaders(),
       },
     );
-    return await response.json();
+    return await safeJsonParse(response);
   } catch (error) {
     console.error("deactivateCalibrations error:", error);
     throw error;
@@ -1183,7 +1216,7 @@ export async function measureDistance3D(missionId, payload) {
         body: JSON.stringify(payload),
       },
     );
-    return await response.json();
+    return await safeJsonParse(response);
   } catch (error) {
     console.error("measureDistance3D error:", error);
     throw error;
@@ -1200,7 +1233,7 @@ export async function measurePolygon3D(missionId, payload) {
         body: JSON.stringify(payload),
       },
     );
-    return await response.json();
+    return await safeJsonParse(response);
   } catch (error) {
     console.error("measurePolygon3D error:", error);
     throw error;
@@ -1217,7 +1250,7 @@ export async function measureElevation3D(missionId, payload) {
         body: JSON.stringify(payload),
       },
     );
-    return await response.json();
+    return await safeJsonParse(response);
   } catch (error) {
     console.error("measureElevation3D error:", error);
     throw error;
@@ -1234,7 +1267,7 @@ export async function measureObject3D(missionId, objectId, payload = {}) {
         body: JSON.stringify(payload),
       },
     );
-    return await response.json();
+    return await safeJsonParse(response);
   } catch (error) {
     console.error("measureObject3D error:", error);
     throw error;
@@ -1251,7 +1284,7 @@ export async function measureVolume3D(missionId, payload = {}) {
         body: JSON.stringify(payload),
       },
     );
-    return await response.json();
+    return await safeJsonParse(response);
   } catch (error) {
     console.error("measureVolume3D error:", error);
     throw error;
@@ -1269,7 +1302,7 @@ export async function fetchSemanticScene(missionId) {
       },
     );
     if (!response.ok) return { success: false, semantic_scene: null };
-    return await response.json();
+    return await safeJsonParse(response);
   } catch (error) {
     console.warn("[API] fetchSemanticScene fallback:", error);
     return { success: false, semantic_scene: null };
@@ -1287,7 +1320,7 @@ export async function fetchObjects3D(missionId) {
       },
     );
     if (!response.ok) return { success: false, objects: [] };
-    return await response.json();
+    return await safeJsonParse(response);
   } catch (error) {
     console.warn("[API] fetchObjects3D fallback:", error);
     return { success: false, objects: [] };
@@ -1305,7 +1338,7 @@ export async function fetchObjectEvidence(missionId, objectId) {
       },
     );
     if (!response.ok) return { success: false, error: `HTTP ${response.status}` };
-    return await response.json();
+    return await safeJsonParse(response);
   } catch (error) {
     console.warn("[API] fetchObjectEvidence fallback:", error);
     return { success: false, error: error.message };

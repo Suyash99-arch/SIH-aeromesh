@@ -290,7 +290,19 @@ def run_3d_fusion_for_mission(
                             hit_p3d = ray.origin + med_d * ray.direction
 
                 if hit_p3d is None:
-                    continue
+                    # Ground plane / depth surface intersection fallback (for Tier 3/4 and missing depth)
+                    z_ground = 0.0
+                    if sparse_points is not None and len(sparse_points) > 0:
+                        z_ground = float(np.percentile(sparse_points[:, 2], 5))
+                    elif mesh is not None and len(mesh.vertices) > 0:
+                        z_ground = float(mesh.bounds_min[2])
+
+                    if abs(ray.direction[2]) > 1e-4:
+                        t_ground = (z_ground - ray.origin[2]) / ray.direction[2]
+                        if t_ground > 0.5:
+                            hit_p3d = ray.origin + t_ground * ray.direction
+                    if hit_p3d is None:
+                        hit_p3d = ray.origin + (20.0 * scale_ratio) * ray.direction
 
                 err_px, proj_uv, zc = compute_reprojection_error(hit_p3d, (cx_cam, cy_cam), intrinsics, pose)
                 if err_px is None or zc is None or zc <= 0:

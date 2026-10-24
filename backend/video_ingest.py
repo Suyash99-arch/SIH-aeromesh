@@ -168,10 +168,17 @@ def transcode_to_normalized_h264(
     input_path: Path,
     output_path: Path,
     target_fps: float = 30.0,
+    max_dimension: int = 1280,
     progress_callback: Optional[Callable[[float], None]] = None
 ) -> Path:
     ffmpeg_bin = get_ffmpeg_bin()
     output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Scale filter: cap long edge at max_dimension, maintain aspect ratio, ensure even dims
+    vf = (
+        f"scale=w='min({max_dimension},iw)':h='min({max_dimension},ih)':"
+        "force_original_aspect_ratio=decrease:force_divisible_by=2"
+    )
 
     cmd = [
         ffmpeg_bin,
@@ -179,6 +186,7 @@ def transcode_to_normalized_h264(
         "-i", str(input_path),
         "-c:v", "libx264",
         "-pix_fmt", "yuv420p",
+        "-vf", vf,
         "-r", str(round(target_fps, 2)),
         "-fps_mode", "cfr",
         "-preset", "fast",

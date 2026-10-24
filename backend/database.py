@@ -204,6 +204,9 @@ def run_database_migrations(database_url: str | None = None) -> bool:
             raise RuntimeError("Could not create a database engine for Alembic")
 
         alembic_cfg = Config(str(alembic_cfg_path))
+        # Ensure script_location is resolved to the absolute path so migrations
+        # work regardless of the process's current working directory.
+        alembic_cfg.set_main_option("script_location", str(root_dir / "backend" / "alembic"))
         # ConfigParser treats '%' as interpolation syntax; doubling it here
         # preserves percent-encoded URL credentials without exposing them.
         alembic_cfg.set_main_option("sqlalchemy.url", url.replace("%", "%%"))

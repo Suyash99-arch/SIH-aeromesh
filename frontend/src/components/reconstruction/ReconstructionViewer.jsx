@@ -1806,8 +1806,24 @@ export default function ReconstructionViewer({
   const scaleStatus =
     reconstructionMeta?.scale?.scale_status ||
     mission?.reconstruction?.scale?.scale_status ||
+    mission?.reconstruction?.scale_mode ||
     mission?.scale_status ||
-    "CALIBRATED (COLMAP)";
+    "RELATIVE_SCALE";
+
+  const tierUsed =
+    reconstructionMeta?.tier_used ||
+    mission?.reconstruction?.tier_used ||
+    null;
+
+  const qualityLabel =
+    reconstructionMeta?.quality_label ||
+    mission?.reconstruction?.quality_label ||
+    (tierUsed === 4 ? "Sparse" : tierUsed === 3 ? "Monocular" : tierUsed ? "Full" : null);
+
+  const scaleModeLabel =
+    scaleStatus === "METRIC_SCALE" || scaleStatus === "METRIC_CALIBRATED" || scaleStatus === "ABSOLUTE_SCALE"
+      ? "Metric"
+      : "LOCAL_ARBITRARY / relative scale";
 
   const poseStatus =
     reconstructionMeta?.pose_status ||
@@ -1899,6 +1915,37 @@ export default function ReconstructionViewer({
           </Canvas>
         </WebGLBoundary>
         {contextUnavailable && <div role="status" className="reconstruction-webgl-error" style={{ position: "absolute", inset: 0, display: "grid", placeItems: "center", background: "var(--surface, #111827)", color: "var(--text, #e5e7eb)" }}>3D preview paused. Restoring graphics…</div>}
+
+        {/* Tier 4 Honest Warning Banner */}
+        {(tierUsed === 4 || qualityLabel === "Geometric Proxy") && (
+          <div
+            role="alert"
+            style={{
+              position: "absolute",
+              top: "14px",
+              left: "50%",
+              transform: "translateX(-50%)",
+              zIndex: 30,
+              background: "rgba(180, 83, 9, 0.92)",
+              border: "1px solid #f59e0b",
+              borderRadius: "8px",
+              padding: "7px 16px",
+              color: "#fef3c7",
+              fontSize: "12px",
+              fontWeight: 600,
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
+              boxShadow: "0 4px 20px rgba(0, 0, 0, 0.5)",
+              backdropFilter: "blur(8px)",
+              maxWidth: "90%",
+              pointerEvents: "auto",
+            }}
+          >
+            <span style={{ fontSize: "15px" }}>⚠️</span>
+            <span>3D reconstruction failed for this video; showing camera path and ground reference only</span>
+          </div>
+        )}
 
         {/* Structured State Overlay (Pending, Processing, Failed, No Geometry) */}
         {!hasMesh && !hasPointCloud && (
@@ -2373,6 +2420,11 @@ export default function ReconstructionViewer({
                       .join(", ")}
                     ]
                   </span>
+                  {(tierUsed === 4 || qualityLabel === "Geometric Proxy") && (
+                    <span style={{ color: "#fbbf24", marginLeft: "6px", fontSize: "10px", fontWeight: 700 }}>
+                      (approximate)
+                    </span>
+                  )}
                 </div>
               )}
               <div>
@@ -2489,10 +2541,24 @@ export default function ReconstructionViewer({
             <span style={{ opacity: 0.35 }}>•</span>
             <span>{t("missionCommand.fusedObjects")}: <b style={{ color: "#fbbf24" }}>{semanticObjects?.length || mission?.objects_3d?.length || mission?.spatial_fusion?.total_fused_objects || 0} {t("sceneIntelligence.semanticObjects", "Entities")}</b></span>
             <span style={{ opacity: 0.35 }}>•</span>
+            {qualityLabel && (
+              <>
+                <span>
+                  Quality:{" "}
+                  <b style={{
+                    color: qualityLabel === "Full" ? "#34d399" : qualityLabel === "Sparse" ? "#fbbf24" : "#f97316",
+                    textTransform: "capitalize",
+                  }}>
+                    {qualityLabel}{tierUsed ? ` (Tier ${tierUsed})` : ""}
+                  </b>
+                </span>
+                <span style={{ opacity: 0.35 }}>•</span>
+              </>
+            )}
             <span>
               {t("sceneIntelligence.scaleStatus", "Scale")}:{" "}
-              <b style={{ color: scaleStatus === 'METRIC_SCALE' || scaleStatus === 'METRIC_CALIBRATED' || scaleStatus === 'CALIBRATED' ? '#34d399' : '#fbbf24' }}>
-                {scaleStatus === 'METRIC_SCALE' || scaleStatus === 'METRIC_CALIBRATED' || scaleStatus === 'CALIBRATED' ? t("reconstruction.scaleCalibrated", "METRIC (Calibrated)") : t("reconstruction.scaleUncalibrated", "RELATIVE (Uncalibrated)")}
+              <b style={{ color: scaleStatus === 'METRIC_SCALE' || scaleStatus === 'METRIC_CALIBRATED' || scaleStatus === 'ABSOLUTE_SCALE' ? '#34d399' : '#fbbf24' }}>
+                {scaleModeLabel}
               </b>
             </span>
           </div>

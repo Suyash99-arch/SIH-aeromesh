@@ -20,7 +20,7 @@ try:
     import psutil
 except ImportError:  # pragma: no cover - exercised in clean environments without psutil
     psutil = None
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set, Tuple
 
@@ -215,8 +215,8 @@ def detect_entry_exit_points(*args, **kwargs):
 BASE_DIR = Path(__file__).resolve().parent.parent
 DATA_DIR = Path(os.getenv("AEROMESH_DATA_DIR", str(BASE_DIR / "data"))).resolve()
 MISSIONS_DIR = DATA_DIR / "missions"
-MAX_UPLOAD_SIZE_BYTES = max(1, int(os.getenv("MAX_UPLOAD_SIZE_BYTES", str(200 * 1024 * 1024))))
-MAX_STORAGE_BYTES = max(1, int(os.getenv("MAX_STORAGE_BYTES", str(1024 * 1024 * 1024))))
+MAX_UPLOAD_SIZE_BYTES = max(1, int(os.getenv("MAX_UPLOAD_SIZE_BYTES", str(500 * 1024 * 1024))))
+MAX_STORAGE_BYTES = max(1, int(os.getenv("MAX_STORAGE_BYTES", str(50 * 1024 * 1024 * 1024))))
 DIRECT_UPLOAD_LIMIT_BYTES = 4 * 1024 * 1024
 MAX_VIDEO_DURATION_SECONDS = min(180.0, max(1.0, float(os.getenv("MAX_VIDEO_DURATION_SECONDS", "180"))))
 
@@ -1646,7 +1646,7 @@ async def api_config():
     return {
         "max_upload_size_bytes": MAX_UPLOAD_SIZE_BYTES,
         "max_upload_size_mb": round(MAX_UPLOAD_SIZE_BYTES / (1024 * 1024), 1),
-        "allowed_video_extensions": [".mp4", ".mov", ".avi"],
+        "allowed_video_extensions": [".mp4", ".mov", ".avi", ".mkv", ".webm"],
         "direct_upload_limit_bytes": DIRECT_UPLOAD_LIMIT_BYTES,
         "chunk_size_bytes": CHUNK_SIZE_BYTES,
         "storage_backend": "s3" if s3_configured else "local_ephemeral",
@@ -3496,8 +3496,8 @@ async def upload_video_chunk(
     if ".." in filename or "/" in filename or "\\" in filename:
         raise HTTPException(status_code=400, detail="Dangerous path traversal characters detected")
     safe_name = sanitize_filename(filename)
-    if Path(safe_name).suffix.lower() not in {".mp4", ".mov", ".avi"}:
-        raise HTTPException(status_code=400, detail="Only MP4, MOV, and AVI video files are supported")
+    if Path(safe_name).suffix.lower() not in {".mp4", ".mov", ".avi", ".mkv", ".webm"}:
+        raise HTTPException(status_code=400, detail="Only MP4, MOV, AVI, MKV, and WebM video files are supported")
     if chunk_index >= total_chunks:
         raise HTTPException(status_code=400, detail="chunk_index must be less than total_chunks")
     if total_chunks > (MAX_UPLOAD_SIZE_BYTES + CHUNK_SIZE_BYTES - 1) // CHUNK_SIZE_BYTES:
@@ -3520,10 +3520,27 @@ async def upload_video_chunk(
 
             session_dir.mkdir(parents=True, exist_ok=True)
             chunk_path = session_dir / f"{chunk_index}.chunk"
-            replacing = chunk_path.stat().st_size if chunk_path.exists() else 0
+            # Idempotent chunk: if this chunk already exists with matching size, skip writing
+            existing_size = chunk_path.stat().st_size if chunk_path.exists() else 0
             chunk.file.seek(0, os.SEEK_END)
             incoming_size = chunk.file.tell()
             chunk.file.seek(0)
+            if existing_size > 0 and existing_size == incoming_size:
+                # Idempotent retry — chunk already received with same size
+                received = received_chunk_indexes(session_dir, total_chunks)
+                current_size = sum((session_dir / f"{index}.chunk").stat().st_size for index in received)
+                if len(received) != total_chunks:
+                    return {
+                        "success": True,
+                        "chunk_received": chunk_index,
+                        "received_chunks": received,
+                        "total_chunks": total_chunks,
+                        "uploaded_bytes": current_size,
+                        "progress_percent": round((len(received) / total_chunks) * 100, 1),
+                        "status": "uploading_chunks",
+                        "idempotent_skip": True,
+                    }
+            replacing = existing_size
             if incoming_size > CHUNK_SIZE_BYTES:
                 raise HTTPException(status_code=413, detail="Chunk exceeds the 2 MB chunk limit")
             _ensure_local_storage_capacity(incoming_size, replacing_bytes=replacing)
@@ -4864,8 +4881,39 @@ def run_full_pipeline_task(
             )
             result = yolo_result
             result["video"] = {**video_info, **result.get("video", {}), **real_summary}
+
+            # Detection fallback: if primary model found zero detections, try alternate
+            det_count = result.get("detections", {}).get("uniqueTracks", 0) or len(result.get("detections", {}).get("observations", []))
+            if det_count == 0:
+                logger.warning("[Detection] Primary model (%s) returned 0 detections. Trying alternate model.", model_name)
+                try:
+                    alt_model, alt_name, alt_aeromesh = _load_detection_model(use_aeromesh=not is_aeromesh)
+                    alt_result = _run_yolo_detection(
+                        video_path,
+                        alt_model,
+                        sample_fps=frame_sampling,
+                        confidence=max(0.20, detection_confidence - 0.10),
+                        is_aeromesh=alt_aeromesh,
+                        scene_profile=scene_profile,
+                        tile_inference=tile_inference,
+                        tile_rows=tile_rows,
+                        tile_cols=tile_cols,
+                        tile_overlap=tile_overlap,
+                    )
+                    alt_det_count = alt_result.get("detections", {}).get("uniqueTracks", 0) or len(alt_result.get("detections", {}).get("observations", []))
+                    if alt_det_count > 0:
+                        result = alt_result
+                        result["video"] = {**video_info, **result.get("video", {}), **real_summary}
+                        result["detection_fallback"] = f"Switched from {model_name} to {alt_name} ({alt_det_count} detections)"
+                        logger.info("[Detection] Alternate model (%s) found %d detections.", alt_name, alt_det_count)
+                except Exception as alt_exc:
+                    logger.warning("[Detection] Alternate model also failed: %s", alt_exc)
+
+            det_count_final = result.get("detections", {}).get("uniqueTracks", 0) or len(result.get("detections", {}).get("observations", []))
             result["processing"]["status"] = "COMPLETE"
-            result["processing"]["warning"] = "" if result.get("detections", {}).get("uniqueTracks", 0) else "No confident detections observed."
+            result["processing"]["warning"] = "" if det_count_final else "No confident detections observed."
+            if det_count_final == 0:
+                result["detection_status"] = "no_detections"
 
             # Save authoritative detections.json to mission directory for single source of truth
             try:
@@ -4881,6 +4929,7 @@ def run_full_pipeline_task(
                 result["processing"] = {}
             result["processing"]["status"] = "PARTIAL"
             result["processing"]["warning"] = f"Detection fallback: {exc}"
+            result["detection_status"] = "no_detections"
 
         damage_result = analyze_damage_for_mission(video_path, mission_id, max_frames=20)
         completed_stages.append("detection")
@@ -5096,6 +5145,9 @@ def run_full_pipeline_task(
                 "mean_reprojection_error": mean_reproj,
                 "success": bool(reconstruction_result.get("success", pts_count > 0)),
                 "method": reconstruction_result.get("method", "pycolmap"),
+                "tier_used": reconstruction_result.get("tier_used", 0),
+                "quality_label": reconstruction_result.get("quality_label", "Unknown"),
+                "scale_mode": reconstruction_result.get("scale", {}).get("scale_status", "RELATIVE_SCALE"),
                 "processing_time_s": reconstruction_result.get("processing_time_s", stage_timings.get("stage_5_pycolmap_sfm_mesh", 0.0)),
                 "output_path": reconstruction_result.get("output_path"),
                 "error": reconstruction_result.get("error"),
@@ -5490,6 +5542,22 @@ async def process_video(
     mission = MissionData(mission_id)
     if not mission.data:
         raise HTTPException(status_code=404, detail="Mission not found")
+
+    active_job_id = mission.data.get("processing_job_id")
+    if str(mission.data.get("status", "")).lower() == "processing" and active_job_id:
+        existing_job = get_job(str(active_job_id))
+        return {
+            "success": True,
+            "job_id": active_job_id,
+            "job": existing_job,
+            "mission_id": mission_id,
+            "status": "PROCESSING",
+            "stage": (existing_job.get("stage") if existing_job else None) or "PROCESSING",
+            "current_stage": (existing_job.get("current_stage_id") if existing_job else None) or "video",
+            "progress_percent": (existing_job.get("progress_percent") if existing_job else None) or mission.data.get("progress", 5),
+            "queue_position": 0,
+            "message": "Processing already in progress",
+        }
 
     if is_lightweight_profile():
         message = "Upload complete - heavy reconstruction requires the full compute profile"
