@@ -1,309 +1,111 @@
----
-title: AeroMesh Backend
-emoji: 🛰️
-colorFrom: blue
-colorTo: indigo
-sdk: docker
-app_port: 7860
-pinned: false
----
+# Hexa Spark (AeroMesh) — Aerial Intelligence & 3D Photogrammetry Platform
 
-# Hexa Spark (AeroMesh) — Tactical Aerial Intelligence & 3D Photogrammetry Platform
-
-Hexa Spark is an end-to-end aerial intelligence system that transforms raw monocular drone video into interactive 3D spatial reconstructions, object tracking trajectories, and certified mission intelligence reports. Built with high-throughput computer vision, incremental Structure-from-Motion (SfM), Poisson surface reconstruction, multi-object ByteTrack tracking, and 2D-to-3D multi-view spatial ray intersection.
+Hexa Spark is an aerial intelligence and photogrammetry platform that transforms raw monocular drone video into interactive 3D spatial reconstructions, object detections, ByteTrack trajectories, and tactical mission intelligence reports.
 
 ---
 
-## Visual Tour
+## What Hexa Spark Does
 
-| **Command Dashboard** | **Interactive 3D Scene Viewer** |
-| :---: | :---: |
-| ![Command Dashboard](docs/screenshots/dashboard.png) | ![3D Scene Viewer](docs/screenshots/viewer.png) |
-
-| **AI Detections & Trajectories** | **Geospatial Tactical Map** |
-| :---: | :---: |
-| ![AI Detections](docs/screenshots/detections.png) | ![Geospatial Map](docs/screenshots/geospatial.png) |
-
-| **Incident Pipeline Launch** | **Mission Decision Report (PDF)** |
-| :---: | :---: |
-| ![Incident Launch](docs/screenshots/new_incident.png) | ![Mission Report](docs/screenshots/report.png) |
+- **Deterministic Fallback Pipeline**: Accepts monocular UAV video of any length, resolution, codec, or orientation, always completing to produce an interactive 3D scene and detections.
+- **Incremental Structure-from-Motion (SfM)**: Reconstructs camera poses and 3D geometry using PyCOLMAP and Poisson surface meshing.
+- **Tactical AI Perception**: Detects tactical categories (vehicles, persons, infrastructure) with YOLOv11 and tracks targets continuously with ByteTrack.
+- **2D-to-3D Multi-View Spatial Fusion**: Unprojects detected bounding boxes through estimated camera rays to estimate 3D spatial coordinates and ground footprints.
+- **Interactive Mission Command**: Three.js 3D viewer, trajectory map, timeline playback, and automated PDF executive decision reports.
 
 ---
 
-## Key Capabilities
+## Requirements
 
-1. **Monocular Video Ingest & Keyframe Extraction**:
-   - Automated video validation, resolution detection, FPS extraction, and downsampled streaming proxy generation via FFmpeg.
-   - Intelligent keyframe selection with blur detection (Laplacian variance) and motion saliency filtering.
-2. **Structure-from-Motion (SfM) Photogrammetry**:
-   - PyCOLMAP-based incremental bundle adjustment with feature extraction and robust geometric verification.
-   - Pinhole and radial distortion camera modeling with sub-pixel camera pose estimation.
-3. **Surface Mesh Generation**:
-   - Screened Poisson surface reconstruction and Ball-Pivoting Algorithms directly from sparse/dense point geometry.
-   - Output in standard GLTF/GLB and Wavefront OBJ formats with mesh simplification and normal estimation.
-4. **AI Neural Detection & Multi-Object Tracking**:
-   - YOLOv11 object detector integration for tactical categories (vehicles, persons, infrastructure).
-   - ByteTrack association with Kalman filtering for continuous track persistence across occlusions.
-5. **AI-to-3D Multi-View Spatial Fusion**:
-   - Ray unprojection from multi-view 2D detections intersecting the reconstructed 3D surface mesh.
-   - Exact camera-to-video pixel coordinate normalization (`sx = cam_w / video_w`, `sy = cam_h / video_h`) ensuring millimeter-accurate reprojections.
-6. **Multi-Role Scoped Access Control**:
-   - Ephemeral guest sandboxing with automatic time-to-live expiration.
-   - Mission isolation with operator-level and commander-level permissions.
-7. **Executive Decision Reports**:
-   - Automated PDF and JSON report generation with ReportLab including forensic visual overlays, camera registration ratios, and scientific integrity disclosures.
+- **Python**: 3.11.x (PyCOLMAP Windows wheels are precompiled for Python 3.11)
+- **Node.js**: 18.x or 20.x
+- **FFmpeg & FFprobe**: Must be available on system `PATH`
+- **COLMAP / pycolmap**: PyCOLMAP 3.11+ library for incremental Structure-from-Motion
 
 ---
 
-## System Architecture
+## Setup Steps
 
-```mermaid
-flowchart TD
-    subgraph Ingest ["1. Ingestion & Preprocessing"]
-        V[UAV Monocular Video MP4] --> FF[FFmpeg Proxy & Metadata]
-        FF --> KF[Keyframe & Blur Quality Analysis]
-    end
+### 1. Backend Setup
 
-    subgraph Perception ["2. Tactical AI Perception"]
-        KF --> YOLO[YOLOv11 Object Detection]
-        YOLO --> BT[ByteTrack Multi-Object Tracking]
-    end
-
-    subgraph Photogrammetry ["3. 3D Photogrammetry & Mesh"]
-        KF --> SFM[PyCOLMAP Incremental SfM]
-        SFM --> PC[(Sparse Point Cloud)]
-        PC --> POISSON[Screened Poisson Surface Mesher]
-        POISSON --> MESH[(3D Surface Mesh OBJ/GLB)]
-    end
-
-    subgraph SpatialFusion ["4. AI-to-3D Spatial Fusion"]
-        BT --> FUSE[Ray-Mesh Surface Intersect]
-        SFM --> FUSE
-        MESH --> FUSE
-        FUSE --> OBJ3D[(3D Spatial Objects & Trajectories)]
-    end
-
-    subgraph Presentation ["5. Client Application & Reporting"]
-        OBJ3D --> API[FastAPI REST & WebSocket Server]
-        PC --> API
-        MESH --> API
-        API --> VITE[React 18 + Three.js / Deck.gl Frontend]
-        API --> PDF[ReportLab Mission Decision PDF]
-    end
-```
-
----
-
-## Quick Start (Local Development)
-
-### Prerequisites
-- **OS**: Windows 10/11, macOS, or Linux.
-- **Python**: Version 3.11.x (`.venv311` virtualenv).
-- **Node.js**: Version 18.x or 20.x.
-- **FFmpeg & FFprobe**: Installed and available on system PATH.
-
-### One-Command Runner (PowerShell on Windows)
-```powershell
-.\scripts\dev.ps1
-```
-The script will:
-1. Validate Python 3.11 and verify required libraries.
-2. Confirm FFmpeg and FFprobe binary availability.
-3. Automatically configure `.env` from `.env.example` if not present.
-4. Launch the FastAPI backend on `http://127.0.0.1:8000`.
-5. Poll `/api/v1/health` until healthy.
-6. Launch the Vite frontend on `http://localhost:5173`.
-7. Launch your default browser to the web portal.
-
-### Local demo startup (Vercel + ngrok Tunnel)
-
-To connect the live Vercel frontend (`https://sih-aeromesh-blond.vercel.app`) to your local FastAPI backend:
-
-1. **Activate virtual environment** (PowerShell):
-   ```powershell
-   .\.venv311\Scripts\Activate.ps1
-   ```
-2. **Run one-command backend + tunnel runner**:
-   ```powershell
-   .\scripts\tunnel.ps1
-   ```
-   *Or start manually in two terminals:*
-   - Terminal 1 (Backend):
-     ```powershell
-     uvicorn backend.main:app --host 127.0.0.1 --port 8000
-     ```
-   - Terminal 2 (ngrok with traffic policy):
-     ```powershell
-     ngrok http 127.0.0.1:8000 --url=closable-ducky-unsuited.ngrok-free.dev --traffic-policy-file ngrok-policy.yml
-     ```
-3. **Open the live application**:
-   - Web App: [https://sih-aeromesh-blond.vercel.app](https://sih-aeromesh-blond.vercel.app)
-   - The status badge will display **ONLINE**.
-
-### Manual Launch
-
-
-**Backend**:
 ```bash
+# From repository root:
+python -m venv backend/.venv
+
 # Activate virtual environment
-source .venv311/bin/activate   # Linux/macOS
-.venv311\Scripts\Activate.ps1 # Windows
+# Windows PowerShell:
+.\backend\.venv\Scripts\Activate.ps1
+# Linux / macOS:
+source backend/.venv/bin/activate
 
-# Run database migrations
-alembic upgrade head
-
-# Start FastAPI server
-uvicorn backend.main:app --host 127.0.0.1 --port 8000 --reload
+# Install backend dependencies
+pip install -r backend/requirements.txt
 ```
 
-**Frontend**:
+### 2. Frontend Setup
+
 ```bash
+# Navigate to frontend and install dependencies
 cd frontend
 npm install
-npm run dev
+cd ..
+```
+
+### 3. Environment Configuration
+
+Copy the example configuration files:
+- Root / Backend: Copy `backend/.env.example` to `backend/.env` (or configure via environment variables).
+- Frontend: Copy `frontend/.env.example` to `frontend/.env` (contains `VITE_API_BASE_URL=/api/v1` and `VITE_UPLOAD_BASE_URL=/api/v1`).
+
+---
+
+## How to Run
+
+To run the complete verified local demo with a single command (launches both the FastAPI backend and Vite frontend dev server with health checks):
+
+```powershell
+.\scripts\run_demo.ps1
+```
+
+- **Backend API**: `http://127.0.0.1:8000` (docs at `http://127.0.0.1:8000/docs`)
+- **Frontend App**: `http://localhost:5173`
+
+Alternatively, to run the preflight verification check beforehand:
+```powershell
+python scripts/preflight.py
 ```
 
 ---
 
-## Authentication & Multi-Role Access
+## Hardware & Reconstruction Notice (Honesty Note)
 
-Hexa Spark enforces scoped, role-based authorization via JWT tokens and secure cookies.
-
-### Portals & Roles
-
-| Portal / Role | Access Level | Data Visibility | Guest TTL |
-| :--- | :--- | :--- | :--- |
-| **Commander / Admin** (`ADMIN`) | Full System & Configuration | All missions across all organizations | N/A (Persistent) |
-| **Tactical Operator** (`OPERATOR`) | Create, Process, Edit Missions | Scoped to operator organization / incident | N/A (Persistent) |
-| **Intelligence Analyst** (`ANALYST`) | View 3D Scenes, Query Geospatial, Export PDF | Scoped to assigned missions | N/A (Persistent) |
-| **Guest Evaluator** (`GUEST`) | Ephemeral Trial Workspace | Isolated to ephemeral guest session | **2 Hours** (`GUEST_TTL_HOURS=2`) |
-
-> **Single Secret Key**: The entire backend authentication system uses one unified environment variable: `SECRET_KEY`.
+Full 3D reconstruction runs locally on the machine. 
+- **CPU Mode**: Incremental Structure-from-Motion (PyCOLMAP) runs on CPU to extract camera poses and generate an authoritative sparse point cloud and Poisson mesh.
+- **Dense Stereo (MVS)**: Dense Multi-View Stereo requires an NVIDIA CUDA GPU. Without a CUDA GPU, CPU-only execution produces sparse point clouds without synthesizing unverified geometry.
 
 ---
 
-## AI Vision Models & Tactical Weights
+## The 4 Reconstruction Tiers
 
-Hexa Spark includes pre-trained neural vision models optimized for tactical aerial imagery and drone-based object detection:
+Hexa Spark employs a 4-tier deterministic fallback chain to guarantee a valid 3D result for any input video:
 
-- **Primary Detector Weights**: `backend/models/aeromesh_yolo.pt`
-- **File Size**: 21,246,435 bytes (20.26 MB)
-- **SHA256 Checksum**: `f63808a3a5e21dee64c45186cb2ff724a0c908840a61192d7edd2cbe2f609885`
-- **Target Classes**: `van`, `truck`, `car`, `bus`, `pedestrian`, `person`, `tricycle`, `awning-tricycle`, `motorcycle`, `bicycle`, `vehicle`
-- **Fail-Fast Policy**: If model weights are missing at the configured path, the service raises `FileNotFoundError("detector weights not found at <path>, see README")` immediately, preventing silent fallbacks or unverified runtime downloads.
-
-Custom models can be supplied by pointing `YOLO_MODEL_PATH` to any local `.pt` weights file in your `.env`.
+1. **Tier 1 — High-Quality Incremental SfM**: Full PyCOLMAP incremental reconstruction with strict geometric verification and bundle adjustment. Yields high-precision camera poses and point clouds for textured flights.
+2. **Tier 2 — Relaxed Corridor SfM**: Sequential matching with relaxed parallax thresholds and feature caps optimized for forward-moving linear drone sweeps.
+3. **Tier 3 — Monocular Depth Fallback**: Utilizes monocular depth estimation backprojection when feature matching yields insufficient inliers (e.g. low-texture terrain or water).
+4. **Tier 4 — Geometric Proxy & Camera Path**: When 3D reconstruction cannot converge (e.g. extreme blur, dark conditions, or near-stationary video), the pipeline constructs a geometric ground proxy along the estimated camera trajectory. This tier is honestly disclosed with a dedicated amber warning banner in the UI: *"3D reconstruction failed for this video; showing camera path and geometric proxy."*
 
 ---
 
-## Environment Variables
+## Model Weights
 
-| Variable Name | Default Value | Description |
-| :--- | :--- | :--- |
-| `SECRET_KEY` | *(Set in `.env`)* | Cryptographic HMAC secret for signing authentication JWT tokens |
-| `DATABASE_URL` | `sqlite:///./data/aeromesh.db` | PostgreSQL or SQLite connection string |
-| `STORAGE_BACKEND` | `local` | Storage driver (`local` or `s3`) |
-| `GUEST_TTL_HOURS` | `2` | Session lifespan in hours for ephemeral guest workspaces |
-| `PORT` | `8000` | HTTP port for FastAPI backend |
-| `CORS_ALLOWED_ORIGINS` | `http://localhost:5173,http://127.0.0.1:5173` | Comma-separated list of allowed CORS origins |
-| `YOLO_MODEL_PATH` | `backend/models/aeromesh_yolo.pt` | Path to tactical YOLO weights file |
-| `DETECTION_CONFIDENCE` | `0.35` | Minimum object detection confidence threshold |
-| `DETECTION_IOU` | `0.7` | NMS IoU threshold for 2D detections |
-| `DETECTION_SAMPLE_FPS` | `2.0` | Target frame sampling frequency for video inference |
-| `DETECTION_IMGSZ` | `1280` | Input dimension for YOLO inference |
-| `DETECTION_TILE_IOU` | `0.5` | IoU threshold for suppressing duplicates across overlapping tiles |
-| `DETECTION_TILE_OVERLAP` | `0.15` | Overlap percentage between adjacent inference tiles |
-| `VIDEO_PROXY_MAX_WIDTH` | `1280` | Max width for browser-compatible H.264 video proxy transcoding |
-| `RECONSTRUCTION_MAX_IMAGE_DIM` | `1600` | Maximum dimension for working-copy photogrammetry keyframes |
-| `RECONSTRUCTION_OPTICAL_FLOW_THRESHOLD` | `0.8` | Minimum optical flow magnitude to filter stationary redundant frames |
-| `FRAME_QUALITY_MIN_SHARPNESS` | `12.0` | Minimum Laplacian variance for photogrammetry frame acceptance |
-| `SPATIAL_FUSION_REPROJ_THRESHOLD` | `25.0` | Max pixel reprojection error before rejecting 3D candidate objects |
-| `BRAND_NAME` | `Hexa Spark` | Platform brand name for executive reports |
-| `BRAND_SUITE` | `Hexa Spark Aerial Intelligence Platform` | Suite title displayed on generated PDF reports |
+Tactical neural detection weights are located at:
+- **Path**: `backend/models/aeromesh_yolo.pt`
+- **Size**: ~20.26 MB (21,246,435 bytes)
+- **Target Classes**: Vehicles, pedestrians, infrastructure, bicycles, motorcycles.
+- Note: Model weights (`*.pt`, `*.onnx`) are excluded from git tracking. The pre-trained weights file is placed in `backend/models/` for local runs, or will automatically fall back to Ultralytics YOLO models if not present.
 
 ---
 
-## Deployment Architecture
+## Verification & Testing
 
-Hexa Spark is designed for flexible cloud and hybrid deployments:
-
-### 1. Cloud API on Render + Managed PostgreSQL
-- **Backend Service**: Render Web Service (`render.yaml` provided).
-- **Database**: Managed PostgreSQL instance on Render.
-- **Configuration**: Set `DATABASE_URL` to postgres connection string; set `SECRET_KEY` in Render environment secrets.
-
-### 2. Frontend on Vercel
-- **Production Bundle**: Single-page application built with Vite (`dist/`).
-- **Routing**: Configured with committed `vercel.json` and `frontend/vercel.json` rewrite rules proxying `/api/*` to the Render backend URL.
-
-### 3. Local Heavy Compute Worker with Cloudflare Tunnel
-- Because PyCOLMAP and CUDA GPU compute are resource-intensive, background photogrammetry tasks can be executed on local or on-prem GPU workers.
-- Connect local backend to the public internet securely using a Cloudflare Named Tunnel:
-```bash
-cloudflared tunnel run hexa-spark-worker
-```
-
----
-
-## Quality & Test Gates
-
-Hexa Spark enforces end-to-end quality standards:
-
-- **Backend Pytest Suite**: 148 automated unit and integration tests covering database models, security scopes, spatial fusion invariants, and dynamic ETA physical models.
-```bash
-pytest
-```
-- **Frontend ESLint**: Strict linting with 0 errors across all JSX/TSX modules.
-```bash
-cd frontend && npm run lint
-```
-- **Production Build**: Vite production compilation.
-```bash
-cd frontend && npm run build
-```
-
----
-
-## API Overview
-
-| Endpoint | Method | Description |
-| :--- | :--- | :--- |
-| `/api/v1/health` | `GET` | System health, database backend status, and pipeline capability |
-| `/api/v1/auth/login` | `POST` | User authentication returning scoped JWT access token |
-| `/api/v1/auth/guest` | `POST` | Create ephemeral guest session with 2-hour TTL |
-| `/api/v1/missions` | `GET`, `POST` | List missions or create a new aerial mission |
-| `/api/v1/missions/{id}` | `GET`, `DELETE` | Retrieve mission status, metadata, and canonical summary |
-| `/api/v1/missions/{id}/process` | `POST` | Trigger automated photogrammetry and AI perception pipeline |
-| `/api/v1/missions/{id}/reconstruction/pointcloud` | `GET` | Stream reconstructed PLY point cloud |
-| `/api/v1/missions/{id}/reconstruction/mesh` | `GET` | Stream reconstructed 3D surface mesh (OBJ/GLB) |
-| `/api/v1/missions/{id}/report` | `GET` | Download executive PDF or JSON mission decision report |
-
----
-
-## Troubleshooting
-
-1. **PyCOLMAP Not Found on Windows**:
-   - Ensure you are running under Python 3.11 (`.venv311`). PyCOLMAP wheels are compiled for Python 3.11 on Windows x64.
-2. **FFmpeg Execution Errors**:
-   - Verify FFmpeg is on your system PATH (`ffmpeg -version`). Run `scripts/dev.ps1` which validates the FFmpeg environment on startup.
-3. **Database Migration Desynchronization**:
-   - Apply migrations using `alembic upgrade head`. For a fresh local SQLite database, deleting `data/aeromesh.db` and running `alembic upgrade head` will recreate the schema cleanly.
-
----
-
-## Scientific Integrity & Known Limitations
-
-- **Arbitrary Local Coordinate System**: In the absence of calibrated Ground Control Points (GCPs) or differential RTK-GPS tags, reconstructed photogrammetry models operate in a relative optical camera frame (`LOCAL_ARBITRARY`).
-- **Relative Scale Ambiguity**: Monocular Structure-from-Motion suffers from inherent scale ambiguity. Distances are calculated in relative scene units unless explicitly calibrated using a known physical ground baseline.
-- **Dense Stereo Hardware Scoping**: Multi-View Stereo (MVS) dense depth matching requires dedicated NVIDIA CUDA or AMD HIP hardware. When running on CPU-only infrastructure, the system outputs authoritative sparse point clouds and Poisson surface meshes without interpolating synthetic geometry.
-
----
-
-## Credits & License
-
-- **Structure-from-Motion**: Built upon [COLMAP](https://colmap.github.io/) / [PyCOLMAP](https://github.com/colmap/pycolmap).
-- **Surface Reconstruction**: [Open3D](http://www.open3d.org/) Screened Poisson Surface Reconstruction.
-- **Object Detection & Tracking**: [Ultralytics YOLOv11](https://github.com/ultralytics/ultralytics) and [ByteTrack](https://github.com/ifzhang/ByteTrack).
-- **Visualization**: [Three.js](https://threejs.org/), [Deck.gl](https://deck.gl/), and [MapLibre GL](https://maplibre.org/).
-
-Hexa Spark is developed for tactical unmanned aerial inspection and research. Distributed under the MIT License.
+- **Backend Tests**: Run unit and integration tests with `pytest`.
+- **Preflight Check**: Run `python scripts/preflight.py` to verify all dependencies and paths.

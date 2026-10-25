@@ -40,14 +40,19 @@ data/users.json
 
 # Data directory and artifacts
 data/
+data/missions/
+data/objects/
 backend/data/
 input/
 datasets/
 SinglePass3D/
 samples/
 
-# Database files
+# Database and COLMAP database files
 *.db
+*.db-wal
+*.db-shm
+database.db
 *.sqlite
 *.sqlite3
 
@@ -66,15 +71,19 @@ samples/
 *.mov
 *.avi
 *.mkv
+*.webm
+*.flv
 
 # Logs
 *.log
 
-# IDE
+# IDE and agent metadata
 .vscode/*
 !.vscode/extensions.json
 !.vscode/settings.json
 .idea/
+.agents/
+.codex/
 
 # Generated output
 output/
@@ -100,8 +109,14 @@ run_final.json
 pip_versions.txt
 *.png
 *.jpg
+!docs/screenshots/*.png
 !docs/screenshots/**/*.png
 !docs/screenshots/**/*.jpg
+docs/screenshots/redesign-*
+docs/screenshots/review-*
+docs/screenshots/local-mission-*
+docs/screenshots/rehearsal-*
+docs/screenshots/mission-command-*
 !frontend/public/**/*.png
 !frontend/public/**/*.jpg
 !frontend/src/**/*.png
