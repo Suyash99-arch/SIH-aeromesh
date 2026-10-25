@@ -1180,6 +1180,28 @@
   cursor: grabbing;
 }
 
+.hero-webgl-fallback {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 12px;
+  color: var(--cyan, #4fd8ff);
+  font-size: 12px;
+  text-align: center;
+  pointer-events: none;
+}
+
+.hero-webgl-fallback svg {
+  width: min(82%, 360px);
+  height: auto;
+  fill: rgba(56, 215, 255, 0.06);
+  stroke: currentColor;
+  stroke-width: 1.25;
+  opacity: 0.72;
+}
+
 /* Concentric Staging Rings & Compass */
 .compass-staging-rings {
   position: absolute;

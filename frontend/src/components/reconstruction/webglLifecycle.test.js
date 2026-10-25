@@ -1,6 +1,21 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { attachWebGLContextHandlers, releaseWebGLRenderer } from "./webglLifecycle.js";
+import { attachWebGLContextHandlers, isSoftwareWebGLRenderer, releaseWebGLRenderer } from "./webglLifecycle.js";
+
+test("software WebGL renderers are detected from the unmasked renderer name", () => {
+  const debugInfo = { UNMASKED_RENDERER_WEBGL: 37446 };
+  const makeRenderer = (name) => ({
+    getContext: () => ({
+      RENDERER: 7937,
+      getExtension: (extension) => extension === "WEBGL_debug_renderer_info" ? debugInfo : null,
+      getParameter: (parameter) => parameter === debugInfo.UNMASKED_RENDERER_WEBGL ? name : "WebGL renderer",
+    }),
+  });
+
+  assert.equal(isSoftwareWebGLRenderer(makeRenderer("Google SwiftShader")), true);
+  assert.equal(isSoftwareWebGLRenderer(makeRenderer("Mesa llvmpipe (LLVM 18.1.2)")), true);
+  assert.equal(isSoftwareWebGLRenderer(makeRenderer("NVIDIA GeForce RTX")), false);
+});
 
 test("WebGL lifecycle prevents context loss and handles restore, then removes listeners", () => {
   const listeners = new Map();

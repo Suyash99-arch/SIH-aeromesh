@@ -1,6 +1,18 @@
 # Local full reconstruction demo runbook
 
-Use a Vercel **Preview deployment** for the tunnel demo. Keep the `main` deployment and production environment pointed at the stable Render API.
+Use the stable Render API for online demos. Do not repoint Production at a laptop or tunnel. Render's local filesystem is ephemeral; files uploaded to the hosted service may disappear after a restart or redeploy.
+
+## Wake and verify the online backend
+
+Render may spin down its free instance. Wake it before opening the frontend and wait for the health response to report `status: healthy`:
+
+```powershell
+curl.exe --fail --show-error --silent https://sih-aeromesh.onrender.com/api/v1/health
+```
+
+The Vercel Production environment should leave `VITE_API_BASE_URL` and `VITE_UPLOAD_BASE_URL` empty, or set both to `https://sih-aeromesh.onrender.com/api/v1`. Preview deployments should use the same values unless a separately approved backend is intended. Never put credentials or a temporary tunnel URL in these variables.
+
+For live E2E account access, keep credentials in the ignored `frontend/.env.e2e` file or environment variables; do not paste them into commands, screenshots, logs, or this runbook. The test runner recognizes `E2E_INDIVIDUAL_EMAIL`, `E2E_INDIVIDUAL_PASSWORD`, `E2E_GOV_EMAIL`, `E2E_GOV_PASSWORD`, and `E2E_GOV_INVITE_CODE`.
 
 ## Start the local API
 
@@ -61,42 +73,25 @@ npm run dev
 
 Remove `frontend/.env.local` after local development; it is gitignored.
 
-## Vercel Preview tunnel setup
+## Local frontend and API
 
-1. Start and verify the local API first.
-2. In a separate PowerShell window, run:
-
-   ```powershell
-   $cloudflared = (Get-Command cloudflared.exe -ErrorAction Stop).Source
-   & $cloudflared tunnel --url http://127.0.0.1:8000
-   ```
-
-3. Copy the HTTPS `https://<random>.trycloudflare.com` URL printed by `cloudflared`. Quick-tunnel URLs change on every restart.
-4. In Vercel Project Settings → Environment Variables, set **Preview only**:
-
-   ```text
-   VITE_API_BASE_URL=https://<random>.trycloudflare.com/api/v1
-   VITE_UPLOAD_BASE_URL=https://<random>.trycloudflare.com/api/v1
-   ```
-
-5. Redeploy the intended preview branch so Vite bakes in the new values. Do not set these values for Production and do not change the `/api` rewrite in `vercel.json`; the explicit Vite API base directs this preview build to the tunnel.
-6. The backend allows Vercel preview origins (`*.vercel.app`). If using a custom preview domain, restart the API with `ALLOWED_ORIGINS` containing that exact HTTPS origin before opening the tunnel.
-7. Test health and a read-only mission page on the preview before sharing it. Keep the API process and tunnel window running for the whole demo.
+When `VITE_API_BASE_URL` is empty, Vite proxies `/api` requests to the stable Render API. To use a local API instead, set both `VITE_API_BASE_URL` and `VITE_UPLOAD_BASE_URL` to that API's `/api/v1` URL in the ignored `frontend/.env.local` file, then restart Vite. Keep local-only API settings out of Vercel Production.
 
 ## Pre-demo checklist
 
 - Laptop is plugged in, awake, and has enough free disk space in `C:\aeromesh-data`.
 - `.venv311`, native COLMAP, FFmpeg/ffprobe, model weights, and frontend dependencies are available.
 - Local `/health` reports the full profile and heavy pipeline mode; confirm the database and data paths are local.
-- Start the API before the tunnel; verify the tunnel reaches local `/health`.
-- Confirm the Preview deployment has the current quick-tunnel URL in both Vite variables; Production remains on Render.
+- Wake Render and verify `/api/v1/health` before opening the frontend.
+- Confirm Vercel Production uses the stable Render API (or empty Vite API variables, allowing the `/api` rewrite).
+- Treat Render-hosted uploads as ephemeral; keep any required demo assets backed up locally and do not promise persistence across service restarts.
 - Prefer a pre-processed demo mission for evaluators. For an optional live run, enable 24-frame fast mode, use a short clip with good lateral baseline and overlap, and allow at least 10–12 minutes end to end on this laptop. Include upload, validation, detection, and report handling in the schedule.
 - Use video with real lateral/orbital baseline and substantial frame overlap. The upload motion heuristic can be conservative; inspect quality and reconstruction results rather than promising success from its score alone.
 - Avoid real accounts, sensitive footage, or unnecessary uploads. The quick tunnel exposes the local API publicly while it runs.
 - Keep screenshots or exported reports for a no-network backup.
 
-## If the tunnel or laptop fails
+## If Render or the laptop fails
 
-- If the quick tunnel disconnects, restart `cloudflared`, copy the newly generated URL, update both **Preview-only** Vercel variables, and redeploy the preview. Existing URLs do not persist across restarts.
-- If the laptop, API, or reconstruction stack fails, stop the tunnel. Switch to the pre-processed demo mission on the stable Render-backed production site if that demo data is already available; otherwise present the saved screenshots and report exports. Do not repoint Production to a laptop tunnel.
-- Resume a live reconstruction only after the local health check and tunnel check both pass. Keep the failed mission/error logs for diagnosis rather than silently substituting synthetic output.
+- If Render is waking, allow its health endpoint time to become healthy before retrying the frontend.
+- If the local reconstruction stack fails, keep its logs and switch to a pre-processed demo mission or saved report exports. Do not create replacement data on Production or expose the laptop API through a tunnel.
+- Resume a local reconstruction only after local health and its required model, FFmpeg, and COLMAP checks pass.

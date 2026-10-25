@@ -91,7 +91,7 @@ export function getUploadBase() {
     const clean = String(envUpload).replace(/\/+$/, "");
     return clean.endsWith("/api/v1") ? clean : `${clean}/api/v1`;
   }
-  return "https://sih-aeromesh.onrender.com/api/v1";
+  return API_BASE;
 }
 export const UPLOAD_BASE = getUploadBase();
 

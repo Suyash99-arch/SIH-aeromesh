@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { joinApiUrl } from "./url.js";
+import { API_BASE, getUploadBase } from "./missions.js";
 
 test("joinApiUrl leaves absolute API response URLs untouched", () => {
   const absolute = "https://media.example.test/video/clip.mp4?download=1";
@@ -18,4 +19,8 @@ test("joinApiUrl joins relative endpoints once", () => {
     "https://api.example.test/api/v1/missions/42/video",
   );
   assert.equal(joinApiUrl("/api/v1", "/missions/42"), "/api/v1/missions/42");
+});
+
+test("uploads use the configured API origin when no separate upload URL is set", () => {
+  assert.equal(getUploadBase(), API_BASE);
 });

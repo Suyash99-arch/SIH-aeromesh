@@ -34,13 +34,15 @@ def test_large_chunk_upload_is_resumable_and_disk_streamed(tmp_path, monkeypatch
             source.write(os.urandom(block_size))
 
     def process_uploaded_file(video_path, safe_name, mid, request, storage_metadata):
-        return {
+        video_info = {
             "filename": safe_name,
             "storage_key": storage_metadata.key,
             "size_bytes": video_path.stat().st_size,
             "sha256": storage_metadata.checksum,
             "storage_persistence": "ephemeral",
         }
+        main._record_uploaded_video(mid, video_info, None, request)
+        return video_info
 
     monkeypatch.setattr(main, "_process_and_validate_video_file", process_uploaded_file)
     total_chunks = (source_size + main.CHUNK_SIZE_BYTES - 1) // main.CHUNK_SIZE_BYTES
@@ -111,6 +113,16 @@ def test_large_chunk_upload_is_resumable_and_disk_streamed(tmp_path, monkeypatch
 
         assert last_response["status"] == "upload_complete"
         assert last_response["processing"]["heavy_reconstruction_available"] is False
+
+        raw_mission_video = (main.MissionData(mission_id).data.get("video") or {})
+        assert raw_mission_video["filename"] == source_path.name
+        assert raw_mission_video["size_bytes"] == source_size
+
+        mission_readback = client.get(f"/api/v1/missions/{mission_id}")
+        assert mission_readback.status_code == 200, mission_readback.text
+        stored_video_metadata = mission_readback.json()["mission"]["video"]
+        assert stored_video_metadata["filename"] == source_path.name
+        assert stored_video_metadata["size_bytes"] == source_size
     finally:
         stop_sampling.set()
         sampler.join(timeout=2)
@@ -143,6 +155,48 @@ def test_large_chunk_upload_is_resumable_and_disk_streamed(tmp_path, monkeypatch
     assert rss_growth_mb < 100
 
 
+def test_chunk_upload_readback_preserves_video_metadata(tmp_path, monkeypatch, synthetic_video_path):
+    client = TestClient(main.app)
+    monkeypatch.setattr(main, "is_lightweight_profile", lambda: True)
+    mission_id = None
+    try:
+        mission_response = client.post("/api/v1/missions?name=Chunk_Readback_Test")
+        assert mission_response.status_code == 200
+        mission_id = mission_response.json()["mission"]["id"]
+
+        source_path = tmp_path / "readback.mp4"
+        video_bytes = synthetic_video_path.read_bytes()
+        source_size = 5 * 1024 * 1024
+        source_path.write_bytes(video_bytes + (b"\0" * (source_size - len(video_bytes))))
+        total_chunks = (source_size + main.CHUNK_SIZE_BYTES - 1) // main.CHUNK_SIZE_BYTES
+        upload_id = "readback_upload_test_id"
+
+        with source_path.open("rb") as source:
+            for chunk_index in range(total_chunks):
+                payload = source.read(main.CHUNK_SIZE_BYTES)
+                response = client.post(
+                    f"/api/v1/missions/{mission_id}/upload/chunk",
+                    params={
+                        "chunk_index": chunk_index,
+                        "total_chunks": total_chunks,
+                        "upload_id": upload_id,
+                        "filename": source_path.name,
+                    },
+                    files={"chunk": (source_path.name, payload, "video/mp4")},
+                )
+                assert response.status_code == 200, response.text
+
+        readback = client.get(f"/api/v1/missions/{mission_id}")
+        assert readback.status_code == 200, readback.text
+        stored_video = readback.json()["mission"]["video"]
+        assert stored_video["filename"] == source_path.name
+        assert stored_video["size_bytes"] == source_size
+    finally:
+        if mission_id:
+            cleanup = client.delete(f"/api/v1/missions/{mission_id}")
+            assert cleanup.status_code in (200, 204, 404), cleanup.text
+
+
 def test_health_and_upload_config_are_lightweight():
     client = TestClient(main.app)
     health = client.get("/api/v1/health")
@@ -155,6 +209,21 @@ def test_health_and_upload_config_are_lightweight():
     assert config.json()["max_upload_size_bytes"] == main.MAX_UPLOAD_SIZE_BYTES
     assert config.json()["chunk_size_bytes"] == 2 * 1024 * 1024
     assert engine.status_code == 200
+
+
+def test_resume_mission_updates_pipeline_state(tmp_path, monkeypatch):
+    monkeypatch.setattr(main, "MISSIONS_DIR", tmp_path / "missions")
+    monkeypatch.setenv("AEROMESH_DISABLE_AUTH", "1")
+    client = TestClient(main.app)
+    mission_response = client.post("/api/v1/missions?name=Resume_Status_Test")
+    assert mission_response.status_code == 200
+    mission_id = mission_response.json()["mission"]["id"]
+
+    response = client.post(f"/api/v1/missions/{mission_id}/resume")
+
+    assert response.status_code == 200
+    assert response.json()["success"] is True
+    assert main.MissionData(mission_id).data["status"] == "processing"
 
 
 def test_lightweight_upload_succeeds_without_preview_dependencies(tmp_path, monkeypatch):

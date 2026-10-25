@@ -2135,6 +2135,13 @@ async def login(credentials: LoginRequest, response: Response):
             headers={"WWW-Authenticate": "Bearer"},
         )
 
+    if credentials.portal_type and credentials.portal_type.strip().upper() != user.portal_type.upper():
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid email or password",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+
     # Handle Multi-Factor Authentication (MFA/OTP)
     if user.mfa_enabled:
         if not credentials.mfa_code:

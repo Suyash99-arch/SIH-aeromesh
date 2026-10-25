@@ -90,6 +90,14 @@ test("all app routes render safely across mission states and responsive themes",
   const countRequestsForMission = (id) => missionRequests.filter((pathname) => pathname.endsWith(`/missions/${id}`)).length;
   await page.addInitScript(() => {
     window.__guestMissionStorageChecks = [];
+    const originalSetTimeout = window.setTimeout.bind(window);
+    window.setTimeout = (callback, delay, ...args) =>
+      originalSetTimeout(callback, Number(delay) === 20_000 ? 0 : delay, ...args);
+    if (window.requestIdleCallback) {
+      const originalRequestIdleCallback = window.requestIdleCallback.bind(window);
+      window.requestIdleCallback = (callback, options) =>
+        originalRequestIdleCallback(callback, { ...options, timeout: 0 });
+    }
     const originalFetch = window.fetch.bind(window);
     window.fetch = (input, init) => {
       const url = typeof input === "string" ? input : input.url;
@@ -183,6 +191,15 @@ test("all app routes render safely across mission states and responsive themes",
           await expect(page.locator("#root")).not.toBeEmpty();
           await expect(page.locator("#root")).not.toContainText("This page could not be loaded");
         }
+        if (route.name === "Landing" || route.workflow) {
+          const heroCanvasViewport = page.locator(".hero-canvas-viewport");
+          await expect(heroCanvasViewport).toBeVisible();
+          await expect.poll(async () => (
+            await heroCanvasViewport.locator("canvas, .hero-webgl-fallback").count()
+          ) > 0).toBe(true);
+        } else {
+          await expect(page.locator(".hero-canvas-viewport")).toHaveCount(0);
+        }
         expect(await page.locator("body").innerText()).not.toMatch(/STAGES\./u);
         expect(await page.locator("body").innerText()).not.toContain("Sign-in required");
         const metricOptionLocator = page.locator("#unit-select option[value='metric']");
@@ -191,9 +208,10 @@ test("all app routes render safely across mission states and responsive themes",
         }
         if (route.name === "Mission Command" && scenario === "not-run-light") {
           await expect(page.getByText("Not run. Full 3D reconstruction requires the full compute profile.", { exact: true })).toHaveCount(2);
+          await expect(page.locator(".dispatch-card .badge-tag.insufficient")).toContainText("No data yet");
           await expect(page.locator(".stage-btn.completed")).toHaveCount(1);
           await expect(page.locator(".stage-btn.failed")).toHaveCount(0);
-          await expect(page.locator(".pipeline-panel .progress-head")).toContainText("13%");
+          await expect(page.locator(".pipeline-panel .progress-head")).toContainText("1 of 8 steps completed");
         }
         if (route.name === "Mission Command" && scenario === "failed") {
           await expect(page.getByText("COLMAP failed: fixture reconstruction error").first()).toBeVisible();
@@ -212,6 +230,7 @@ test("all app routes render safely across mission states and responsive themes",
         await expect(page.getByText("This page could not be loaded", { exact: true })).toHaveCount(0);
         if (await page.locator("canvas").count()) {
           await page.goto(`${baseURL}/?page=auth`, { waitUntil: "domcontentloaded" });
+          await expect(page.locator(".hero-canvas-viewport")).toHaveCount(0);
           await page.waitForTimeout(100);
           expect(webglContextLossWarnings, `${scenario}/${route.name}/${viewport.width}/${viewport.theme} WebGL cleanup warnings`).toEqual([]);
         }
@@ -309,6 +328,7 @@ test("all app routes render safely across mission states and responsive themes",
   });
   await page.goto(`${baseURL}/?page=overview&mission=${missionId}`, { waitUntil: "domcontentloaded" });
   await expect(page.locator("html")).toHaveAttribute("lang", "hi");
+  await expect(page.locator(".dispatch-card .badge-tag.insufficient")).toContainText("अभी कोई डेटा नहीं");
   await page.screenshot({ path: path.join(screenshotsDir, "review-v2-mission-command-390-light-hi.png"), fullPage: true, animations: "disabled" });
   expect(pageErrors).toEqual([]);
   expect(consoleErrors).toEqual([]);

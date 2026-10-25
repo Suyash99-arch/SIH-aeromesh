@@ -268,7 +268,9 @@
     "downloadZip": "Download Evidence Package",
     "openViewer": "Launch 3D Spatial Viewer",
     "openScene": "Inspect Scene Intelligence",
-    "notRunReconstruction": "Not run. Full 3D reconstruction requires the full compute profile."
+    "notRunReconstruction": "Not run. Full 3D reconstruction requires the full compute profile.",
+    "noSceneData": "No data yet",
+    "stageProgress": "{completed} of {total} steps completed"
   },
   "reconstruction": {
     "title": "3D Aerial Spatial Viewer",
@@ -777,6 +779,7 @@
     "meshTitle": "Aerial surface mesh",
     "meshDescription": "Visual guide · not mission data",
     "meshBadge": "Illustrative visualization",
+    "webglFallback": "3D preview unavailable on this device; showing a static view.",
     "meshType": "VIEW TYPE",
     "meshTypeValue": "Concept surface",
     "meshSource": "MISSION SOURCE",

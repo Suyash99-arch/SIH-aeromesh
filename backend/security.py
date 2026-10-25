@@ -583,8 +583,6 @@ def check_mission_access(
     if os.environ.get("AEROMESH_DISABLE_AUTH") == "1":
         return True
 
-    # Demo mode may admit anonymous visitors, but an authenticated account must
-    # still be scoped to its own missions and organization.
     if AUTH_OPTIONAL_MODE and user is None:
         return True
 

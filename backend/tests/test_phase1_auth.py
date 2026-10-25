@@ -61,6 +61,43 @@ def test_government_org_registration():
     assert "refresh_token" in res.cookies
 
 
+def test_login_rejects_credentials_for_the_wrong_portal():
+    email = f"portal-check-{RUN_ID}@geo-mapping.io"
+    password = "SurveyorPass123!"
+    registration = client.post(
+        "/api/v1/auth/register",
+        json={
+            "email": email,
+            "password": password,
+            "full_name": "Portal Check",
+            "portal_type": PORTAL_INDIVIDUAL,
+        },
+    )
+    assert registration.status_code == 200
+
+    wrong_portal = client.post(
+        "/api/v1/auth/login",
+        json={
+            "email": email,
+            "password": password,
+            "portal_type": PORTAL_GOV_ORG,
+        },
+    )
+    assert wrong_portal.status_code == 401
+    assert wrong_portal.json()["detail"] == "Invalid email or password"
+
+    correct_portal = client.post(
+        "/api/v1/auth/login",
+        json={
+            "email": email,
+            "password": password,
+            "portal_type": PORTAL_INDIVIDUAL,
+        },
+    )
+    assert correct_portal.status_code == 200
+    assert correct_portal.json()["user"]["portal_type"] == PORTAL_INDIVIDUAL
+
+
 def test_individual_registration():
     res = client.post(
         "/api/v1/auth/register",
