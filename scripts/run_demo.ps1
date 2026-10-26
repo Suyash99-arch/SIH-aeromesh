@@ -76,7 +76,7 @@ Write-Host ""
 Write-Host "============================================================" -ForegroundColor Cyan
 Write-Host "  AeroMesh Demo Running!" -ForegroundColor Green
 Write-Host "  Backend:  http://127.0.0.1:8000" -ForegroundColor White
-Write-Host "  Frontend: http://localhost:5173" -ForegroundColor White
+Write-Host "  Frontend: http://localhost:5173 (open with no ?mission= parameter)" -ForegroundColor White
 Write-Host "" -ForegroundColor White
 Write-Host "  Press Ctrl+C to stop all services." -ForegroundColor DarkGray
 Write-Host "============================================================" -ForegroundColor Cyan

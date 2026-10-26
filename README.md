@@ -67,7 +67,7 @@ To run the complete verified local demo with a single command (launches both the
 ```
 
 - **Backend API**: `http://127.0.0.1:8000` (docs at `http://127.0.0.1:8000/docs`)
-- **Frontend App**: `http://localhost:5173`
+- **Frontend App**: `http://localhost:5173` (open with no `?mission=` parameter)
 
 Alternatively, to run the preflight verification check beforehand:
 ```powershell
