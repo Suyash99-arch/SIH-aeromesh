@@ -1158,20 +1158,35 @@ function Scene({
   // 1. If real mesh exists and hasn't failed, mesh is PRIMARY.
   // 2. Point cloud is optional layer (default false if mesh exists; true if mesh is absent or fails).
   const hasMesh = Boolean(meshUrl) && !meshFailed;
+  const isDenseMode = mode === "dense_cloud" || mode === "dense";
   const showMesh =
     !meshFailed &&
     layers.mesh !== false &&
     hasMesh &&
     mode !== "point cloud" &&
     mode !== "point_cloud" &&
+    !isDenseMode &&
     layers.pointsOnly !== true;
   const showCloud =
     mode === "point_cloud" ||
     mode === "point cloud" ||
+    isDenseMode ||
     layers.pointCloud === true ||
     layers.pointsOnly === true ||
     (meshFailed && Boolean(pointCloudUrl)) ||
     (!hasMesh && layers.pointCloud !== false && Boolean(pointCloudUrl));
+
+  const effectiveCloudUrl = useMemo(() => {
+    if (isDenseMode) {
+      if (mission?.reconstruction?.dense_point_cloud_url) {
+        return resolveAssetUrl(mission.reconstruction.dense_point_cloud_url);
+      }
+      if (pointCloudUrl) {
+        return pointCloudUrl.includes("?") ? `${pointCloudUrl}&type=dense` : `${pointCloudUrl}?type=dense`;
+      }
+    }
+    return pointCloudUrl;
+  }, [isDenseMode, pointCloudUrl, mission]);
 
   const showSemanticObjects =
     layers.semanticObjects !== false && layers.objects !== false;
@@ -1427,9 +1442,9 @@ function Scene({
             />
           )}
 
-          {showCloud && pointCloudUrl && (
+          {showCloud && effectiveCloudUrl && (
             <RealPointCloud
-              url={pointCloudUrl}
+              url={effectiveCloudUrl}
               onBoundsComputed={handleBoundsComputed}
               pointSize={pointSize}
             />
@@ -2181,6 +2196,11 @@ export default function ReconstructionViewer({
                   { id: "solid", label: language === "hi" ? "सॉलिड" : "Solid" },
                   { id: "wireframe", label: language === "hi" ? "वायरफ्रेम" : "Wireframe" },
                   { id: "point_cloud", label: language === "hi" ? "पॉइंट क्लाउड" : "Point Cloud" },
+                  {
+                    id: "dense_cloud",
+                    label: language === "hi" ? "सघन (डेप्थ-संरेखित)" : "Dense (depth-aligned)",
+                    title: "Dense: learned depth aligned to SfM (estimated, not measured MVS)"
+                  },
                 ].map((m) => (
                   <button
                     key={m.id}
@@ -2188,6 +2208,7 @@ export default function ReconstructionViewer({
                     style={
                       currentMode === m.id ? activeNavBtnStyle : navBtnStyle
                     }
+                    title={m.title}
                   >
                     {m.label}
                   </button>
@@ -2518,21 +2539,26 @@ export default function ReconstructionViewer({
             bottom: 0,
             left: 0,
             right: 0,
-            height: "28px",
+            minHeight: "28px",
+            height: "auto",
             background: "rgba(6, 16, 23, 0.94)",
             borderTop: "1px solid rgba(56, 215, 255, 0.15)",
             backdropFilter: "blur(8px)",
             display: "flex",
             alignItems: "center",
             justifyContent: "space-between",
-            padding: "0 14px",
+            flexWrap: "wrap",
+            gap: "8px",
+            padding: "4px 14px",
             fontSize: "11px",
             color: "#94a3b8",
             zIndex: 9,
-            pointerEvents: "none",
+            pointerEvents: "auto",
+            maxHeight: "80px",
+            overflowY: "auto",
           }}
         >
-          <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+          <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
             <span>{t("reconstruction.registeredCamerasCount")}: <b style={{ color: "#ffffff" }}>{mission?.reconstruction?.registered_cameras ?? reconstructionMeta?.registered_cameras ?? 0} {t("sceneIntelligence.registered", "Registered")}</b></span>
             <span style={{ opacity: 0.35 }}>•</span>
             <span>{t("reconstruction.sparsePointCount")}: <b style={{ color: "#38bdf8" }}>{(mission?.reconstruction?.sparse_point_count ?? reconstructionMeta?.sparse_point_count ?? 0).toLocaleString()}</b></span>

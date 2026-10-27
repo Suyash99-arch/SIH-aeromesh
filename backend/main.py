@@ -651,11 +651,11 @@ def _load_detection_model(use_aeromesh: bool = True):
     """
     Load the detection model with fallback logic.
     
-    Tries to load aeromesh_yolo.pt (fine-tuned on VisDrone dataset).
-    Falls back to yolo11n.pt (COCO-pretrained) if aeromesh file is missing.
+    Prefers OpenVINO FP32 exported model for high-throughput CPU batched inference.
+    Falls back to .pt PyTorch weights if OpenVINO is unavailable or export fails.
     
     Args:
-        use_aeromesh: If True, prefer aeromesh model; if False, use yolo11n
+        use_aeromesh: If True, prefer aeromesh model; if False, use yolo11 canonical
         
     Returns:
         Tuple of (model, model_name, is_aeromesh_loaded)
@@ -664,14 +664,42 @@ def _load_detection_model(use_aeromesh: bool = True):
     
     configured_path = os.getenv("YOLO_MODEL_PATH", "").strip()
     backend_models_dir = Path(__file__).resolve().parent / "models"
+    disable_openvino = os.getenv("DISABLE_OPENVINO", "0").lower() in ("1", "true", "yes")
+
+    aeromesh_openvino_candidates = [
+        backend_models_dir / "aeromesh_yolo_openvino_model",
+        BASE_DIR / "backend" / "models" / "aeromesh_yolo_openvino_model",
+    ]
     aeromesh_candidates = [
         backend_models_dir / "aeromesh_yolo.pt",
         BASE_DIR / "backend" / "models" / "aeromesh_yolo.pt",
     ]
     if use_aeromesh:
+        if not disable_openvino:
+            for ov_cand in aeromesh_openvino_candidates:
+                if ov_cand.is_dir() and (ov_cand / "aeromesh_yolo.xml").is_file():
+                    try:
+                        model = YOLO(str(ov_cand))
+                        logger.info("Loaded aeromesh OpenVINO FP32 model from %s", ov_cand)
+                        return model, "aeromesh_yolo_openvino", True
+                    except Exception as exc:
+                        logger.warning("Failed to load aeromesh OpenVINO model at %s: %s", ov_cand, exc)
+
         for aero_cand in aeromesh_candidates:
             if aero_cand.is_file():
                 try:
+                    # Attempt export to OpenVINO FP32 if not already done
+                    if not disable_openvino:
+                        try:
+                            pt_model = YOLO(str(aero_cand))
+                            logger.info("Exporting %s to OpenVINO FP32 (dynamic=True, half=False)...", aero_cand)
+                            ov_path = pt_model.export(format="openvino", dynamic=True, half=False)
+                            ov_model = YOLO(str(ov_path))
+                            logger.info("Successfully exported and loaded OpenVINO FP32 model: %s", ov_path)
+                            return ov_model, "aeromesh_yolo_openvino", True
+                        except Exception as export_exc:
+                            logger.warning("OpenVINO FP32 export failed; falling back to PyTorch .pt: %s", export_exc)
+
                     model = YOLO(str(aero_cand))
                     logger.info("Loaded aeromesh_yolo.pt from %s (VisDrone fine-tuned model)", aero_cand)
                     return model, "aeromesh_yolo", True
@@ -808,6 +836,8 @@ class MissionData:
                         time.sleep(0.005)
     
     def save(self, *, failure_stage: str = "db_update"):
+        if "id" not in self.data:
+            self.data["id"] = self.mission_id
         database_engine = get_configured_engine()
         if database_engine is not None:
             try:
@@ -4827,6 +4857,36 @@ def run_full_pipeline_task(
         completed_stages.append("video")
         stage_timings["stage_1_video_validation"] = round(time.perf_counter() - t_s1, 3)
 
+        # Step 1.a: Start web playback proxy creation in background thread so pipeline never waits on it
+        mission_dir = MISSIONS_DIR / mission_id
+        try:
+            import threading
+            from backend.video_ingest import get_or_create_browser_proxy
+            threading.Thread(
+                target=get_or_create_browser_proxy,
+                args=(video_path, mission_dir),
+                kwargs={"max_width": 1280},
+                daemon=True,
+            ).start()
+        except Exception as bg_proxy_err:
+            logger.warning("Failed starting background proxy generation: %s", bg_proxy_err)
+
+        # Single-pass frame extraction: decode video frames once for quality, detection, and tracking
+        pipeline_frames = []
+        cap_pipe = cv2.VideoCapture(str(video_path))
+        if cap_pipe and cap_pipe.isOpened():
+            v_fps = float(cap_pipe.get(cv2.CAP_PROP_FPS) or 25.0)
+            v_interval = max(1, int(round(v_fps / frame_sampling)))
+            f_num = 0
+            while True:
+                ret_p, frm_p = cap_pipe.read()
+                if not ret_p or frm_p is None:
+                    break
+                if f_num % v_interval == 0:
+                    pipeline_frames.append((f_num, float(f_num / v_fps), frm_p))
+                f_num += 1
+            cap_pipe.release()
+
         # ============================================================
         # STAGE 2: Quality Filtering & Keyframe Extraction
         # ============================================================
@@ -4841,24 +4901,52 @@ def run_full_pipeline_task(
             progress_percent=20,
             message="Variance of Laplacian blur gate & keyframe extraction",
         )
-        basic_res = _basic_process(video_path, frame_sampling, detection_confidence, scene_profile)
-        result = basic_res
-        result["video"] = {**video_info, **result.get("video", {}), **real_summary}
+        # Step 1.b: Sample at 1 fps instead of dense sampling
+        q_step = max(1, int(round(frame_sampling / 1.0)))
+        q_samples = []
+        from backend.quality_metrics import compute_frame_quality_metrics
+        for idx_p, (fn_p, ts_p, frm_p) in enumerate(pipeline_frames):
+            if idx_p % q_step == 0:
+                q = compute_frame_quality_metrics(frm_p)
+                q_samples.append({"frame": fn_p, "timestamp_s": ts_p, **q})
 
-        try:
-            from backend.quality_metrics import analyze_video_quality_timeseries as _aqts
-            q_data = _aqts(video_path, sample_fps=2.0)
-            if q_data.get("samples"):
-                result["frameQuality"] = {
-                    "estimated": False,
-                    "average": q_data["summary"],
-                    "samples": q_data["samples"],
-                    "timeseries": q_data["samples"],
-                    "summary": q_data["summary"],
-                }
-                result["quality"] = q_data["summary"]
-        except Exception as _qe:
-            logger.warning("Frame quality timeseries computation failed: %s", _qe)
+        sharp_vals = [s["sharpness"] for s in q_samples] or [50.0]
+        blur_vals = [s["motion_blur"] for s in q_samples] or [50.0]
+        light_vals = [s["lighting"] for s in q_samples] or [50.0]
+        comp_vals = [s["compression"] for s in q_samples] or [50.0]
+        overall_vals = [s["overall"] for s in q_samples] or [50.0]
+
+        q_summary = {
+            "sharpness": round(float(np.mean(sharp_vals)), 1),
+            "motion_blur": round(float(np.mean(blur_vals)), 1),
+            "lighting": round(float(np.mean(light_vals)), 1),
+            "compression": round(float(np.mean(comp_vals)), 1),
+            "overall": round(float(np.mean(overall_vals)), 1),
+            "min_quality": round(float(np.min(overall_vals)), 1),
+            "max_quality": round(float(np.max(overall_vals)), 1),
+            "p10_quality": round(float(np.percentile(overall_vals, 10)), 1),
+            "p90_quality": round(float(np.percentile(overall_vals, 90)), 1),
+            "total_analyzed_frames": len(q_samples),
+        }
+
+        result = {
+            "video": {**video_info, **real_summary},
+            "processing": {
+                "status": "PROCESSING",
+                "sampleFps": frame_sampling,
+                "framesAnalyzed": len(pipeline_frames),
+                "inferenceFps": 0,
+            },
+            "frameQuality": {
+                "estimated": False,
+                "average": q_summary,
+                "samples": q_samples,
+                "timeseries": q_samples,
+                "summary": q_summary,
+            },
+            "quality": q_summary,
+            "scene_analysis": build_scene_analysis({"observations": []}, []),
+        }
 
         mission.update({
             "frameQuality": result.get("frameQuality"),
@@ -4894,6 +4982,7 @@ def run_full_pipeline_task(
                 tile_rows=tile_rows,
                 tile_cols=tile_cols,
                 tile_overlap=tile_overlap,
+                decoded_frames=pipeline_frames,
             )
             result = yolo_result
             result["video"] = {**video_info, **result.get("video", {}), **real_summary}
@@ -5169,6 +5258,9 @@ def run_full_pipeline_task(
                 "error": reconstruction_result.get("error"),
                 "mesh": mesh_data,
                 "point_cloud_url": f"/api/v1/missions/{mission_id}/reconstruction/pointcloud" if (reconstruction_result.get("success", pts_count > 0) and pts_count > 0) else None,
+                "dense_point_cloud_url": f"/api/v1/missions/{mission_id}/reconstruction/pointcloud?type=dense" if (reconstruction_result.get("dense_point_count", 0) > 0) else None,
+                "dense_point_count": reconstruction_result.get("dense_point_count", 0),
+                "dense_method": reconstruction_result.get("dense_method"),
                 "mesh_url": f"/api/v1/missions/{mission_id}/reconstruction/mesh" if (reconstruction_result.get("success", False) and has_mesh) else None,
                 "stages": reconstruction_result.get("stages", {}),
                 "scale": reconstruction_result.get("scale", {}),
@@ -6031,6 +6123,7 @@ def _run_yolo_detection(
     tile_cols: int = 2,
     tile_overlap: float = 0.15,
     tile_iou: float = 0.5,
+    decoded_frames: list | None = None,
 ) -> dict:
     """
     Run real YOLO inference and reduce false positives using temporal persistence.
@@ -6111,15 +6204,19 @@ def _run_yolo_detection(
         pass
 
     cache_dir = Path("data/cache/detections")
-    cache_path = cache_dir / f"{video_sha256}.json" if video_sha256 else None
-    if not disable_cache and cache_path and cache_path.is_file():
-        try:
-            with open(cache_path, "r", encoding="utf-8") as cf:
-                cached_data = json.load(cf)
-            logger.info("[_run_yolo_detection] Using cached detections for video sha256=%s", video_sha256)
-            return cached_data
-        except Exception as ce:
-            logger.warning("[_run_yolo_detection] Failed loading cache: %s", ce)
+    settings_key = f"{confidence:.2f}_{sample_fps:.1f}_{scene_profile or 'all'}_{tile_inference}"
+    cache_path = cache_dir / f"{video_sha256}_{settings_key}.json" if video_sha256 else None
+    fallback_cache_path = cache_dir / f"{video_sha256}.json" if video_sha256 else None
+    if not disable_cache:
+        for cp in [cache_path, fallback_cache_path]:
+            if cp and cp.is_file():
+                try:
+                    with open(cp, "r", encoding="utf-8") as cf:
+                        cached_data = json.load(cf)
+                    logger.info("[_run_yolo_detection] Using cached detections for video sha256=%s (%s)", video_sha256, cp.name)
+                    return cached_data
+                except Exception as ce:
+                    logger.warning("[_run_yolo_detection] Failed loading cache: %s", ce)
 
     target_min_hits = max(2, int(round(sample_fps * 1.0)))
     tracker = UltralyticsTracker(model)
@@ -6141,6 +6238,7 @@ def _run_yolo_detection(
             tile_iou=tile_iou,
             min_track_hits=target_min_hits,
             raw_frame_callback=_log_raw_frame,
+            decoded_frames=decoded_frames,
         )
     except Exception as exc:
         logger.error("[_run_yolo_detection] EXCEPTION caught in UltralyticsTracker.track_video: %s", exc, exc_info=True)
@@ -6287,8 +6385,10 @@ def _run_yolo_detection(
     if not disable_cache and cache_path:
         try:
             cache_dir.mkdir(parents=True, exist_ok=True)
-            with open(cache_path, "w", encoding="utf-8") as cf:
-                json.dump(result_payload, cf, indent=2)
+            for cp in [cache_path, fallback_cache_path]:
+                if cp:
+                    with open(cp, "w", encoding="utf-8") as cf:
+                        json.dump(result_payload, cf, indent=2)
         except Exception as ce:
             logger.warning("[_run_yolo_detection] Failed caching detections: %s", ce)
 
@@ -6666,14 +6766,14 @@ async def fuse_mission_objects_3d(mission_id: str, reprojection_threshold_px: fl
 @app.get("/api/v1/missions/{mission_id}/reconstruction/pointcloud")
 @app.get("/api/missions/{mission_id}/reconstruction/pointcloud")
 @app.get("/missions/{mission_id}/reconstruction/pointcloud")
-async def get_mission_pointcloud(mission_id: str):
-    """Serve the generated PLY point cloud for a mission if it exists."""
+async def get_mission_pointcloud(mission_id: str, type: Optional[str] = Query(None)):
+    """Serve the generated PLY point cloud (sparse or dense) for a mission if it exists."""
     mission = MissionData(mission_id)
     if not mission.data:
         raise HTTPException(status_code=404, detail="Mission not found")
 
     m_id = mission.mission_id
-    pointcloud_path = get_reconstruction_pointcloud_path(m_id)
+    pointcloud_path = get_reconstruction_pointcloud_path(m_id, pointcloud_type=type)
     if not pointcloud_path or not pointcloud_path.exists():
         return get_artifact_status_response(mission, "pointcloud")
 
@@ -6682,6 +6782,14 @@ async def get_mission_pointcloud(mission_id: str):
         media_type="application/octet-stream",
         filename=pointcloud_path.name,
     )
+
+
+@app.get("/api/v1/missions/{mission_id}/reconstruction/dense_pointcloud")
+@app.get("/api/missions/{mission_id}/reconstruction/dense_pointcloud")
+@app.get("/missions/{mission_id}/reconstruction/dense_pointcloud")
+async def get_mission_dense_pointcloud(mission_id: str):
+    """Serve the dense PLY point cloud (learned depth aligned to SfM) for a mission."""
+    return await get_mission_pointcloud(mission_id, type="dense")
 
 
 @app.get("/api/v1/missions/{mission_id}/reconstruction/mesh")

@@ -96,6 +96,8 @@ output/
 *.ckpt
 *.safetensors
 .hf_cache/
+backend/models/
+kernel.errors.txt
 
 # OS
 Thumbs.db

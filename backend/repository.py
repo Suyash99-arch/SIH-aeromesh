@@ -18,8 +18,8 @@ class MissionRepository:
 
     def create(self, data: dict[str, Any]) -> dict[str, Any]:
         mission = Mission(
-            id=data["id"],
-            name=data["name"],
+            id=data.get("id", ""),
+            name=data.get("name") or data.get("id") or "Mission",
             mission_type=data.get("type"),
             location=data.get("location"),
             operator=data.get("operator"),

@@ -471,6 +471,11 @@ def build_canonical_mission_summary(
             "observations": det_list,
             "uniqueTracks": unique_tracks,
             "mean_confidence": round(float(np.mean(conf_scores)), 2) if conf_scores else None,
+            "confidence_stats": {
+                "mean": round(float(np.mean(conf_scores)), 3) if conf_scores else 0.0,
+                "min": round(float(np.min(conf_scores)), 3) if conf_scores else 0.0,
+                "max": round(float(np.max(conf_scores)), 3) if conf_scores else 0.0,
+            },
             "model_name": data.get("detector", {}).get("name") or "aeromesh_yolo.pt",
             "model_path": os.getenv("YOLO_MODEL_PATH", "backend/models/aeromesh_yolo.pt"),
             "model_sha256": "f63808a3a5e21dee64c45186cb2ff724a0c908840a61192d7edd2cbe2f609885" if Path("backend/models/aeromesh_yolo.pt").exists() else None,

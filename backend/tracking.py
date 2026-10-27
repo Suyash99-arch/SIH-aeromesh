@@ -492,18 +492,10 @@ class UltralyticsTracker:
         min_box_size: tuple[float, float] | None = None,
         min_track_hits: int | None = None,
         raw_frame_callback: Any = None,
+        decoded_frames: list | None = None,
     ) -> list[DetectionRecord]:
         import cv2
-        capture = cv2.VideoCapture(str(video_path))
-        if not capture.isOpened():
-            raise ValueError("INVALID_VIDEO")
-        fps = float(capture.get(cv2.CAP_PROP_FPS) or 0.0)
-        if fps <= 0:
-            capture.release()
-            raise ValueError("INVALID_VIDEO")
-        interval = calculate_frame_interval(fps, sample_fps)
         allowed_classes = resolve_allowed_classes(scene_profile, classes)
-
         motion_estimator = CameraMotionEstimator(target_width=480) if enable_motion_compensation else None
         camera_motions: dict[int, CameraMotion] = {}
         motion_failures = 0
@@ -517,15 +509,36 @@ class UltralyticsTracker:
         dropped_aspect_ratio_count = 0
 
         records = []
-        frame_number = 0
-        sampled_frame_seq = 0
         target_min_hits = min_track_hits if min_track_hits is not None else max(2, int(round(sample_fps * 1.0)))
 
-        while True:
-            ok, frame = capture.read()
-            if not ok:
-                break
-            if frame_number % interval == 0:
+        # 1. Gather frame items: list of (frame_number, timestamp_s, frame_bgr)
+        frame_items: list[tuple[int, float, Any]] = []
+        if decoded_frames is not None and len(decoded_frames) > 0:
+            frame_items = decoded_frames
+            fps = float(len(frame_items) / max(0.1, frame_items[-1][1])) if frame_items[-1][1] > 0 else 30.0
+        else:
+            capture = cv2.VideoCapture(str(video_path))
+            if not capture.isOpened():
+                raise ValueError("INVALID_VIDEO")
+            fps = float(capture.get(cv2.CAP_PROP_FPS) or 0.0)
+            if fps <= 0:
+                capture.release()
+                raise ValueError("INVALID_VIDEO")
+            interval = calculate_frame_interval(fps, sample_fps)
+            frame_number = 0
+            while True:
+                ok, frame = capture.read()
+                if not ok:
+                    break
+                if frame_number % interval == 0:
+                    frame_items.append((frame_number, float(frame_number / fps), frame))
+                frame_number += 1
+            capture.release()
+
+        # 2. Inference & tracking pass (batched when not tiled)
+        if tile_inference:
+            sampled_frame_seq = 0
+            for frame_number, timestamp, frame in frame_items:
                 sampled_frame_seq += 1
                 h, w = frame.shape[:2]
                 rel_min_w = min_box_size[0] if min_box_size else max(24.0, float(w) * 0.006)
@@ -538,72 +551,100 @@ class UltralyticsTracker:
                     if not motion.success:
                         motion_failures += 1
 
-                if tile_inference:
-                    tiles = generate_tiles(w, h, rows=tile_rows, cols=tile_cols, overlap=tile_overlap)
-                    raw_frame_records = []
-                    for tx1, ty1, tx2, ty2 in tiles:
-                        tile = frame[ty1:ty2, tx1:tx2]
-                        try:
-                            result = self.model(tile, conf=confidence, iou=iou, verbose=False)[0]
-                        except Exception as exc:
-                            if raw_frame_callback:
-                                raw_frame_callback(sampled_frame_seq, frame_number, frame_number / fps, None, getattr(self.model, "names", {}), exc)
-                            raise
-                        names = getattr(result, "names", {})
-                        boxes = getattr(result, "boxes", [])
-                        if raw_frame_callback:
-                            raw_frame_callback(sampled_frame_seq, frame_number, frame_number / fps, boxes, names, None)
-                        for box in boxes:
-                            class_id = int(_scalar(box.cls[0]))
-                            class_name = str(names[class_id] if isinstance(names, dict) else names[class_id])
-                            if allowed_classes is not None and class_name not in allowed_classes:
-                                continue
-                            confidence_value = float(_scalar(box.conf[0]))
-                            raw_box = box.xyxy[0].tolist() if hasattr(box.xyxy[0], "tolist") else box.xyxy[0]
-                            remapped_bbox = [
-                                round(max(0.0, min(float(w), float(raw_box[0]) + tx1)), 4),
-                                round(max(0.0, min(float(h), float(raw_box[1]) + ty1)), 4),
-                                round(max(0.0, min(float(w), float(raw_box[2]) + tx1)), 4),
-                                round(max(0.0, min(float(h), float(raw_box[3]) + ty1)), 4),
-                            ]
-                            bw = remapped_bbox[2] - remapped_bbox[0]
-                            bh = remapped_bbox[3] - remapped_bbox[1]
-                            if bw < rel_min_w or bh < rel_min_h:
-                                dropped_box_size_count += 1
-                                continue
-                            # Aspect ratio sanity check for vehicles
-                            if any(v in class_name.lower() for v in ("car", "van", "truck", "bus", "vehicle")):
-                                ar = bw / max(1.0, bh)
-                                if ar > 4.5 or ar < 0.22:
-                                    dropped_aspect_ratio_count += 1
-                                    continue
-
-                            raw_frame_records.append(
-                                DetectionRecord(
-                                    frame_id=str(frame_number),
-                                    class_name=class_name,
-                                    confidence=confidence_value,
-                                    bbox=remapped_bbox,
-                                    timestamp=frame_number / fps,
-                                )
-                            )
-                        del tile
-
-                    kept_records, dups = suppress_tile_duplicates(raw_frame_records, iou_threshold=tile_iou)
-                    total_tile_duplicates += dups
-                    assigned = online_tracker.update_frame(kept_records, camera_motion=motion)
-                    records.extend(assigned)
-                else:
+                tiles = generate_tiles(w, h, rows=tile_rows, cols=tile_cols, overlap=tile_overlap)
+                raw_frame_records = []
+                for tx1, ty1, tx2, ty2 in tiles:
+                    tile = frame[ty1:ty2, tx1:tx2]
                     try:
-                        result = self.model.track(frame, persist=True, tracker=f"{self.tracker_type}.yaml", conf=confidence, iou=iou, verbose=False)[0]
+                        result = self.model(tile, conf=confidence, iou=iou, verbose=False)[0]
                     except Exception as exc:
                         if raw_frame_callback:
-                            raw_frame_callback(sampled_frame_seq, frame_number, frame_number / fps, None, getattr(self.model, "names", {}), exc)
+                            raw_frame_callback(sampled_frame_seq, frame_number, timestamp, None, getattr(self.model, "names", {}), exc)
                         raise
                     names = getattr(result, "names", {})
                     boxes = getattr(result, "boxes", [])
                     if raw_frame_callback:
-                        raw_frame_callback(sampled_frame_seq, frame_number, frame_number / fps, boxes, names, None)
+                        raw_frame_callback(sampled_frame_seq, frame_number, timestamp, boxes, names, None)
+                    for box in boxes:
+                        class_id = int(_scalar(box.cls[0]))
+                        class_name = str(names[class_id] if isinstance(names, dict) else names[class_id])
+                        if allowed_classes is not None and class_name not in allowed_classes:
+                            continue
+                        confidence_value = float(_scalar(box.conf[0]))
+                        raw_box = box.xyxy[0].tolist() if hasattr(box.xyxy[0], "tolist") else box.xyxy[0]
+                        remapped_bbox = [
+                            round(max(0.0, min(float(w), float(raw_box[0]) + tx1)), 4),
+                            round(max(0.0, min(float(h), float(raw_box[1]) + ty1)), 4),
+                            round(max(0.0, min(float(w), float(raw_box[2]) + tx1)), 4),
+                            round(max(0.0, min(float(h), float(raw_box[3]) + ty1)), 4),
+                        ]
+                        bw = remapped_bbox[2] - remapped_bbox[0]
+                        bh = remapped_bbox[3] - remapped_bbox[1]
+                        if bw < rel_min_w or bh < rel_min_h:
+                            dropped_box_size_count += 1
+                            continue
+                        if any(v in class_name.lower() for v in ("car", "van", "truck", "bus", "vehicle")):
+                            ar = bw / max(1.0, bh)
+                            if ar > 4.5 or ar < 0.22:
+                                dropped_aspect_ratio_count += 1
+                                continue
+
+                        raw_frame_records.append(
+                            DetectionRecord(
+                                frame_id=str(frame_number),
+                                class_name=class_name,
+                                confidence=confidence_value,
+                                bbox=remapped_bbox,
+                                timestamp=timestamp,
+                            )
+                        )
+                    del tile
+
+                kept_records, dups = suppress_tile_duplicates(raw_frame_records, iou_threshold=tile_iou)
+                total_tile_duplicates += dups
+                assigned = online_tracker.update_frame(kept_records, camera_motion=motion)
+                records.extend(assigned)
+        else:
+            # Batched track inference
+            batch_size = max(1, min(8, int(os.getenv("YOLO_BATCH_SIZE", "4"))))
+            for b_start in range(0, len(frame_items), batch_size):
+                batch = frame_items[b_start : b_start + batch_size]
+                batch_imgs = [item[2] for item in batch]
+
+                if motion_estimator is not None:
+                    for fn, ts, frm in batch:
+                        m = motion_estimator.estimate(frm)
+                        camera_motions[fn] = m
+                        if not m.success:
+                            motion_failures += 1
+
+                try:
+                    results = self.model.track(
+                        batch_imgs,
+                        persist=True,
+                        tracker=f"{self.tracker_type}.yaml",
+                        conf=confidence,
+                        iou=iou,
+                        verbose=False,
+                    )
+                except Exception as exc:
+                    if raw_frame_callback:
+                        for idx_sub, (fn, ts, frm) in enumerate(batch):
+                            raw_frame_callback(b_start + idx_sub + 1, fn, ts, None, getattr(self.model, "names", {}), exc)
+                    raise
+
+                for idx_sub, (fn, ts, frm) in enumerate(batch):
+                    sampled_seq = b_start + idx_sub + 1
+                    res = results[idx_sub]
+                    names = getattr(res, "names", {})
+                    boxes = getattr(res, "boxes", [])
+                    if raw_frame_callback:
+                        raw_frame_callback(sampled_seq, fn, ts, boxes, names, None)
+
+                    h, w = frm.shape[:2]
+                    rel_min_w = min_box_size[0] if min_box_size else max(24.0, float(w) * 0.006)
+                    rel_min_h = min_box_size[1] if min_box_size else max(24.0, float(h) * 0.006)
+
                     for box in boxes:
                         class_id = int(_scalar(box.cls[0]))
                         class_name = str(names[class_id] if isinstance(names, dict) else names[class_id])
@@ -623,9 +664,16 @@ class UltralyticsTracker:
                                 continue
                         ids = getattr(box, "id", None)
                         track_id = str(int(_scalar(ids[0]))) if ids is not None else None
-                        records.append(DetectionRecord(str(frame_number), class_name, confidence_value, [float(value) for value in bbox], frame_number / fps, track_id))
-            frame_number += 1
-        capture.release()
+                        records.append(
+                            DetectionRecord(
+                                str(fn),
+                                class_name,
+                                confidence_value,
+                                [float(val) for val in bbox],
+                                ts,
+                                track_id,
+                            )
+                        )
 
         # Track persistence filtering: eliminate transient single-frame noise
         from collections import Counter

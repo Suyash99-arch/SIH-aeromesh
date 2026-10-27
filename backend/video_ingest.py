@@ -122,14 +122,12 @@ def probe_video(video_path: Path) -> Dict[str, Any]:
     duration = float(probe_data.get("format", {}).get("duration", 0.0))
     fps = avg_fps if avg_fps > 0 else (r_fps if r_fps > 0 else 30.0)
 
-    # If width < height (portrait video), flag rotation if rotation metadata was 0
-    if width > 0 and height > 0 and width < height and rotation == 0:
-        rotation = 90
-
+    pix_fmt = video_stream.get("pix_fmt", "").lower()
     return {
         "is_corrupt": False,
         "corrupt_reason": "",
         "codec": codec_name,
+        "pix_fmt": pix_fmt,
         "is_hevc": is_hevc,
         "is_vfr": is_vfr,
         "rotation": rotation % 360,
@@ -163,7 +161,14 @@ def should_transcode(probe_info: Dict[str, Any], cv2_ok: bool) -> Tuple[bool, st
         return True, "Variable Frame Rate (VFR) detected; normalizing to Constant Frame Rate (CFR)"
     if probe_info.get("codec") not in ["h264", "avc1"]:
         return True, f"Non-H.264 codec ({probe_info.get('codec')}) detected; normalizing for web & photogrammetry"
-    return False, "Video already compliant H.264 CFR"
+    w = probe_info.get("width", 0)
+    h = probe_info.get("height", 0)
+    pix_fmt = probe_info.get("pix_fmt", "")
+    if max(w, h) > 1280:
+        return True, f"Long edge {max(w, h)}px > 1280px; downscaling proxy required"
+    if pix_fmt and pix_fmt not in ["yuv420p", "yuvj420p"]:
+        return True, f"Non-yuv420p pixel format ({pix_fmt}); normalizing to yuv420p"
+    return False, "Video already compliant H.264 yuv420p <=1280px"
 
 def transcode_to_normalized_h264(
     input_path: Path,
@@ -181,20 +186,39 @@ def transcode_to_normalized_h264(
         "force_original_aspect_ratio=decrease:force_divisible_by=2"
     )
 
-    cmd = [
-        ffmpeg_bin,
-        "-y",
-        "-i", str(input_path),
-        "-c:v", "libx264",
-        "-pix_fmt", "yuv420p",
-        "-vf", vf,
-        "-r", str(round(target_fps, 2)),
-        "-fps_mode", "cfr",
-        "-preset", "fast",
-        "-crf", "22",
-        "-an",
-        str(output_path)
-    ]
+    probe = probe_video(input_path)
+    w = probe.get("width", 0)
+    h = probe.get("height", 0)
+    codec = probe.get("codec", "")
+    pix_fmt = probe.get("pix_fmt", "")
+    is_vfr = probe.get("is_vfr", False)
+    rot = probe.get("rotation", 0)
+
+    # Stream copy if already compliant H.264/yuv420p and <= max_dimension
+    if codec in ["h264", "avc1"] and pix_fmt in ["yuv420p", "yuvj420p"] and max(w, h) <= max_dimension and not is_vfr and rot == 0:
+        cmd = [
+            ffmpeg_bin,
+            "-y",
+            "-i", str(input_path),
+            "-c", "copy",
+            str(output_path)
+        ]
+    else:
+        cmd = [
+            ffmpeg_bin,
+            "-y",
+            "-i", str(input_path),
+            "-c:v", "libx264",
+            "-pix_fmt", "yuv420p",
+            "-vf", vf,
+            "-r", str(round(target_fps, 2)),
+            "-fps_mode", "cfr",
+            "-preset", "veryfast",
+            "-crf", "20",
+            "-threads", "0",
+            "-an",
+            str(output_path)
+        ]
 
     process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     if progress_callback:
@@ -272,11 +296,11 @@ def create_browser_proxy(
         "-c:a", "aac",
         "-b:a", "128k",
         "-ac", "2",                     # stereo
-        "-movflags", "+faststart",      # ← moves moov atom to front → enables immediate seeking
+        "-movflags", "+faststart",      # ← moves moov atom to front -> enables immediate seeking
         str(tmp_output),
     ]
 
-    logger.info("Creating browser proxy: %s → %s", input_path, output_path)
+    logger.info("Creating browser proxy: %s -> %s", input_path, output_path)
     process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
     if progress_callback:
         progress_callback(5.0)

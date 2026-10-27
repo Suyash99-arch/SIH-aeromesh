@@ -137,7 +137,28 @@ def build_mission_report(mission_id: str, mission_data: Any = None) -> dict[str,
 
     detection_info["total_detections"] = can_det.get("total_detections", detection_info.get("total_detections", 0))
     detection_info["detections_by_class"] = can_det.get("detections_by_class", detection_info.get("detections_by_class", {}))
-    detection_info.setdefault("confidence_stats", can_det.get("confidence_stats", {"min": 0.0, "max": 0.0, "mean": 0.0}))
+    # Robust confidence stats from real observations
+    observations = detection_info.get("observations") or can_det.get("observations") or []
+    if not observations and mission_dir:
+        det_path = mission_dir / "detections.json"
+        if det_path.exists():
+            try:
+                import json as _j
+                with open(det_path, "r", encoding="utf-8") as df:
+                    det_data = _j.load(df)
+                    observations = det_data.get("observations", [])
+            except Exception:
+                pass
+    confs = [float(o["confidence"]) for o in observations if isinstance(o, dict) and o.get("confidence") is not None]
+    if confs:
+        conf_stats = {
+            "mean": round(float(sum(confs) / len(confs)), 3),
+            "min": round(float(min(confs)), 3),
+            "max": round(float(max(confs)), 3),
+        }
+    else:
+        conf_stats = can_det.get("confidence_stats") or {"min": 0.0, "max": 0.0, "mean": 0.0}
+    detection_info["confidence_stats"] = conf_stats
     detection_info.setdefault("model", can_det.get("model", "aeromesh_yolo"))
     detection_info.setdefault("model_version", "aeromesh-visdrone")
 
@@ -400,11 +421,21 @@ def build_mission_report(mission_id: str, mission_data: Any = None) -> dict[str,
     # ----------------------------------------------------
     # SCIENTIFIC LIMITATIONS
     # ----------------------------------------------------
+    has_dense_geo = bool(
+        rec_info.get("dense_reconstruction_status") == "AVAILABLE"
+        or int(rec_info.get("dense_point_count") or 0) > 0
+        or (data.get("reconstruction") or {}).get("dense_method") == "monocular_depth_aligned_to_sfm"
+    )
+    dense_disclosure = (
+        "DENSE_ESTIMATED: Dense: learned depth aligned to SfM (estimated, not measured MVS); relative scale."
+        if has_dense_geo
+        else "DENSE_MVS_UNAVAILABLE: Dense stereo reconstruction requires CUDA or HIP hardware. Sparse SfM is preserved as authoritative geometry without synthetic point fabrication."
+    )
     limitations = [
         "LOCAL_ARBITRARY: Reconstruction coordinates are arbitrary relative units, not true meters or GPS coordinates.",
         "RELATIVE_SCALE: Monocular video SfM is scale-ambiguous; metric distances are strictly valid only where verified ground scale calibration is applied.",
         "UNREFERENCED: Scene is unreferenced against EPSG/WGS84. GeoJSON geographic coordinates (latitude/longitude) are unavailable.",
-        "DENSE_MVS_UNAVAILABLE: Dense stereo reconstruction requires CUDA or HIP hardware. Sparse SfM is preserved as authoritative geometry without synthetic point fabrication.",
+        dense_disclosure,
         "UNOBSERVED_SURFACES: Unobserved, occluded, or low-parallax areas are preserved as unobserved rather than interpolated as synthetic geometry.",
     ]
 
