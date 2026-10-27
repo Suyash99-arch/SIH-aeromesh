@@ -1973,9 +1973,9 @@ def generate_depth_anything_dense_reconstruction(
         "camera_poses": camera_poses or [],
         "pose_status": pose_status,
         "point_cloud_path": str(point_cloud_ply),
-        "point_cloud_url": f"/api/missions/{resolved_mission_id}/reconstruction/pointcloud",
+        "point_cloud_url": f"/api/v1/missions/{resolved_mission_id}/reconstruction/pointcloud",
         "mesh": mesh_info,
-        "mesh_url": f"/api/missions/{resolved_mission_id}/reconstruction/mesh" if mesh_avail else None,
+        "mesh_url": f"/api/v1/missions/{resolved_mission_id}/reconstruction/mesh" if mesh_avail else None,
         "dense": {
             "status": "COMPLETED_MONOCULAR",
             "point_count": total_true_points,
@@ -2283,7 +2283,7 @@ def generate_geometric_proxy_reconstruction(
         "mean_reprojection_error": 0.0,
         "camera_poses": cam_poses,
         "point_cloud_path": str(point_cloud_ply),
-        "point_cloud_url": f"/api/missions/{resolved_mission_id}/reconstruction/pointcloud",
+        "point_cloud_url": f"/api/v1/missions/{resolved_mission_id}/reconstruction/pointcloud",
         "mesh": {
             "status": "AVAILABLE",
             "vertex_count": len(g_pts),
@@ -2291,7 +2291,7 @@ def generate_geometric_proxy_reconstruction(
             "mesh_path": str(mesh_ply),
             "method": "geometric_ground_proxy",
         },
-        "mesh_url": f"/api/missions/{resolved_mission_id}/reconstruction/mesh",
+        "mesh_url": f"/api/v1/missions/{resolved_mission_id}/reconstruction/mesh",
         "mesh_status": "AVAILABLE",
         "mesh_vertices": len(g_pts),
         "mesh_faces": len(mesh_faces),
@@ -2601,7 +2601,7 @@ def run_reconstruction_pipeline(
                 "mean_reprojection_error": sfm_res.get("mean_reprojection_error", 0.0) if sfm_res else 0.0,
                 "camera_poses": sfm_res.get("camera_poses", []) if sfm_res else [],
                 "point_cloud_path": str(sparse_ply),
-                "point_cloud_url": f"/api/missions/{mission_id}/reconstruction/pointcloud",
+                "point_cloud_url": f"/api/v1/missions/{mission_id}/reconstruction/pointcloud",
                 "mesh": {"status": "UNAVAILABLE", "vertex_count": 0, "face_count": 0},
                 "mesh_url": None,
                 "dense": {"status": "SKIPPED", "point_count": 0},
@@ -2709,9 +2709,9 @@ def run_reconstruction_pipeline(
         "mean_reprojection_error": sfm_res["mean_reprojection_error"],
         "camera_poses": sfm_res.get("camera_poses", []),
         "point_cloud_path": str(point_cloud_path),
-        "point_cloud_url": f"/api/missions/{mission_id}/reconstruction/pointcloud",
+        "point_cloud_url": f"/api/v1/missions/{mission_id}/reconstruction/pointcloud",
         "mesh": dense_and_mesh["mesh"],
-        "mesh_url": f"/api/missions/{mission_id}/reconstruction/mesh" if mesh_available else None,
+        "mesh_url": f"/api/v1/missions/{mission_id}/reconstruction/mesh" if mesh_available else None,
         "dense": dense_and_mesh["dense"],
         "scale": scale_info,
         "stages": stages,
@@ -3101,8 +3101,8 @@ def get_reconstruction_metadata(mission_id: str) -> Optional[Dict[str, Any]]:
                 data["mean_reprojection_error"] = float(sparse_sfm["mean_reprojection_error"])
                 data["mean_reprojection_error_px"] = float(sparse_sfm["mean_reprojection_error"])
 
-        data["point_cloud_url"] = f"/api/missions/{mission_id}/reconstruction/pointcloud" if (pt_p or data.get("sparse_point_count", 0) > 0) else None
-        data["mesh_url"] = f"/api/missions/{mission_id}/reconstruction/mesh" if (mesh_p or data.get("mesh_status") == "AVAILABLE") else None
+        data["point_cloud_url"] = f"/api/v1/missions/{mission_id}/reconstruction/pointcloud" if (pt_p or data.get("sparse_point_count", 0) > 0) else None
+        data["mesh_url"] = f"/api/v1/missions/{mission_id}/reconstruction/mesh" if (mesh_p or data.get("mesh_status") == "AVAILABLE") else None
         return data
 
     summary_files = [
@@ -3150,9 +3150,9 @@ def get_reconstruction_metadata(mission_id: str) -> Optional[Dict[str, Any]]:
                         "mean_reprojection_error": sparse_info.get("mean_reprojection_error_px", 0.98),
                         "camera_poses": data.get("camera_poses", []),
                         "point_cloud_path": sparse_info.get("ply_path"),
-                        "point_cloud_url": data.get("point_cloud_url", f"/api/missions/{mission_id}/reconstruction/pointcloud"),
+                        "point_cloud_url": data.get("point_cloud_url", f"/api/v1/missions/{mission_id}/reconstruction/pointcloud"),
                         "mesh": surface_mesh,
-                        "mesh_url": data.get("mesh_url", f"/api/missions/{mission_id}/reconstruction/mesh"),
+                        "mesh_url": data.get("mesh_url", f"/api/v1/missions/{mission_id}/reconstruction/mesh"),
                         "dense": dense_info,
                         "scale": scale_info,
                         "error": None,

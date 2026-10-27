@@ -4,6 +4,7 @@ import os
 import re
 import shutil
 import subprocess
+import time
 from pathlib import Path
 from typing import Any, Callable, Dict, Optional, Tuple
 try:
@@ -254,6 +255,7 @@ def create_browser_proxy(
     )
     proxy_threads = max(1, min(int(os.getenv("VIDEO_PROXY_THREADS", "1")), 2))
 
+    tmp_output = output_path.with_name(f"{output_path.stem}.tmp_{os.getpid()}_{time.time_ns()}.mp4")
     cmd = [
         ffmpeg_bin,
         "-y",
@@ -271,7 +273,7 @@ def create_browser_proxy(
         "-b:a", "128k",
         "-ac", "2",                     # stereo
         "-movflags", "+faststart",      # ← moves moov atom to front → enables immediate seeking
-        str(output_path),
+        str(tmp_output),
     ]
 
     logger.info("Creating browser proxy: %s → %s", input_path, output_path)
@@ -289,8 +291,15 @@ def create_browser_proxy(
 
     retcode = process.poll()
     if retcode != 0:
+        if tmp_output.exists():
+            try:
+                tmp_output.unlink()
+            except OSError:
+                pass
         err_msg = "".join(stderr_output)
         raise RuntimeError(f"Browser proxy creation failed (code {retcode}): {err_msg[-800:]}")
+
+    os.replace(tmp_output, output_path)
 
     if progress_callback:
         progress_callback(100.0)

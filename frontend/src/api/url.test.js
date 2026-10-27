@@ -18,7 +18,19 @@ test("joinApiUrl joins relative endpoints once", () => {
     joinApiUrl("https://api.example.test/api/v1", "/api/v1/missions/42/video"),
     "https://api.example.test/api/v1/missions/42/video",
   );
+  assert.equal(
+    joinApiUrl("https://api.example.test/api/v1", "/api/missions/42/reconstruction/mesh"),
+    "https://api.example.test/api/v1/missions/42/reconstruction/mesh",
+  );
   assert.equal(joinApiUrl("/api/v1", "/missions/42"), "/api/v1/missions/42");
+  assert.equal(
+    joinApiUrl("/api/v1", "/api/missions/42/reconstruction/mesh"),
+    "/api/v1/missions/42/reconstruction/mesh",
+  );
+  assert.equal(
+    joinApiUrl("/api/v1", "/api/v1/missions/42/reconstruction/mesh"),
+    "/api/v1/missions/42/reconstruction/mesh",
+  );
 });
 
 test("uploads use the configured API origin when no separate upload URL is set", () => {

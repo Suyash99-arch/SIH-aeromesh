@@ -51,8 +51,24 @@ class MissionRepository:
         from sqlalchemy import not_, or_
         query = select(Mission).order_by(Mission.created_at.desc())
         if not include_benchmarks:
+            test_names = [
+                "Happy_Path_Sortie", "Regression Mission",
+                "Scope_Mesh_1", "Scope_Mesh_2", "Scope_Mesh_3",
+                "Scope_PC_1", "Scope_PC_2",
+                "Scope_Test_1", "Scope_Test_2", "Scope_Test_3",
+                "Concurrency_Stress_Test", "Worker Forwarding Test", "Shared Artifacts Test",
+                "Alpha Dept Incident", "Guest A Mission", "User B Secret Mission",
+                "Compare_Target", "Untitled mission", "Chunk_Upload_Test",
+                "Shareable_Test_Mission", "Resolution 422 Test", "Quality 422 Test",
+                "Legacy Alias Test", "JSON Body Options Test", "Fusion Test Mission",
+                "Defaults Test", "Corrupt_Test_Mission", "Confidence 422 Test",
+                "35_MB_Chunk_Test", "Forced_Chunk_Error_Test", "Preview_Unavailable_Test",
+                "Advisory Check Test",
+            ]
             query = query.where(
                 not_(Mission.id.like("test_%")),
+                not_(Mission.name.like("%Test%")),
+                not_(Mission.name.in_(test_names)),
             )
         if user is not None:
             is_superadmin = (getattr(user, "role", "") == "ADMIN" and not getattr(user, "organization_name", None))
@@ -163,6 +179,19 @@ def _payload(mission: Mission) -> dict[str, Any]:
     payload.setdefault("type", mission.mission_type)
     payload.setdefault("location", mission.location)
     payload.setdefault("operator", mission.operator)
-    payload.setdefault("createdAt", mission.created_at.isoformat())
+    payload.setdefault("createdAt", mission.created_at.isoformat() if mission.created_at else datetime.utcnow().isoformat())
     payload.setdefault("status", mission.status)
+    m_id = mission.id
+
+    assets = dict(payload.get("assets") or {})
+    v_dict = payload.get("video")
+    if not assets.get("video") and isinstance(v_dict, dict) and v_dict.get("url"):
+        assets["video"] = v_dict["url"]
+    elif not assets.get("video") and v_dict:
+        assets["video"] = f"/api/v1/missions/{m_id}/video"
+    if not assets.get("pointCloud"):
+        assets["pointCloud"] = f"/api/v1/missions/{m_id}/reconstruction/pointcloud"
+    if not assets.get("mesh"):
+        assets["mesh"] = f"/api/v1/missions/{m_id}/reconstruction/mesh"
+    payload["assets"] = assets
     return payload

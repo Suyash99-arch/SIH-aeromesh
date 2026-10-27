@@ -12,9 +12,18 @@ export function joinApiUrl(base, endpoint) {
 
   const endpointValue = endpoint.replace(/^\/+/, "");
   const basePath = baseValue.replace(/^[a-z][a-z\d+.-]*:\/\/[^/]+/i, "").replace(/\/+$/, "");
-  const endpointPath = endpointValue.startsWith(`${basePath.replace(/^\/+/, "")}/`)
-    ? endpointValue.slice(basePath.replace(/^\/+/, "").length + 1)
-    : endpointValue;
+  const cleanBase = basePath.replace(/^\/+/, "");
+
+  let endpointPath = endpointValue;
+  if (cleanBase && endpointValue.startsWith(`${cleanBase}/`)) {
+    endpointPath = endpointValue.slice(cleanBase.length + 1);
+  } else if (cleanBase.startsWith("api/") || cleanBase === "api") {
+    if (endpointValue.startsWith("api/v1/")) {
+      endpointPath = endpointValue.slice("api/v1/".length);
+    } else if (endpointValue.startsWith("api/")) {
+      endpointPath = endpointValue.slice("api/".length);
+    }
+  }
 
   return `${baseValue}/${endpointPath}`;
 }

@@ -176,7 +176,7 @@ async def get_scene_manifest(scene_id: str):
         "scaleMode": semantic_data.get("scale_status") or meta["scale_mode"],
         "coordSystem": semantic_data.get("coordinate_system") or meta["coord_system"],
         "pointCloudUrl": f"/api/scenes/{scene_id}/points" if (cameras_count >= 3 and point_count > 0) else None,
-        "meshUrl": f"/api/missions/{mission_id}/reconstruction/mesh" if (cameras_count >= 3 and faces_count > 0) else None,
+        "meshUrl": f"/api/v1/missions/{mission_id}/reconstruction/mesh" if (cameras_count >= 3 and faces_count > 0) else None,
         "stages": stages,
         "updatedAt": mission_data.get("updated_at") or mission_data.get("created_at"),
     }

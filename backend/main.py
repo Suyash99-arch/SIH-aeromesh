@@ -2973,9 +2973,9 @@ async def list_missions(
                 if not assets.get("video") and isinstance(v_dict, dict) and v_dict.get("url"):
                     assets["video"] = v_dict["url"]
                 if not assets.get("pointCloud"):
-                    assets["pointCloud"] = f"/api/missions/{m_id}/reconstruction/pointcloud"
+                    assets["pointCloud"] = f"/api/v1/missions/{m_id}/reconstruction/pointcloud"
                 if not assets.get("mesh"):
-                    assets["mesh"] = f"/api/missions/{m_id}/reconstruction/mesh"
+                    assets["mesh"] = f"/api/v1/missions/{m_id}/reconstruction/mesh"
 
                 summary_m = {
                     "id": m_id,
@@ -4149,18 +4149,19 @@ async def get_mission_video_proxy(mission_id: str, request: Request):
     if not original_path:
         return get_artifact_status_response(mission, "video")
 
-    # Look for existing proxy in all potential mission directories
+    # Look for existing proxy in all potential mission directories (only if not currently generating)
     proxy_path: Path | None = None
-    for cand_dir in [
-        DATA_DIR / "objects" / "missions" / mission_id,
-        MISSIONS_DIR / mission_id,
-        original_path.parent.parent,
-        original_path.parent,
-    ]:
-        p_cand = cand_dir / "proxy" / "video_proxy.mp4"
-        if p_cand.is_file() and p_cand.stat().st_size > 10_000:
-            proxy_path = p_cand
-            break
+    if mission_id not in _pending_proxy_generation:
+        for cand_dir in [
+            DATA_DIR / "objects" / "missions" / mission_id,
+            MISSIONS_DIR / mission_id,
+            original_path.parent.parent,
+            original_path.parent,
+        ]:
+            p_cand = cand_dir / "proxy" / "video_proxy.mp4"
+            if p_cand.is_file() and p_cand.stat().st_size > 10_000:
+                proxy_path = p_cand
+                break
 
     # Serve existing proxy immediately if ready
     if proxy_path and proxy_path.exists() and proxy_path.stat().st_size > 10_000:
@@ -4215,7 +4216,7 @@ async def create_processing_job(
     mission = MissionData(target_mission_id)
     if not mission.data:
         raise HTTPException(status_code=404, detail="Mission not found")
-    if is_lightweight_profile():
+    if is_lightweight_profile() and not get_worker_url():
         message = "Upload complete - heavy reconstruction requires the full compute profile"
         mission.update({
             "status": "video_uploaded",
@@ -4475,6 +4476,8 @@ async def retry_mission_pipeline(mission_id: str, current_user: Optional[UserRec
 
 @app.get("/api/v1/missions/{mission_id}/export/csv")
 @app.get("/api/missions/{mission_id}/export/csv")
+@app.get("/api/v1/missions/{mission_id}/report/csv")
+@app.get("/api/missions/{mission_id}/report/csv")
 async def export_mission_csv(
     mission_id: str,
     current_user: Optional[UserRecord] = Depends(get_current_user_optional),
@@ -4499,6 +4502,8 @@ async def export_mission_csv(
 
 @app.get("/api/v1/missions/{mission_id}/export/json")
 @app.get("/api/missions/{mission_id}/export/json")
+@app.get("/api/v1/missions/{mission_id}/report/json")
+@app.get("/api/missions/{mission_id}/report/json")
 async def export_mission_json(
     mission_id: str,
     current_user: Optional[UserRecord] = Depends(get_current_user_optional),
@@ -4524,6 +4529,8 @@ async def export_mission_json(
 
 @app.get("/api/v1/missions/{mission_id}/export/geojson")
 @app.get("/api/missions/{mission_id}/export/geojson")
+@app.get("/api/v1/missions/{mission_id}/report/geojson")
+@app.get("/api/missions/{mission_id}/report/geojson")
 async def export_mission_geojson(
     mission_id: str,
     current_user: Optional[UserRecord] = Depends(get_current_user_optional),
@@ -4556,6 +4563,8 @@ async def export_mission_geojson(
 
 @app.get("/api/v1/missions/{mission_id}/export/package", dependencies=[Depends(rate_limit_dependency)])
 @app.get("/api/missions/{mission_id}/export/package", dependencies=[Depends(rate_limit_dependency)])
+@app.get("/api/v1/missions/{mission_id}/report/package", dependencies=[Depends(rate_limit_dependency)])
+@app.get("/api/missions/{mission_id}/report/package", dependencies=[Depends(rate_limit_dependency)])
 async def export_mission_evidence_package(
     mission_id: str,
     current_user: Optional[UserRecord] = Depends(get_current_user_optional),
@@ -5159,8 +5168,8 @@ def run_full_pipeline_task(
                 "output_path": reconstruction_result.get("output_path"),
                 "error": reconstruction_result.get("error"),
                 "mesh": mesh_data,
-                "point_cloud_url": f"/api/missions/{mission_id}/reconstruction/pointcloud" if (reconstruction_result.get("success", pts_count > 0) and pts_count > 0) else None,
-                "mesh_url": f"/api/missions/{mission_id}/reconstruction/mesh" if (reconstruction_result.get("success", False) and has_mesh) else None,
+                "point_cloud_url": f"/api/v1/missions/{mission_id}/reconstruction/pointcloud" if (reconstruction_result.get("success", pts_count > 0) and pts_count > 0) else None,
+                "mesh_url": f"/api/v1/missions/{mission_id}/reconstruction/mesh" if (reconstruction_result.get("success", False) and has_mesh) else None,
                 "stages": reconstruction_result.get("stages", {}),
                 "scale": reconstruction_result.get("scale", {}),
             },
@@ -5566,7 +5575,7 @@ async def process_video(
             "message": "Processing already in progress",
         }
 
-    if is_lightweight_profile():
+    if is_lightweight_profile() and not get_worker_url():
         message = "Upload complete - heavy reconstruction requires the full compute profile"
         mission.update({
             "status": "video_uploaded",
@@ -6320,9 +6329,9 @@ async def get_mission_reconstruction(mission_id: str):
                 "mean_reprojection_error": sparse_info.get("mean_reprojection_error_px", 0.98),
                 "camera_poses": mission.get("camera_poses", []),
                 "point_cloud_path": sparse_info.get("ply_path"),
-                "point_cloud_url": mission.get("point_cloud_url", f"/api/missions/{m_id}/reconstruction/pointcloud"),
+                "point_cloud_url": mission.get("point_cloud_url", f"/api/v1/missions/{m_id}/reconstruction/pointcloud"),
                 "mesh": surface_mesh,
-                "mesh_url": mission.get("mesh_url", f"/api/missions/{m_id}/reconstruction/mesh"),
+                "mesh_url": mission.get("mesh_url", f"/api/v1/missions/{m_id}/reconstruction/mesh"),
                 "dense": dense_info,
                 "scale": scale_info,
                 "error": None,
@@ -6340,9 +6349,9 @@ async def get_mission_reconstruction(mission_id: str):
 
     # Ensure URLs are properly populated if assets exist on disk
     if get_reconstruction_mesh_path(m_id) and not reconstruction.get("mesh_url"):
-        reconstruction["mesh_url"] = f"/api/missions/{m_id}/reconstruction/mesh"
+        reconstruction["mesh_url"] = f"/api/v1/missions/{m_id}/reconstruction/mesh"
     if get_reconstruction_pointcloud_path(m_id) and not reconstruction.get("point_cloud_url"):
-        reconstruction["point_cloud_url"] = f"/api/missions/{m_id}/reconstruction/pointcloud"
+        reconstruction["point_cloud_url"] = f"/api/v1/missions/{m_id}/reconstruction/pointcloud"
 
     # Ensure outer success and nested reconstruction success contract is strictly identical
     raw_success = reconstruction.get("success")
@@ -7399,6 +7408,8 @@ async def generate_report(
 
 @app.get("/api/v1/missions/{mission_id}/report/pdf", dependencies=[Depends(rate_limit_dependency)])
 @app.get("/api/missions/{mission_id}/report/pdf", dependencies=[Depends(rate_limit_dependency)])
+@app.get("/api/v1/missions/{mission_id}/export/pdf", dependencies=[Depends(rate_limit_dependency)])
+@app.get("/api/missions/{mission_id}/export/pdf", dependencies=[Depends(rate_limit_dependency)])
 def export_mission_pdf(
     mission_id: str,
     request: Request,
