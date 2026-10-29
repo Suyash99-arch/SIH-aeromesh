@@ -710,8 +710,10 @@ def _run_pycolmap_sfm(
 
     total_input_frames = len(list(frames_dir.glob("*.jpg")) + list(frames_dir.glob("*.png")))
     attempts_log: List[Dict[str, Any]] = []
+    sfm_substage_timings: Dict[str, float] = {}
 
-    # Dynamic Object Masking to prevent vehicle/person motion from poisoning feature matching
+    # Dynamic Object Masking
+    t_mask0 = time.perf_counter()  # to prevent vehicle/person motion from poisoning feature matching
     masks_dir = output_dir / "masks"
     has_masks = False
     try:
@@ -720,8 +722,10 @@ def _run_pycolmap_sfm(
             logger.info("Dynamic object masks generated for moving vehicles/pedestrians in %s", frames_dir)
     except Exception as m_exc:
         logger.warning("Dynamic masking skipped due to error: %s", m_exc)
+    sfm_substage_timings["dynamic_mask_creation"] = round(time.perf_counter() - t_mask0, 3)
 
-    # 1. Feature Extraction (Single Pass)
+    # 1. Feature Extraction
+    t_ext0 = time.perf_counter()  # Single Pass
     if database_path.exists():
         database_path.unlink(missing_ok=True)
     _ensure_dir(database_path.parent)
@@ -731,7 +735,7 @@ def _run_pycolmap_sfm(
     if has_masks and masks_dir.exists():
         reader_options.mask_path = masks_dir
 
-    colmap_threads = 1 if _available_memory_mb() < 1024 else max(1, min((os.cpu_count() or 4) - 1, 4))
+    colmap_threads = max(1, min(int(os.getenv("COLMAP_NUM_THREADS", str(os.cpu_count() or 4))), 4))
     extraction_options = pycolmap.FeatureExtractionOptions()
     extraction_options.max_image_size = RECONSTRUCTION_MAX_IMAGE_DIM
     extraction_options.num_threads = colmap_threads
@@ -771,6 +775,7 @@ def _run_pycolmap_sfm(
             extraction_options=extraction_options,
             device=pycolmap.Device.cpu,
         )
+        sfm_substage_timings["feature_extraction"] = round(time.perf_counter() - t_ext0, 3)
     except Exception as exc:
         logger.warning("Feature extraction failed: %s", exc)
         return {
@@ -786,6 +791,7 @@ def _run_pycolmap_sfm(
         }
 
     # 2. Matching (Single Pass)
+    t_match0 = time.perf_counter()
     if progress_cb:
         progress_cb("Matching multi-view feature correspondences", 50)
 
@@ -831,6 +837,7 @@ def _run_pycolmap_sfm(
                 database_path=str(database_path), matching_options=matching_options,
                 pairing_options=seq_opts, device=pycolmap.Device.cpu,
             )
+        sfm_substage_timings["feature_matching"] = round(time.perf_counter() - t_match0, 3)
     except Exception as exc:
         logger.warning("Feature matching error: %s", exc)
         return {
@@ -929,6 +936,7 @@ def _run_pycolmap_sfm(
             pass
 
         triangulated_pct = round(reg_cams / max(1, total_input_frames) * 100.0, 1)
+        sfm_substage_timings[f"mapper_ladder_{attempt_id}"] = elapsed
         st = "SUCCESS" if (reg_cams >= 3 and sparse_pts >= 100 and triangulated_pct >= 50.0) else ("PARTIAL" if reg_cams >= 3 else "FAILED")
         rec = {
             "attempt_id": attempt_id, "name": cfg["name"], "keyframe_count": total_input_frames,
@@ -942,6 +950,9 @@ def _run_pycolmap_sfm(
             if best_recon is None or cand_recon.num_points3D() > best_recon.num_points3D():
                 best_recon = cand_recon
                 winning_attempt = rec
+            if triangulated_pct >= 90.0:
+                logger.info("[SfM] Early ladder stop: %s registered %.1f%% cameras (>=90%% threshold)", attempt_id, triangulated_pct)
+                break
             if triangulated_pct >= 60.0:
                 break
 
@@ -1006,6 +1017,7 @@ def _run_pycolmap_sfm(
         "point_cloud_path": str(sparse_ply_path),
         "camera_poses": camera_poses,
         "sfm_attempts": attempts_log,
+        "substage_timings": sfm_substage_timings,
         "active_attempt": winning_attempt.get("attempt_id") if winning_attempt else "A1_sequential",
         "best_recon": best_recon,
         "reconstruction": best_recon,
@@ -2026,6 +2038,7 @@ def generate_depth_anything_dense_reconstruction(
         },
         "scale": scale_info,
         "stages": stages,
+        "substage_timings": sfm_res.get("substage_timings", {}),
         "processing_time_s": round(time.time() - started, 2),
         "error": None,
     }
@@ -2670,13 +2683,14 @@ def run_reconstruction_pipeline(
             progress_cb=progress_cb,
         )
 
-    point_cloud_path = Path(sfm_res["point_cloud_path"])
-    dense_and_mesh = _run_dense_and_meshing(output_dir, point_cloud_path, sfm_res.get("best_recon"), progress_cb)
-
-    # STEP 2 - DENSIFY DEPTH: Runs when SfM registered >= 60% cameras
-    dense_depth_res: Dict[str, Any] = {}
+    t_mesh0 = time.perf_counter()
     reg_cams = sfm_res.get("registered_cameras", 0)
     tot_cams = len(frame_files)
+    point_cloud_path = Path(sfm_res["point_cloud_path"])
+    dense_and_mesh = None
+
+    # STEP 2 - DENSIFY DEPTH: Runs when SfM registered >= 60% cameras (avoids duplicate sparse mesh build!)
+    dense_depth_res: Dict[str, Any] = {}
     if reg_cams >= max(3, int(round(tot_cams * 0.60))):
         try:
             from backend.dense_depth import densify_depth_aligned_to_sfm
@@ -2687,17 +2701,30 @@ def run_reconstruction_pipeline(
                 progress_cb=progress_cb,
             )
             if dense_depth_res.get("success"):
-                if dense_depth_res.get("dense_mesh_path") and Path(dense_depth_res["dense_mesh_path"]).exists():
-                    dense_and_mesh["mesh"]["status"] = "AVAILABLE"
-                    dense_and_mesh["mesh"]["mesh_path"] = dense_depth_res["dense_mesh_path"]
-                    dense_and_mesh["mesh"]["vertex_count"] = dense_depth_res.get("mesh_vertices", 0)
-                    dense_and_mesh["mesh"]["face_count"] = dense_depth_res.get("mesh_faces", 0)
-                    dense_and_mesh["mesh"]["method"] = "poisson_depth_aligned_to_sfm"
-                if dense_depth_res.get("dense_glb_path") and Path(dense_depth_res["dense_glb_path"]).exists():
-                    dense_and_mesh["mesh"]["glb_path"] = dense_depth_res["dense_glb_path"]
-                    dense_and_mesh["mesh"]["glb_size_bytes"] = Path(dense_depth_res["dense_glb_path"]).stat().st_size
+                dense_and_mesh = {
+                    "mesh": {
+                        "status": "AVAILABLE",
+                        "mesh_path": dense_depth_res.get("dense_mesh_path"),
+                        "vertex_count": dense_depth_res.get("mesh_vertices", 0),
+                        "face_count": dense_depth_res.get("mesh_faces", 0),
+                        "method": "poisson_depth_aligned_to_sfm",
+                        "glb_path": dense_depth_res.get("dense_glb_path"),
+                        "glb_size_bytes": Path(dense_depth_res["dense_glb_path"]).stat().st_size if dense_depth_res.get("dense_glb_path") and Path(dense_depth_res["dense_glb_path"]).exists() else 0,
+                    },
+                    "dense": {
+                        "status": "AVAILABLE",
+                        "point_count": dense_depth_res.get("point_count", 0),
+                    }
+                }
         except Exception as _dd_exc:
             logger.warning("[RECONSTRUCTION] densify_depth optional stage notice: %s", _dd_exc)
+
+    # If dense meshing was skipped or failed, fall back to sparse meshing
+    if dense_and_mesh is None:
+        dense_and_mesh = _run_dense_and_meshing(output_dir, point_cloud_path, sfm_res.get("best_recon"), progress_cb)
+
+    if "substage_timings" in sfm_res:
+        sfm_res["substage_timings"]["meshing_and_export"] = round(time.perf_counter() - t_mesh0, 3)
 
     # Determine final status honestly
     mesh_available = dense_and_mesh["mesh"]["status"] == "AVAILABLE"
@@ -2796,6 +2823,7 @@ def run_reconstruction_pipeline(
         "dense_residuals": dense_depth_res.get("residuals", {}),
         "scale": scale_info,
         "stages": stages,
+        "substage_timings": sfm_res.get("substage_timings", {}),
         "sfm_attempts": sfm_res.get("sfm_attempts", []),
         "active_attempt": sfm_res.get("active_attempt"),
         "processing_time_s": duration_s,
@@ -3116,7 +3144,7 @@ def get_reconstruction_mesh_path(mission_id: str) -> Optional[Path]:
     return None
 
 
-def get_reconstruction_pointcloud_path(mission_id: str, pointcloud_type: Optional[str] = None) -> Optional[Path]:
+def get_reconstruction_pointcloud_path(mission_id: str, pointcloud_type: Optional[str] = None, download: bool = False) -> Optional[Path]:
     """Locate sparse or dense point cloud file for a mission only if COLMAP registered >= 3 cameras."""
     recon_dirs = [
         MISSIONS_DIR / mission_id,
@@ -3126,6 +3154,14 @@ def get_reconstruction_pointcloud_path(mission_id: str, pointcloud_type: Optiona
     ]
     if pointcloud_type == "dense":
         for recon_dir in recon_dirs:
+            if not download:
+                preview_cands = [
+                    recon_dir / "dense_point_cloud_preview.ply",
+                    recon_dir / "model" / "dense_point_cloud_preview.ply",
+                ]
+                for cand in preview_cands:
+                    if cand.exists():
+                        return cand
             dense_cands = [
                 recon_dir / "dense_point_cloud.ply",
                 recon_dir / "model" / "dense_point_cloud.ply",

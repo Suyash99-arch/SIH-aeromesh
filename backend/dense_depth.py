@@ -336,7 +336,18 @@ def densify_depth_aligned_to_sfm(
 
         dense_ply_path = output_dir / "dense_point_cloud.ply"
         o3d.io.write_point_cloud(str(dense_ply_path), pcd)
-        logger.info("[densify_depth] Saved dense point cloud to %s (%d points)", dense_ply_path, final_dense_points)
+        logger.info("[densify_depth] Saved full dense point cloud to %s (%d points)", dense_ply_path, final_dense_points)
+
+        # Cap the viewer's dense point cloud at 500k points for browser performance
+        viewer_ply_path = output_dir / "dense_point_cloud_preview.ply"
+        max_viewer_points = 500_000
+        if final_dense_points > max_viewer_points:
+            sample_ratio = max_viewer_points / float(final_dense_points)
+            pcd_viewer = pcd.random_down_sample(sampling_ratio=sample_ratio)
+            o3d.io.write_point_cloud(str(viewer_ply_path), pcd_viewer)
+            logger.info("[densify_depth] Saved display-capped dense point cloud to %s (%d points)", viewer_ply_path, len(pcd_viewer.points))
+        else:
+            o3d.io.write_point_cloud(str(viewer_ply_path), pcd)
 
         if progress_cb:
             progress_cb("Reconstructing dense Poisson surface mesh & GLB", 92)
@@ -352,7 +363,17 @@ def densify_depth_aligned_to_sfm(
             trim_thresh = np.quantile(densities_np, 0.05)
             mesh.remove_vertices_by_mask(densities_np < trim_thresh)
 
-        # Color transfer via cKDTree
+        # Decimate dense mesh to <= 400k faces (quadric decimation, keep vertex colours)
+        max_mesh_faces = 400_000
+        if len(mesh.triangles) > max_mesh_faces:
+            logger.info("[densify_depth] Decimating dense mesh from %d to <= %d faces...", len(mesh.triangles), max_mesh_faces)
+            mesh = mesh.simplify_quadric_decimation(target_number_of_triangles=max_mesh_faces)
+            mesh.remove_degenerate_triangles()
+            mesh.remove_duplicated_triangles()
+            mesh.remove_duplicated_vertices()
+            mesh.remove_non_manifold_edges()
+
+        # Color transfer via cKDTree on decimated mesh vertices
         from scipy.spatial import cKDTree
         pcd_pts = np.asarray(pcd.points)
         pcd_cols = np.asarray(pcd.colors)

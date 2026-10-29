@@ -1641,14 +1641,25 @@ export default function ReconstructionViewer({
   const [internalLayers, setInternalLayers] = useState({});
   const [selectedCameraId, setSelectedCameraId] = useState(null);
   const [contextUnavailable, setContextUnavailable] = useState(false);
-  const [currentMode, setCurrentMode] = useState(mode || "textured");
+  const hasDenseCloud = Boolean(
+    mission?.reconstruction?.dense_point_count ||
+    mission?.reconstruction?.dense_method ||
+    reconstructionMeta?.dense_point_count ||
+    reconstructionMeta?.dense_method ||
+    reconstructionMeta?.stages?.dense_mvs?.status === "AVAILABLE"
+  );
+  const [currentMode, setCurrentMode] = useState(mode || (hasDenseCloud ? "dense_cloud" : "textured"));
   const [currentTool, setCurrentTool] = useState(activeTool || "orbit");
   const [measurePoints, setMeasurePoints] = useState([]);
   const [pointSize, setPointSize] = useState(0.22);
 
   useEffect(() => {
-    if (mode) setCurrentMode(mode);
-  }, [mode]);
+    if (mode) {
+      setCurrentMode(mode);
+    } else if (hasDenseCloud && (currentMode === "textured" || currentMode === "solid")) {
+      setCurrentMode("dense_cloud");
+    }
+  }, [mode, hasDenseCloud]);
 
   useEffect(() => {
     if (activeTool) setCurrentTool(activeTool);

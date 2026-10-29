@@ -5264,6 +5264,8 @@ def run_full_pipeline_task(
                 "mesh_url": f"/api/v1/missions/{mission_id}/reconstruction/mesh" if (reconstruction_result.get("success", False) and has_mesh) else None,
                 "stages": reconstruction_result.get("stages", {}),
                 "scale": reconstruction_result.get("scale", {}),
+                "substage_timings": reconstruction_result.get("substage_timings", {}),
+                "sfm_attempts": reconstruction_result.get("sfm_attempts", []),
             },
             "objects_3d": fusion_result.get("objects", []),
             "semantic_scene": fusion_result.get("semantic_scene", {}),
@@ -6766,14 +6768,14 @@ async def fuse_mission_objects_3d(mission_id: str, reprojection_threshold_px: fl
 @app.get("/api/v1/missions/{mission_id}/reconstruction/pointcloud")
 @app.get("/api/missions/{mission_id}/reconstruction/pointcloud")
 @app.get("/missions/{mission_id}/reconstruction/pointcloud")
-async def get_mission_pointcloud(mission_id: str, type: Optional[str] = Query(None)):
+async def get_mission_pointcloud(mission_id: str, type: Optional[str] = Query(None), download: Optional[bool] = Query(False)):
     """Serve the generated PLY point cloud (sparse or dense) for a mission if it exists."""
     mission = MissionData(mission_id)
     if not mission.data:
         raise HTTPException(status_code=404, detail="Mission not found")
 
     m_id = mission.mission_id
-    pointcloud_path = get_reconstruction_pointcloud_path(m_id, pointcloud_type=type)
+    pointcloud_path = get_reconstruction_pointcloud_path(m_id, pointcloud_type=type, download=download)
     if not pointcloud_path or not pointcloud_path.exists():
         return get_artifact_status_response(mission, "pointcloud")
 
@@ -6787,9 +6789,9 @@ async def get_mission_pointcloud(mission_id: str, type: Optional[str] = Query(No
 @app.get("/api/v1/missions/{mission_id}/reconstruction/dense_pointcloud")
 @app.get("/api/missions/{mission_id}/reconstruction/dense_pointcloud")
 @app.get("/missions/{mission_id}/reconstruction/dense_pointcloud")
-async def get_mission_dense_pointcloud(mission_id: str):
+async def get_mission_dense_pointcloud(mission_id: str, download: Optional[bool] = Query(False)):
     """Serve the dense PLY point cloud (learned depth aligned to SfM) for a mission."""
-    return await get_mission_pointcloud(mission_id, type="dense")
+    return await get_mission_pointcloud(mission_id, type="dense", download=download)
 
 
 @app.get("/api/v1/missions/{mission_id}/reconstruction/mesh")
