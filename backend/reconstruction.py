@@ -109,7 +109,9 @@ def _colmap_matcher_settings(total_frames: int) -> tuple[str, int, bool]:
     loop_detection = os.getenv("COLMAP_LOOP_DETECTION", "false").strip().lower() in {"1", "true", "yes", "on"}
 
     # Step 1.f: Reuse sequential matcher with overlap; no exhaustive matching unless registration < 60%
-    if matcher in {"auto", "default", ""}:
+    if total_frames > 40:
+        matcher = "sequential"
+    elif matcher in {"auto", "default", ""}:
         matcher = "sequential"
     elif matcher not in {"sequential", "exhaustive"}:
         matcher = "sequential"

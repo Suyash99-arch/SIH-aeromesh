@@ -714,6 +714,7 @@ export default function VideoPlayer({
       {/* Object Detection Bounding Box Overlay Canvas (Interactive: B3) */}
       <canvas
         ref={canvasRef}
+        className="video-canvas"
         onClick={handleCanvasClick}
         onMouseMove={handleCanvasMouseMove}
         onMouseLeave={handleCanvasMouseLeave}

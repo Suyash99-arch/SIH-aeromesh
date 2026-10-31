@@ -6,6 +6,39 @@ import { fileURLToPath } from "node:url";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const apiProxyTarget = process.env.E2E_API_PROXY_TARGET || "http://127.0.0.1:8000";
 
+const apiProxyConfig = {
+  "/api/v1": {
+    target: apiProxyTarget,
+    changeOrigin: true,
+    secure: false,
+  },
+  "/api": {
+    target: apiProxyTarget,
+    changeOrigin: true,
+    secure: false,
+  },
+  "/missions": {
+    target: apiProxyTarget,
+    changeOrigin: true,
+    secure: false,
+  },
+  "/scenes": {
+    target: apiProxyTarget,
+    changeOrigin: true,
+    secure: false,
+  },
+  "/health": {
+    target: apiProxyTarget,
+    changeOrigin: true,
+    secure: false,
+  },
+  "/media": {
+    target: apiProxyTarget,
+    changeOrigin: true,
+    secure: false,
+  },
+};
+
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [
@@ -37,38 +70,10 @@ export default defineConfig({
     ],
   },
   server: {
-    proxy: {
-      "/api/v1": {
-        target: apiProxyTarget,
-        changeOrigin: true,
-        secure: false,
-      },
-      "/api": {
-        target: apiProxyTarget,
-        changeOrigin: true,
-        secure: false,
-      },
-      "/missions": {
-        target: apiProxyTarget,
-        changeOrigin: true,
-        secure: false,
-      },
-      "/scenes": {
-        target: apiProxyTarget,
-        changeOrigin: true,
-        secure: false,
-      },
-      "/health": {
-        target: apiProxyTarget,
-        changeOrigin: true,
-        secure: false,
-      },
-      "/media": {
-        target: apiProxyTarget,
-        changeOrigin: true,
-        secure: false,
-      },
-    },
+    proxy: apiProxyConfig,
+  },
+  preview: {
+    proxy: apiProxyConfig,
   },
   build: {
     cssMinify: false,
