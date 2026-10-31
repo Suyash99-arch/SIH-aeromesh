@@ -6633,6 +6633,54 @@ async def get_mission_objects_3d(mission_id: str):
     }
 
 
+@app.get("/api/v1/missions/{mission_id}/objects/{object_id}")
+@app.get("/api/missions/{mission_id}/objects/{object_id}")
+async def get_mission_object_detail_endpoint(mission_id: str, object_id: str):
+    """Return comprehensive object details, 3D coordinates, and per-frame observations (Section B1)."""
+    from backend.object_detail import get_object_detail
+    detail = get_object_detail(mission_id, object_id)
+    if not detail:
+        raise HTTPException(status_code=404, detail=f"Object {object_id} not found in mission {mission_id}")
+    return detail
+
+
+@app.get("/api/v1/missions/{mission_id}/objects/{object_id}/thumbnails/{filename}")
+@app.get("/api/missions/{mission_id}/objects/{object_id}/thumbnails/{filename}")
+async def get_mission_object_thumbnail(mission_id: str, object_id: str, filename: str):
+    """Generate or serve lazy thumbnail for object observation (Section B1)."""
+    from backend.object_detail import generate_thumbnail, get_object_detail
+    # Parse frame index from filename thumb_{track_id}_f{frame_idx}.jpg
+    frame_idx = 0
+    if "_f" in filename:
+        try:
+            num_part = filename.split("_f")[-1].replace(".jpg", "")
+            frame_idx = int(num_part)
+        except Exception:
+            pass
+
+    detail = get_object_detail(mission_id, object_id)
+    bbox = None
+    if detail and detail.get("observations"):
+        for o in detail["observations"]:
+            if o.get("frame_idx") == frame_idx:
+                bbox = o.get("bbox")
+                break
+
+    thumb_path = generate_thumbnail(mission_id, object_id, frame_idx, bbox)
+    if not thumb_path or not thumb_path.exists():
+        raise HTTPException(status_code=404, detail=f"Thumbnail not available for frame {frame_idx}")
+    return FileResponse(str(thumb_path), media_type="image/jpeg", headers={"Cache-Control": "public, max-age=86400"})
+
+
+@app.get("/api/v1/missions/{mission_id}/entry-exit")
+@app.get("/api/missions/{mission_id}/entry-exit")
+async def get_mission_entry_exit_endpoint(mission_id: str):
+    """Return entry and exit boundary events for tracked objects (Section C1-C2)."""
+    from backend.entry_exit import compute_mission_entry_exit
+    events = compute_mission_entry_exit(mission_id)
+    return {"success": True, "mission_id": mission_id, "data": events}
+
+
 @app.get("/api/v1/missions/{mission_id}/objects/{object_id}/3d")
 @app.get("/api/missions/{mission_id}/objects/{object_id}/3d")
 async def get_mission_object_3d(mission_id: str, object_id: str):

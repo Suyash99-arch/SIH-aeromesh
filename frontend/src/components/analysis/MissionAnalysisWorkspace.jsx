@@ -6,6 +6,7 @@ import ViewFiltersSidebar from "./ViewFiltersSidebar";
 import BottomStatStrip from "./BottomStatStrip";
 import VideoFramesTab from "./VideoFramesTab";
 import AddMarkerModal from "./AddMarkerModal";
+import ObjectDetailCard from "./ObjectDetailCard";
 import {
   fetchSemanticScene,
   fetchObjectEvidence,
@@ -280,12 +281,32 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
     return mission?.objects?.vehicles ?? 0;
   }, [objects, mission?.objects?.vehicles]);
 
+  const [entryExitData, setEntryExitData] = useState(null);
+  useEffect(() => {
+    let active = true;
+    if (!missionId) return;
+    fetch(resolveAssetUrl(`/api/v1/missions/${missionId}/entry-exit`))
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (active && data?.data) {
+          setEntryExitData(data.data);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [missionId]);
+
   const entryExitPointsCount = useMemo(() => {
+    if (entryExitData?.total_events != null) {
+      return entryExitData.total_events;
+    }
     return customMarkings.filter((m) => {
       const t = (m.type || "").toLowerCase();
       return t.includes("entry") || t.includes("exit") || t.includes("door");
     }).length;
-  }, [customMarkings]);
+  }, [entryExitData, customMarkings]);
 
   // Load evidence whenever selectedObject changes
   useEffect(() => {
@@ -867,41 +888,24 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
         />
         </Suspense>
 
-        {/* Floating Selected Object HUD Badge */}
+        {/* Interactive Object Info Card (Section B4) */}
         {selectedObject && (
-          <div className="floating-object-hud">
-            <div className="object-hud-meta">
-              <span className="object-hud-id">
-                {selectedObject.object_id} ({selectedObject.track_id}) ·{" "}
-                {selectedObject.class || selectedObject.class_name}
-              </span>
-              <span className="object-hud-coords">
-                Pos: [
-                {selectedObject.position_3d
-                  ? selectedObject.position_3d
-                      .map((v) => v.toFixed(2))
-                      .join(", ")
-                  : "0, 0, 0"}
-                ]
-              </span>
-            </div>
-            <div className="object-hud-actions">
-              <button
-                className="object-hud-btn"
-                onClick={() => setActiveTab("objects")}
-                title="Inspect in right panel"
-              >
-                {t("sceneIntelligence.inspect", "Inspect")}
-              </button>
-              <button
-                className="object-hud-btn clear"
-                onClick={handleClearSelection}
-                title="Deselect object"
-              >
-                ×
-              </button>
-            </div>
-          </div>
+          <ObjectDetailCard
+            missionId={missionId}
+            objectId={selectedObject.track_id || selectedObject.object_id}
+            currentFrame={selectedKeyframe?.frame_index ?? 0}
+            onSeekFrame={(f) => {
+              const kf = keyframes.find((k) => k.frame_index === f);
+              if (kf) setSelectedKeyframe(kf);
+            }}
+            onShowInVideo={(frameNum, detail) => {
+              setPrimaryTab("video_frames");
+              const kf = keyframes.find((k) => k.frame_index === frameNum);
+              if (kf) setSelectedKeyframe(kf);
+            }}
+            onClose={handleClearSelection}
+            viewContext="3d"
+          />
         )}
       </main>
 
@@ -1354,12 +1358,27 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
                         {t("sceneIntelligence.noMatchingObjects", "No matching 3D objects found")}
                       </div>
                     ) : (
-                      filteredObjects.map((obj) => (
-                        <div
-                          key={obj.object_id || obj.track_id}
-                          className="object-list-item"
-                          onClick={() => handleSelectObject(obj)}
-                        >
+                      filteredObjects.map((obj) => {
+                        const isSelected =
+                          selectedObject?.object_id === obj.object_id ||
+                          selectedObject?.track_id === obj.track_id ||
+                          selectedObject?.track_id === obj.object_id;
+                        return (
+                          <div
+                            key={obj.object_id || obj.track_id}
+                            className={`object-list-item ${isSelected ? "active" : ""}`}
+                            tabIndex={0}
+                            role="button"
+                            aria-label={`Select object ${obj.track_id || obj.object_id}`}
+                            onClick={() => handleSelectObject(obj)}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault();
+                                handleSelectObject(obj);
+                              }
+                            }}
+                            style={isSelected ? { borderLeft: "3px solid #38bdf8", background: "rgba(56, 189, 248, 0.12)" } : {}}
+                          >
                           <div className="object-item-left">
                             <span className="object-item-id">
                               {obj.track_id || obj.object_id} ·{" "}
@@ -1398,8 +1417,8 @@ export default function MissionAnalysisWorkspace({ mission, notice }) {
                               : "94%"}
                           </span>
                         </div>
-                      ))
-                    )}
+                      );
+                    }))}
                   </div>
                 </div>
               )}

@@ -983,6 +983,49 @@ def generate_mission_pdf(report: dict[str, Any], output: str | Path | BinaryIO) 
         story.append(obj_tbl)
     story.append(Spacer(1, 8))
 
+    # Entry / Exit Events Table (Section C6)
+    from backend.entry_exit import compute_mission_entry_exit
+    m_id = str(report.get("missionId") or report.get("id") or report.get("mission_id") or "")
+    ee_data = compute_mission_entry_exit(m_id)
+    ee_events = ee_data.get("events", [])
+    
+    story.append(Paragraph("<b>Boundary Crossings (Entry / Exit Events)</b>", h1_style))
+    story.append(Spacer(1, 4))
+    if not ee_events:
+        story.append(Paragraph("<i>0 - no tracked object crossed the view boundary in this clip (honest border-crossing definition).</i>", body_style))
+    else:
+        ee_rows = [
+            [
+                Paragraph("<b>Type</b>", table_header),
+                Paragraph("<b>Track ID</b>", table_header),
+                Paragraph("<b>Class</b>", table_header),
+                Paragraph("<b>Frame</b>", table_header),
+                Paragraph("<b>Time (s)</b>", table_header),
+                Paragraph("<b>3D Position (m)</b>", table_header),
+            ]
+        ]
+        for ev in ee_events[:8]:
+            pos = ev.get("position_3d")
+            pos_str = f"[{pos[0]:.2f}, {pos[1]:.2f}, {pos[2]:.2f}]" if pos else "Scene Plane"
+            ev_type = str(ev.get("type", "")).upper()
+            ee_rows.append([
+                Paragraph(f"<font color='{'#22c55e' if ev_type == 'ENTRY' else '#ef4444'}'><b>{ev_type}</b></font>", table_text),
+                Paragraph(str(ev.get("track_id")), table_text),
+                Paragraph(str(ev.get("class", "object")), table_text),
+                Paragraph(str(ev.get("frame_idx")), table_text),
+                Paragraph(f"{float(ev.get('time_s', 0.0)):.2f}s", table_text),
+                Paragraph(pos_str, table_text),
+            ])
+        ee_tbl = Table(ee_rows, colWidths=[0.9 * inch, 0.9 * inch, 1.0 * inch, 0.8 * inch, 1.0 * inch, 2.4 * inch])
+        ee_tbl.setStyle(TableStyle([
+            ("BACKGROUND", (0, 0), (-1, 0), c_primary),
+            ("GRID", (0, 0), (-1, -1), 0.5, c_border),
+            ("TOPPADDING", (0, 0), (-1, -1), 3),
+            ("BOTTOMPADDING", (0, 0), (-1, -1), 3),
+        ]))
+        story.append(ee_tbl)
+    story.append(Spacer(1, 8))
+
     # SECTION 5: GEOMETRIC MEASUREMENTS & SCALE
     story.append(Paragraph("5. Geometric Measurements & Metric Scale Calibration", h1_style))
     cal = measurements.get("active_calibration", {})

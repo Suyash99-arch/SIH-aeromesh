@@ -120,7 +120,13 @@ export default function ViewFiltersSidebar({
               onChange={() => onToggleLayer?.("entryExit")}
             />
             <span className="filter-label">{t("sceneIntelligence.entryExitPoints")}</span>
-            <span className="filter-badge count">{entryExitCount}</span>
+            <span
+              className="filter-badge count"
+              title={entryExitCount === 0 ? "0 - no tracked object crossed the view boundary in this clip" : `${entryExitCount} boundary events`}
+              style={entryExitCount === 0 ? { fontSize: "0.68rem", maxWidth: "180px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" } : {}}
+            >
+              {entryExitCount === 0 ? "0 - no tracked object crossed view boundary" : entryExitCount}
+            </span>
           </label>
 
           {/* 3D Reconstruction Mesh */}

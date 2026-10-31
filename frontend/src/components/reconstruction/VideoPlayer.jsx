@@ -2,6 +2,8 @@ import { useEffect, useRef, useState, useMemo, useCallback } from "react";
 import { resolveAssetUrl, fetchArtifactsStatus, uploadVideoChunk, uploadVideo, getMission, getUploadConfig } from "../../api/missions.js";
 import Icon from "../ui/Icon";
 import { useUI } from "../../context/UIContext";
+import { computeRenderedVideoRect, mapBboxToRenderedRect } from "../../utils/videoGeometry.js";
+import ObjectDetailCard from "../analysis/ObjectDetailCard.jsx";
 
 export default function VideoPlayer({
   mission,
@@ -12,6 +14,9 @@ export default function VideoPlayer({
   speed,
   detections: propDetections,
   semanticObjects: propSemanticObjects,
+  selectedObjectId = null,
+  onSelectObject = null,
+  onShowIn3D = null,
 }) {
   const { t } = useUI();
   const videoRef = useRef(null);
@@ -64,6 +69,30 @@ export default function VideoPlayer({
   const [ended, setEnded] = useState(false);
   const [duration, setDuration] = useState(0);
   const [retryCount, setRetryCount] = useState(0);
+
+  // Interactive selection and entry/exit states (Section B2-B3, C4)
+  const [internalSelectedId, setInternalSelectedId] = useState(null);
+  const [hoveredId, setHoveredId] = useState(null);
+  const [entryExitData, setEntryExitData] = useState(null);
+  const renderedBoxesRef = useRef([]);
+
+  const activeSelectedId = selectedObjectId || internalSelectedId;
+
+  useEffect(() => {
+    let active = true;
+    if (!mission?.id) return;
+    fetch(resolveAssetUrl(`/api/v1/missions/${mission.id}/entry-exit`))
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (active && data?.data) {
+          setEntryExitData(data.data);
+        }
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+  }, [mission?.id]);
 
   // Compute active candidate URL based on attempt index
   const activeCandidateUrl = useMemo(() => {
@@ -308,7 +337,7 @@ export default function VideoPlayer({
     return map;
   }, [propDetections, propSemanticObjects, mission]);
 
-  // Draw detection bounding boxes on overlay canvas
+  // Draw detection bounding boxes on overlay canvas (Section A1, B3)
   useEffect(() => {
     const canvas = canvasRef.current;
     const video = videoRef.current;
@@ -326,11 +355,34 @@ export default function VideoPlayer({
     ctx.scale(dpr, dpr);
     ctx.clearRect(0, 0, rect.width, rect.height);
 
-    const dets = detectionsByFrame[frame] || detectionsByFrame[frame - 1] || detectionsByFrame[frame + 1] || [];
-    if (dets.length === 0) return;
+    // Look for real observations within sampling interval (Section A1)
+    let dets = detectionsByFrame[frame] || [];
+    let isPredicted = false;
+    if (dets.length === 0) {
+      const frameKeys = Object.keys(detectionsByFrame).map(Number);
+      let closestDiff = Infinity;
+      let closestKey = null;
+      for (const k of frameKeys) {
+        const diff = Math.abs(k - frame);
+        if (diff < closestDiff) {
+          closestDiff = diff;
+          closestKey = k;
+        }
+      }
+      if (closestKey != null && closestDiff <= 15) {
+        dets = detectionsByFrame[closestKey] || [];
+        isPredicted = true;
+      }
+    }
+
+    if (dets.length === 0) {
+      renderedBoxesRef.current = [];
+      return;
+    }
 
     const vw = video.videoWidth || rect.width;
     const vh = video.videoHeight || rect.height;
+    const renderedRect = computeRenderedVideoRect(rect.width, rect.height, vw, vh, "contain");
 
     const CLASS_COLORS = {
       car: "#22d3ee", truck: "#f59e0b", bus: "#a78bfa", van: "#34d399",
@@ -343,38 +395,47 @@ export default function VideoPlayer({
       building: "#a3e635", infrastructure: "#facc15",
     };
 
+    const currentRenderedBoxes = [];
+
     for (const det of dets) {
-      let [x1, y1, x2, y2] = det.bbox;
-
-      if (x1 <= 1.0 && y1 <= 1.0 && x2 <= 1.0 && y2 <= 1.0) {
-        x1 *= rect.width; y1 *= rect.height; x2 *= rect.width; y2 *= rect.height;
-      } else {
-        x1 = (x1 / vw) * rect.width; y1 = (y1 / vh) * rect.height;
-        x2 = (x2 / vw) * rect.width; y2 = (y2 / vh) * rect.height;
-      }
-
+      const [x1, y1, x2, y2] = mapBboxToRenderedRect(det.bbox, renderedRect, vw, vh);
       const w = x2 - x1;
       const h = y2 - y1;
       if (w < 2 || h < 2) continue;
 
+      const tid = det.track_id || det.object_id;
+      const isSelected = activeSelectedId && (tid === activeSelectedId || `OBJ_${tid}` === activeSelectedId || activeSelectedId === `OBJ_${tid}`);
+      const isHovered = hoveredId && (tid === hoveredId || `OBJ_${tid}` === hoveredId);
+
+      currentRenderedBoxes.push({
+        track_id: tid,
+        object_id: det.object_id || `OBJ_${tid}`,
+        bbox: [x1, y1, x2, y2],
+        w,
+        h,
+        det,
+      });
+
       const clsKey = (det.cls || "object").toLowerCase();
-      const color = CLASS_COLORS[clsKey] || "#38bdf8";
+      const color = isSelected ? "#fbbf24" : isHovered ? "#38bdf8" : (CLASS_COLORS[clsKey] || "#38bdf8");
       const confStr = det.confidence != null ? ` ${Math.round(det.confidence * (det.confidence <= 1 ? 100 : 1))}%` : "";
-      const label = `${(det.cls || "OBJ").toUpperCase()}${det.track_id ? ` (${det.track_id})` : ""}${confStr}`;
+      const predLabel = isPredicted ? " (predicted)" : "";
+      const label = `${(det.cls || "OBJ").toUpperCase()}${det.track_id ? ` (${det.track_id})` : ""}${confStr}${predLabel}`;
 
       // Semi-transparent fill
-      ctx.fillStyle = color + "12";
+      ctx.fillStyle = color + (isSelected ? "2a" : isHovered ? "20" : "12");
       ctx.fillRect(x1, y1, w, h);
 
-      // Box border
+      // Box border (dashed if predicted)
       ctx.strokeStyle = color;
-      ctx.lineWidth = 1.5;
-      ctx.setLineDash([]);
+      ctx.lineWidth = isSelected ? 3 : isHovered ? 2.5 : 1.5;
+      ctx.setLineDash(isPredicted ? [4, 4] : []);
       ctx.strokeRect(x1, y1, w, h);
+      ctx.setLineDash([]);
 
       // Corner accents
       const cornerLen = Math.min(14, w / 3.5, h / 3.5);
-      ctx.lineWidth = 2.5;
+      ctx.lineWidth = isSelected ? 3.5 : 2.5;
       ctx.strokeStyle = color;
       ctx.beginPath(); ctx.moveTo(x1, y1 + cornerLen); ctx.lineTo(x1, y1); ctx.lineTo(x1 + cornerLen, y1); ctx.stroke();
       ctx.beginPath(); ctx.moveTo(x2 - cornerLen, y1); ctx.lineTo(x2, y1); ctx.lineTo(x2, y1 + cornerLen); ctx.stroke();
@@ -408,7 +469,44 @@ export default function VideoPlayer({
       ctx.fillStyle = "#000000";
       ctx.fillText(label, x1 + 6, labelY + 13);
     }
-  }, [frame, detectionsByFrame]);
+
+    renderedBoxesRef.current = currentRenderedBoxes;
+  }, [frame, detectionsByFrame, activeSelectedId, hoveredId]);
+
+  const handleCanvasMouseMove = (e) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    const hit = renderedBoxesRef.current.find(
+      (b) => x >= b.bbox[0] && x <= b.bbox[2] && y >= b.bbox[1] && y <= b.bbox[3]
+    );
+    setHoveredId(hit ? (hit.track_id || hit.object_id) : null);
+  };
+
+  const handleCanvasMouseLeave = () => {
+    setHoveredId(null);
+  };
+
+  const handleCanvasClick = (e) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    const hit = renderedBoxesRef.current.find(
+      (b) => x >= b.bbox[0] && x <= b.bbox[2] && y >= b.bbox[1] && y <= b.bbox[3]
+    );
+    if (hit) {
+      const tid = hit.track_id || hit.object_id;
+      setInternalSelectedId(tid);
+      if (onSelectObject) onSelectObject(tid);
+    } else {
+      setInternalSelectedId(null);
+      if (onSelectObject) onSelectObject(null);
+    }
+  };
 
   // Resize overlay canvas when video element resizes
   useEffect(() => {
@@ -613,19 +711,98 @@ export default function VideoPlayer({
         onError={handleVideoError}
       />
 
-      {/* Object Detection Bounding Box Overlay Canvas */}
+      {/* Object Detection Bounding Box Overlay Canvas (Interactive: B3) */}
       <canvas
         ref={canvasRef}
+        onClick={handleCanvasClick}
+        onMouseMove={handleCanvasMouseMove}
+        onMouseLeave={handleCanvasMouseLeave}
         style={{
           position: "absolute",
           top: 0,
           left: 0,
           width: "100%",
           height: "100%",
-          pointerEvents: "none",
-          zIndex: 5,
+          pointerEvents: "auto",
+          cursor: hoveredId ? "pointer" : "default",
+          zIndex: 10,
         }}
       />
+
+      {/* Entry / Exit Timeline Ticks (Section C4) */}
+      {entryExitData?.events && entryExitData.events.length > 0 && duration > 0 && (
+        <div
+          className="video-entry-exit-timeline"
+          style={{
+            position: "absolute",
+            bottom: "6px",
+            left: "14px",
+            right: "14px",
+            height: "8px",
+            pointerEvents: "auto",
+            zIndex: 15,
+            display: "flex",
+            alignItems: "center",
+          }}
+        >
+          {entryExitData.events.map((ev, i) => {
+            const pct = Math.min(100, Math.max(0, (ev.time_s / duration) * 100));
+            const isEntry = ev.type === "ENTRY";
+            return (
+              <button
+                key={`ee-${ev.type}-${ev.track_id}-${i}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  setFrame(ev.frame_idx);
+                  if (videoRef.current) {
+                    videoRef.current.currentTime = ev.time_s;
+                  }
+                  if (onSelectObject) onSelectObject(ev.track_id);
+                  setInternalSelectedId(ev.track_id);
+                }}
+                title={`${ev.type}: ${ev.class || "object"} (${ev.track_id}) at ${ev.time_s}s (f${ev.frame_idx})`}
+                style={{
+                  position: "absolute",
+                  left: `${pct}%`,
+                  transform: "translateX(-50%)",
+                  width: "8px",
+                  height: "8px",
+                  borderRadius: "50%",
+                  background: isEntry ? "#22c55e" : "#ef4444",
+                  border: "1.5px solid #ffffff",
+                  cursor: "pointer",
+                  padding: 0,
+                  boxShadow: `0 0 6px ${isEntry ? "#22c55e" : "#ef4444"}`,
+                }}
+              />
+            );
+          })}
+        </div>
+      )}
+
+      {/* Interactive Object Info Card (Section B3) */}
+      {activeSelectedId && (
+        <ObjectDetailCard
+          missionId={mission?.id}
+          objectId={activeSelectedId}
+          currentFrame={frame}
+          onSeekFrame={(f) => {
+            setFrame(f);
+            if (videoRef.current && Number.isFinite(videoRef.current.duration) && videoRef.current.duration > 0) {
+              const totalF = mission?.video?.total_frames || mission?.frames || 1;
+              videoRef.current.currentTime = (f / totalF) * videoRef.current.duration;
+            }
+          }}
+          onShowIn3D={(obj) => {
+            if (onShowIn3D) onShowIn3D(obj);
+          }}
+          onClose={() => {
+            setInternalSelectedId(null);
+            if (onSelectObject) onSelectObject(null);
+          }}
+          viewContext="video"
+        />
+      )}
 
       {/* Detection Count HUD Badge */}
       {detectionCount > 0 && (
