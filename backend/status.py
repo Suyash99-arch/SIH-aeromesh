@@ -62,10 +62,24 @@ def resolve_mission_status(
     if job_data:
         job_status = (job_data.get("status") or "").upper()
         job_stage = (job_data.get("stage") or "").upper()
-        if job_status == "QUEUED":
-            return MissionStatus.QUEUED, None, None, stage_breakdown
-        if job_status in ("PROCESSING", "RUNNING", "EXTRACTING_FRAMES", "DETECTING_OBJECTS", "TRACKING", "RECONSTRUCTING", "GENERATING_MESH", "FUSING_3D"):
-            return MissionStatus.PROCESSING, None, None, stage_breakdown
+        
+        # Check if job is stale (no heartbeat for > 300s or already finished data exists)
+        is_stale = False
+        last_hb_str = (job_data.get("details") or {}).get("last_heartbeat") or job_data.get("last_heartbeat") or job_data.get("created_at")
+        if last_hb_str:
+            try:
+                from datetime import datetime, timezone
+                last_hb = datetime.fromisoformat(str(last_hb_str).replace("Z", "+00:00"))
+                if (datetime.now(timezone.utc) - last_hb).total_seconds() > 300:
+                    is_stale = True
+            except Exception:
+                pass
+
+        if not is_stale:
+            if job_status == "QUEUED":
+                return MissionStatus.QUEUED, None, None, stage_breakdown
+            if job_status in ("PROCESSING", "RUNNING", "EXTRACTING_FRAMES", "DETECTING_OBJECTS", "TRACKING", "RECONSTRUCTING", "GENERATING_MESH", "FUSING_3D"):
+                return MissionStatus.PROCESSING, None, None, stage_breakdown
         if job_status == "INTERRUPTED":
             err_msg = job_data.get("error_message") or "Processing was interrupted by a server restart. Please retry."
             return MissionStatus.INTERRUPTED, "pipeline", err_msg, stage_breakdown

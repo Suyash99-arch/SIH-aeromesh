@@ -31,7 +31,7 @@
   height: auto;
   aspect-ratio: 16 / 9;
   display: block;
-  object-fit: cover;
+  object-fit: contain;
   background: #061017;
 }
 

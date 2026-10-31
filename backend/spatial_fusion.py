@@ -400,6 +400,39 @@ class FusedObject3D:
         }
 
 
+def classify_object_motion_state(
+    trajectory_pts: Optional[List[Union[Dict[str, Any], List[float], Tuple[float, ...]]]] = None,
+    evidence_count: int = 1,
+) -> str:
+    """
+    Restore single source of truth for motion state from triangulated 3D position
+    variance across frames (ego-motion compensated), NOT from image-space motion.
+    Parked vans must be STATIC.
+    """
+    if not trajectory_pts or len(trajectory_pts) < 3:
+        return "STATIC" if evidence_count >= 1 else "UNKNOWN"
+
+    pts = []
+    for p in trajectory_pts:
+        if isinstance(p, dict):
+            pts.append([float(p.get("x", 0.0)), float(p.get("y", 0.0)), float(p.get("z", 0.0))])
+        elif isinstance(p, (list, tuple)) and len(p) >= 3:
+            pts.append([float(p[0]), float(p[1]), float(p[2])])
+
+    if len(pts) < 3:
+        return "STATIC" if evidence_count >= 1 else "UNKNOWN"
+
+    traj_pts = np.array(pts, dtype=np.float64)
+    d_net = float(np.linalg.norm(traj_pts[-1] - traj_pts[0]))
+    pairwise = np.linalg.norm(np.diff(traj_pts, axis=0), axis=1)
+    path_len = float(np.sum(pairwise))
+    std_dev = float(np.mean(np.std(traj_pts, axis=0)))
+
+    if d_net > 1.5 and path_len > 2.0 and std_dev > 0.5:
+        return "MOVING"
+    return "STATIC"
+
+
 class SpatialFusionEngine:
     """Connects 2D tracked detections to photogrammetric 3D camera poses and scene geometry."""
 

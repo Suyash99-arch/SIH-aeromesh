@@ -26,6 +26,7 @@ from backend.spatial_fusion import (
     TriangleMesh,
     compute_reprojection_error,
     unproject_pixel_to_ray,
+    classify_object_motion_state,
 )
 
 logger = logging.getLogger(__name__)
@@ -382,11 +383,7 @@ def run_3d_fusion_for_mission(
             avg_conf = float(np.mean([obs["confidence"] for obs in valid_hits]))
             evidence_count = len(valid_hits)
 
-            motion_state = "STATIC"
-            if len(valid_hits) >= 2:
-                net_disp = float(np.linalg.norm(pts[-1] - pts[0]))
-                if net_disp > (1.8 * scale_ratio):
-                    motion_state = "MOVING"
+            motion_state = classify_object_motion_state(pts, evidence_count)
 
             if evidence_count >= 2 and avg_conf >= 0.35 and mean_err <= reprojection_threshold_px:
                 association_status = "VALID"

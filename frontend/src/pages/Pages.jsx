@@ -282,7 +282,7 @@ export function OverviewPage({ mission, navigate, notice, updateMission }) {
     : safeMission?.objects?.low_confidence || 0;
 
   const isMetricCalibrated = (safeMission?.scale_status || safeMission?.measurements?.scale_status) === "METRIC_CALIBRATED";
-  const isProcessing = safeMission.status === "processing";
+  const isProcessing = ["processing", "queued", "running"].includes(String(safeMission.status || "").toLowerCase());
   const failureMessage = safeMission.error || safeMission.error_message || safeMission.reconstruction?.error || "";
   const isMissionFailed = ["failed", "reconstruction_failed"].includes(String(safeMission.status || "").toLowerCase()) && Boolean(failureMessage);
   const lightweightMode = healthConfig?.pipeline_mode === "light" || healthConfig?.reconstruction_engine === "disabled";
@@ -858,7 +858,7 @@ export function MissionsPage({ mission, setMission, navigate, notice, onCreateMi
           </div>
 
           <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", marginTop: "16px" }}>
-            {mission.status === "processing" ? (
+            {["processing", "queued", "running"].includes(String(mission.status || "").toLowerCase()) ? (
               <Button variant="primary" icon="Activity" onClick={() => navigate("pipeline")}>
                 Monitor Live Pipeline Execution
               </Button>
@@ -892,7 +892,16 @@ export function DronePage({ mission }) {
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState("1×");
   const [quality, setQuality] = useState("overall");
-  const detect = mission?.findings?.[0];
+  const detect = React.useMemo(() => {
+    if (!mission?.findings || !Array.isArray(mission.findings) || mission.findings.length === 0) return null;
+    const match = mission.findings.find((f) => {
+      const fNum = f.frame ?? f.frame_index ?? f.frame_id;
+      if (fNum == null) return false;
+      const num = typeof fNum === "string" ? (parseInt(fNum.match(/\d+/)?.[0] || "-1", 10)) : Number(fNum);
+      return Math.abs(num - frame) <= 1 || Math.abs(num - (frame - 1)) <= 1;
+    });
+    return match || null;
+  }, [mission?.findings, frame]);
 
   const speedMultiplier = speed === "0.5×" ? 0.5 : speed === "2×" ? 2 : 1;
 
@@ -1775,6 +1784,32 @@ export function IntelligencePage({ kind, mission, navigate, notice }) {
     );
   }, [sceneObjects, mission, peopleCount, vehiclesCount, structuresCount, hazardsCount]);
 
+  const staticCount = useMemo(() => {
+    if (sceneObjects.length > 0) {
+      return sceneObjects.filter((o) => (o.motion_state || "").toUpperCase() === "STATIC").length;
+    }
+    return (
+      mission?.semantic_scene?.static_objects ??
+      mission?.spatial_fusion?.static_objects ??
+      mission?.canonical_summary?.objects?.static_objects ??
+      mission?.summary?.static_objects ??
+      0
+    );
+  }, [sceneObjects, mission]);
+
+  const movingCount = useMemo(() => {
+    if (sceneObjects.length > 0) {
+      return sceneObjects.filter((o) => (o.motion_state || "").toUpperCase() === "MOVING").length;
+    }
+    return (
+      mission?.semantic_scene?.moving_objects ??
+      mission?.spatial_fusion?.moving_objects ??
+      mission?.canonical_summary?.objects?.moving_objects ??
+      mission?.summary?.moving_objects ??
+      0
+    );
+  }, [sceneObjects, mission]);
+
   const confidenceItems = useMemo(() => {
     if (Array.isArray(mission?.findings) && mission.findings.length > 0) {
       return mission.findings;
@@ -2052,11 +2087,11 @@ export function IntelligencePage({ kind, mission, navigate, notice }) {
             <div className="classification">
               <div className="class-item">
                 <span>{t("sceneIntelligence.motionStatic", "Static Objects")}</span>
-                <b>{structuresCount + hazardsCount || (totalCount - (peopleCount + vehiclesCount) >= 0 ? totalCount - (peopleCount + vehiclesCount) : 0)}</b>
+                <b>{staticCount}</b>
               </div>
               <div className="class-item">
                 <span>{t("geospatial.dynamicObjects", "Dynamic Objects")}</span>
-                <b>{peopleCount + vehiclesCount}</b>
+                <b>{movingCount}</b>
               </div>
             </div>
           </Panel>

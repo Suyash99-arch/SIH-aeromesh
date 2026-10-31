@@ -96,7 +96,7 @@ export default function Topbar({
           }}
         >
             <span className="crumb-mission-name">{mission?.name || t("nav.activeMission")}</span>
-          {mission?.status === "processing" && (
+          {["processing", "queued", "running"].includes(String(mission?.status || "").toLowerCase()) && (
             <span style={{
               fontSize: "0.65rem", padding: "1px 5px",
               background: "rgba(14, 165, 233, 0.25)", border: "1px solid rgba(14, 165, 233, 0.5)",

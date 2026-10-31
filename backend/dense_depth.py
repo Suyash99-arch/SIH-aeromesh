@@ -79,6 +79,35 @@ def ransac_fit_inverse_depth(
     return float(best_s), float(best_t), med_res
 
 
+def compute_sky_mask(
+    depth: np.ndarray,
+    bgr: np.ndarray,
+    median_scene_depth: float,
+    k: float = 2.5,
+) -> np.ndarray:
+    """
+    Mask sky pixels before unprojection (Section A3):
+    - Farthest ~3% depth percentile
+    - Points beyond k * median_scene_depth
+    - Low-texture blue/white pixels at far distances
+    """
+    p97 = float(np.percentile(depth, 97))
+    far_pct_mask = depth >= p97
+    far_depth_mask = depth > (k * median_scene_depth) if median_scene_depth > 0 else far_pct_mask
+
+    hsv = cv2.cvtColor(bgr, cv2.COLOR_BGR2HSV)
+    gray = cv2.cvtColor(bgr, cv2.COLOR_BGR2GRAY)
+    lap = cv2.Laplacian(gray, cv2.CV_32F)
+    lap_var = np.abs(lap)
+
+    blue_sky = (hsv[:, :, 0] >= 90) & (hsv[:, :, 0] <= 135) & (hsv[:, :, 1] >= 25) & (hsv[:, :, 2] >= 100) & (lap_var < 15.0)
+    white_sky = (hsv[:, :, 1] <= 35) & (hsv[:, :, 2] >= 210) & (lap_var < 10.0)
+    color_sky = (blue_sky | white_sky) & (depth > 1.2 * median_scene_depth)
+
+    sky_mask = far_pct_mask | far_depth_mask | color_sky
+    return sky_mask
+
+
 def densify_depth_aligned_to_sfm(
     recon: Any,
     frames_dir: Path,
@@ -245,6 +274,8 @@ def densify_depth_aligned_to_sfm(
         # Multi-view consistency filter
         all_pts: List[np.ndarray] = []
         all_cols: List[np.ndarray] = []
+        all_depth_medians = [float(np.median(f["depth"])) for f in aligned_frames]
+        median_scene_depth = float(np.median(all_depth_medians)) if all_depth_medians else 10.0
 
         for i, f_curr in enumerate(aligned_frames):
             # Find 2-3 nearest keyframes
@@ -261,6 +292,10 @@ def densify_depth_aligned_to_sfm(
             stride = 2
             u_coords, v_coords = np.meshgrid(np.arange(0, dw, stride), np.arange(0, dh, stride))
             z_vals = f_curr["depth"][v_coords, u_coords]
+
+            # Section A3: Sky and extreme floater mask
+            sky_mask = compute_sky_mask(f_curr["depth"], f_curr["bgr"], median_scene_depth)
+            non_sky_mask = (~sky_mask)[v_coords, u_coords].reshape(-1)
 
             x_cam = (u_coords - f_curr["cx"]) * z_vals / f_curr["fx"]
             y_cam = (v_coords - f_curr["cy"]) * z_vals / f_curr["fy"]
@@ -295,6 +330,7 @@ def densify_depth_aligned_to_sfm(
                 consistent_indices = np.where(in_bounds)[0][agrees]
                 consistent_mask[consistent_indices] = True
 
+            consistent_mask = consistent_mask & non_sky_mask
             kept_pts = pts_world[consistent_mask]
             bgr_frame = f_curr["bgr"]
             rgb_frame = cv2.cvtColor(bgr_frame, cv2.COLOR_BGR2RGB)

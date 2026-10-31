@@ -299,7 +299,7 @@ export default function App() {
         }
 
         // Only poll if the mission is actively processing or queued
-        const isLive = nextMission.status === "processing" || nextMission.status === "queued" || nextMission.status === "running";
+        const isLive = ["processing", "queued", "running"].includes(String(nextMission?.status || "").toLowerCase());
         if (isLive && pollAttempts < maxPollAttempts) {
           pollTimer = setTimeout(() => {
             if (active) {
