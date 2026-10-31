@@ -896,6 +896,10 @@ def _run_pycolmap_sfm(
                 inc_options.mapper.ba_refine_focal_length = True
             if hasattr(inc_options.mapper, "ba_refine_extra_params"):
                 inc_options.mapper.ba_refine_extra_params = True
+            if hasattr(inc_options.mapper, "ba_global_frames_ratio"):
+                inc_options.mapper.ba_global_frames_ratio = 1.25
+            if hasattr(inc_options.mapper, "ba_global_points_ratio"):
+                inc_options.mapper.ba_global_points_ratio = 1.25
 
         reconstructions = None
         try:
@@ -983,6 +987,14 @@ def _run_pycolmap_sfm(
         best_recon.write_binary(str(model_0_dir))
     except Exception as exc:
         logger.warning("Could not write binary reconstruction model: %s", exc)
+
+    # Section D5: Intermediate disk cleanup
+    try:
+        if database_path.exists():
+            database_path.unlink(missing_ok=True)
+            logger.info("[SfM] Cleaned up intermediate %s", database_path.name)
+    except Exception as cl_exc:
+        logger.debug("[SfM] Database cleanup notice: %s", cl_exc)
 
     camera_poses = []
     for img_id, img in best_recon.images.items():

@@ -11,6 +11,8 @@ Honest disclosure:
 
 from __future__ import annotations
 
+import gc
+import hashlib
 import logging
 import time
 from pathlib import Path
@@ -160,8 +162,12 @@ def densify_depth_aligned_to_sfm(
             progress_cb("Estimating dense neural depth & aligning to SfM scale", 75)
 
         logger.info("[densify_depth] Loading DepthAnythingV2Runner for %d registered frames...", num_reg)
+        torch.set_num_threads(4)
         from backend.depth_anything import DepthAnythingV2Runner
         runner = DepthAnythingV2Runner()
+
+        depth_cache_dir = output_dir / "depth_cache"
+        depth_cache_dir.mkdir(parents=True, exist_ok=True)
 
         registered_images = [img for img in recon.images.values() if getattr(img, "num_points3D", 0) > 0]
         registered_images.sort(key=lambda im: im.name)
@@ -170,6 +176,11 @@ def densify_depth_aligned_to_sfm(
         residuals: Dict[str, float] = {}
 
         for colmap_img in registered_images:
+            # Watchdog timeout check (Section D4: 15m dense timeout)
+            if (time.time() - started) > 900:
+                logger.warning("[densify_depth] Watchdog timeout (15m) reached; proceeding with %d aligned frames", len(aligned_frames))
+                break
+
             frame_path = frames_dir / colmap_img.name
             if not frame_path.exists():
                 continue
@@ -185,12 +196,28 @@ def densify_depth_aligned_to_sfm(
             th = max(1, int(round(orig_h * scale_input)))
             img_small = cv2.resize(bgr, (tw, th), interpolation=cv2.INTER_AREA)
 
-            # Predict relative depth
-            pil_img = Image.fromarray(cv2.cvtColor(img_small, cv2.COLOR_BGR2RGB))
-            inputs = runner.processor(images=pil_img, return_tensors="pt").to(runner.device)
-            with torch.no_grad():
-                outputs = runner.model(**inputs)
-                pred = outputs.predicted_depth.squeeze().cpu().numpy()
+            # Predict relative depth with SHA256 cache & torch.inference_mode (Section D3)
+            try:
+                frame_bytes = frame_path.read_bytes()
+                frame_sha = hashlib.sha256(frame_bytes).hexdigest()[:16]
+            except Exception:
+                frame_sha = colmap_img.name.replace(".jpg", "").replace(".png", "")
+
+            cache_file = depth_cache_dir / f"depth_{frame_sha}_{max_input_dimension}.npy"
+            if cache_file.exists():
+                pred = np.load(str(cache_file))
+            else:
+                pil_img = Image.fromarray(cv2.cvtColor(img_small, cv2.COLOR_BGR2RGB))
+                inputs = runner.processor(images=pil_img, return_tensors="pt").to(runner.device)
+                with torch.inference_mode():
+                    outputs = runner.model(**inputs)
+                    pred = outputs.predicted_depth.squeeze().cpu().numpy()
+                try:
+                    np.save(str(cache_file), pred)
+                except Exception:
+                    pass
+                del inputs, outputs
+                gc.collect()
 
             cfw = colmap_img.cam_from_world()
             r_mat = cfw.rotation.matrix()
