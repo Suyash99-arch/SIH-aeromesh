@@ -36,7 +36,7 @@ def sample_videos(tmp_path_factory):
     subprocess.run([ffmpeg, "-y", "-f", "lavfi", "-i", "testsrc=duration=1:size=320x240:rate=30", "-c:v", "libx265", "-pix_fmt", "yuv420p", str(files["hevc"])], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     
     # 3. Rotated video (metadata display_rotation=90)
-    subprocess.run([ffmpeg, "-y", "-display_rotation:v", "90", "-f", "lavfi", "-i", "testsrc=duration=1:size=320x240:rate=30", "-c:v", "libx264", "-pix_fmt", "yuv420p", str(files["rotated"])], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    subprocess.run([ffmpeg, "-y", "-display_rotation:v", "90", "-i", str(files["h264"]), "-c", "copy", str(files["rotated"])], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     
     # 4. MOV container
     subprocess.run([ffmpeg, "-y", "-f", "lavfi", "-i", "testsrc=duration=1:size=320x240:rate=30", "-c:v", "mpeg4", str(files["mov"])], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
