@@ -2694,6 +2694,13 @@ async def get_mission(mission_id: str, current_user: Optional[UserRecord] = Depe
         assets["video"] = video_dict["url"]
     elif not assets.get("video"):
         assets["video"] = f"/api/v1/missions/{m_id}/video"
+
+    # Normalize non-streaming storage URL to ranged video streaming endpoint
+    if assets.get("video") and ("/api/storage/" in assets["video"] or "/storage/" in assets["video"]):
+        assets["video"] = f"/api/v1/missions/{m_id}/video"
+
+    if not assets.get("video_proxy"):
+        assets["video_proxy"] = f"/api/v1/missions/{m_id}/video/proxy"
     
     recon_meta = get_reconstruction_metadata(m_id)
     if recon_meta:
@@ -3762,6 +3769,7 @@ def ranged_file_response(file_path: Path, request: Request, content_type: str = 
             "Accept-Ranges": "bytes",
             "Content-Length": str(file_size),
             "Content-Disposition": f'inline; filename="{file_path.name}"',
+            "Cache-Control": "public, max-age=3600",
         }
         return Response(status_code=200, headers=headers, media_type=content_type)
 
@@ -3777,6 +3785,7 @@ def ranged_file_response(file_path: Path, request: Request, content_type: str = 
             "Accept-Ranges": "bytes",
             "Content-Length": str(file_size),
             "Content-Disposition": f'inline; filename="{file_path.name}"',
+            "Cache-Control": "public, max-age=3600",
         }
         return StreamingResponse(iter_full(), status_code=200, media_type=content_type, headers=headers)
 
@@ -3823,6 +3832,7 @@ def ranged_file_response(file_path: Path, request: Request, content_type: str = 
         "Accept-Ranges": "bytes",
         "Content-Length": str(content_length),
         "Content-Disposition": f'inline; filename="{file_path.name}"',
+        "Cache-Control": "public, max-age=3600",
     }
     return StreamingResponse(
         iter_range(start, content_length),
@@ -4179,22 +4189,22 @@ async def get_mission_video_proxy(mission_id: str, request: Request):
     if not original_path:
         return get_artifact_status_response(mission, "video")
 
-    # Look for existing proxy in all potential mission directories (only if not currently generating)
+    # Look for existing proxy in all potential mission directories (always search, even if pending)
     proxy_path: Path | None = None
-    if mission_id not in _pending_proxy_generation:
-        for cand_dir in [
-            DATA_DIR / "objects" / "missions" / mission_id,
-            MISSIONS_DIR / mission_id,
-            original_path.parent.parent,
-            original_path.parent,
-        ]:
-            p_cand = cand_dir / "proxy" / "video_proxy.mp4"
-            if p_cand.is_file() and p_cand.stat().st_size > 10_000:
-                proxy_path = p_cand
-                break
+    for cand_dir in [
+        DATA_DIR / "objects" / "missions" / mission_id,
+        MISSIONS_DIR / mission_id,
+        original_path.parent.parent,
+        original_path.parent,
+    ]:
+        p_cand = cand_dir / "proxy" / "video_proxy.mp4"
+        if p_cand.is_file() and p_cand.stat().st_size > 10_000:
+            proxy_path = p_cand
+            break
 
     # Serve existing proxy immediately if ready
     if proxy_path and proxy_path.exists() and proxy_path.stat().st_size > 10_000:
+        _pending_proxy_generation.discard(mission_id)
         return ranged_file_response(proxy_path, request, content_type="video/mp4")
 
     # Determine target directory where new proxy should be written
@@ -4205,6 +4215,15 @@ async def get_mission_video_proxy(mission_id: str, request: Request):
             break
     if not mission_dir:
         mission_dir = original_path.parent.parent  # fallback: put proxy next to original
+
+    # Clean up any leftover temporary files in target proxy directory
+    proxy_dir = mission_dir / "proxy"
+    if proxy_dir.exists():
+        for stale in proxy_dir.glob("*.tmp_*.mp4"):
+            try:
+                stale.unlink(missing_ok=True)
+            except OSError:
+                pass
 
     # If proxy is not ready yet, trigger generation asynchronously in background
     # and IMMEDIATELY stream the original video so the browser video player starts with 0 delay.
@@ -4225,7 +4244,7 @@ async def get_mission_video_proxy(mission_id: str, request: Request):
 
         asyncio.create_task(_run_bg_proxy(mission_id, original_path, mission_dir))
 
-    # Fast immediate response: serve original (supported by ranged_file_response partial content)
+    # Fast immediate response: fall back to original video (with HTTP range support)
     return ranged_file_response(original_path, request, content_type="video/mp4")
 
 

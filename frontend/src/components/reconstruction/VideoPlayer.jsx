@@ -40,11 +40,12 @@ export default function VideoPlayer({
     mission?.video?.proxy_url ||
     (mission?.id ? `/api/v1/missions/${mission.id}/video/proxy` : "")) : "";
 
+  const canonicalDirectEndpoint = mission?.id ? `/api/v1/missions/${mission.id}/video` : "";
   const directUrl = videoAvailable ? (
-    mission?.assets?.video ||
-    mission?.video?.original_url ||
-    mission?.video?.url ||
-    (mission?.id ? `/api/v1/missions/${mission.id}/video` : "")) : "";
+    (mission?.assets?.video && !mission?.assets?.video.includes("127.0.0.1") && !mission?.assets?.video.includes("storage/missions"))
+      ? mission.assets.video
+      : (canonicalDirectEndpoint || mission?.assets?.video || mission?.video?.original_url || mission?.video?.url || "")
+  ) : "";
 
   // Fallback state tracking: 0 = try proxy, 1 = try direct original, 2 = all failed
   const [attemptIndex, setAttemptIndex] = useState(0);
@@ -135,6 +136,25 @@ export default function VideoPlayer({
       setFailed(true);
     }
   }, [videoSrc]);
+
+  // Watchdog guard: never stay as an unexplained black/loading box
+  useEffect(() => {
+    if (!videoSrc || failed) return;
+    const timer = setTimeout(() => {
+      // If after 8 seconds, the video element is still loading and has duration 0
+      if (loading && duration === 0) {
+        if (attemptIndex === 0 && directUrl && directUrl !== proxyUrl) {
+          console.warn("[VideoPlayer] Stream load watchdog triggered for proxy; falling back to direct video.");
+          setAttemptIndex(1);
+        } else {
+          setLoading(false);
+          setFailed(true);
+          setErrorMessage("Flight video stream timed out or is not playable by your browser. Please retry or re-upload.");
+        }
+      }
+    }, 8000);
+    return () => clearTimeout(timer);
+  }, [videoSrc, loading, duration, attemptIndex, directUrl, proxyUrl, failed]);
 
   // ------------------------------------------------------------------
   // Video Error & Automatic Fallback Handler
@@ -727,6 +747,7 @@ export default function VideoPlayer({
           pointerEvents: "auto",
           cursor: hoveredId ? "pointer" : "default",
           zIndex: 10,
+          background: "transparent",
         }}
       />
 

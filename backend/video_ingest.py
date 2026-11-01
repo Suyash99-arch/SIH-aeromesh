@@ -266,6 +266,13 @@ def create_browser_proxy(
     ffmpeg_bin = get_ffmpeg_bin()
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
+    # Clean up any leftover temporary files from prior interrupted attempts
+    for stale_tmp in output_path.parent.glob(f"{output_path.stem}.tmp_*.mp4"):
+        try:
+            stale_tmp.unlink(missing_ok=True)
+        except OSError:
+            pass
+
     # Probe to get real fps (used for keyframe interval)
     probe = probe_video(input_path)
     fps = probe.get("fps") or 25.0
@@ -301,29 +308,31 @@ def create_browser_proxy(
     ]
 
     logger.info("Creating browser proxy: %s -> %s", input_path, output_path)
-    process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-    if progress_callback:
-        progress_callback(5.0)
+    try:
+        process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        if progress_callback:
+            progress_callback(5.0)
 
-    stderr_output = []
-    while True:
-        line = process.stderr.readline() if process.stderr else ""
-        if not line and process.poll() is not None:
-            break
-        if line:
-            stderr_output.append(line)
+        stderr_output = []
+        while True:
+            line = process.stderr.readline() if process.stderr else ""
+            if not line and process.poll() is not None:
+                break
+            if line:
+                stderr_output.append(line)
 
-    retcode = process.poll()
-    if retcode != 0:
+        retcode = process.poll()
+        if retcode != 0:
+            err_msg = "".join(stderr_output)
+            raise RuntimeError(f"Browser proxy creation failed (code {retcode}): {err_msg[-800:]}")
+
+        os.replace(tmp_output, output_path)
+    finally:
         if tmp_output.exists():
             try:
-                tmp_output.unlink()
+                tmp_output.unlink(missing_ok=True)
             except OSError:
                 pass
-        err_msg = "".join(stderr_output)
-        raise RuntimeError(f"Browser proxy creation failed (code {retcode}): {err_msg[-800:]}")
-
-    os.replace(tmp_output, output_path)
 
     if progress_callback:
         progress_callback(100.0)
