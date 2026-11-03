@@ -224,6 +224,30 @@ function RealPointCloud({ url, onBoundsComputed, pointSize = 0.22 }) {
         const rawGeom = loader.parse(buffer);
         if (!active) return;
 
+        // Cap point cloud at 500,000 points to prevent WebGL context loss on integrated GPUs
+        const MAX_VIEW_POINTS = 500000;
+        const totalPoints = rawGeom.attributes.position?.count || 0;
+        if (totalPoints > MAX_VIEW_POINTS) {
+          const stride = Math.ceil(totalPoints / MAX_VIEW_POINTS);
+          const pos = rawGeom.attributes.position.array;
+          const col = rawGeom.attributes.color?.array;
+          const newCount = Math.floor(totalPoints / stride);
+          const newPos = new Float32Array(newCount * 3);
+          const newCol = col ? new Float32Array(newCount * 3) : null;
+          for (let i = 0, j = 0; i < totalPoints && j < newCount; i += stride, j++) {
+            newPos[j * 3] = pos[i * 3];
+            newPos[j * 3 + 1] = pos[i * 3 + 1];
+            newPos[j * 3 + 2] = pos[i * 3 + 2];
+            if (newCol && col) {
+              newCol[j * 3] = col[i * 3];
+              newCol[j * 3 + 1] = col[i * 3 + 1];
+              newCol[j * 3 + 2] = col[i * 3 + 2];
+            }
+          }
+          rawGeom.setAttribute("position", new THREE.BufferAttribute(newPos, 3));
+          if (newCol) rawGeom.setAttribute("color", new THREE.BufferAttribute(newCol, 3));
+        }
+
         const geom = sanitizeBufferGeometry(rawGeom);
         geom.computeVertexNormals();
         geom.computeBoundingBox();

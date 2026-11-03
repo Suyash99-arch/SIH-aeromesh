@@ -194,6 +194,27 @@ def run_3d_fusion_for_mission(
     authoritative_tracks = mission_data.get("tracks") or []
     authoritative_observations = (mission_data.get("detections") or {}).get("observations") or []
 
+    # Check detections.json in mission directory if manifest lacked tracks/observations
+    detections_json_path = mission_dir / "detections.json"
+    if detections_json_path.exists():
+        try:
+            with open(detections_json_path, "r", encoding="utf-8") as f_det:
+                det_json = json.load(f_det)
+                if not authoritative_tracks:
+                    authoritative_tracks = (
+                        det_json.get("tracks")
+                        or det_json.get("scene_analysis", {}).get("per_object_evidence")
+                        or []
+                    )
+                if not authoritative_observations:
+                    authoritative_observations = (
+                        det_json.get("observations")
+                        or (det_json.get("detections") or {}).get("observations")
+                        or []
+                    )
+        except Exception as det_exc:
+            logger.warning(f"Could not read detections.json {detections_json_path}: {det_exc}")
+
     # Get sampling interval from reconstruction extraction audit
     recon_meta_path = recon_dir / "reconstruction_metadata.json"
     sampling_interval = 12
@@ -268,7 +289,7 @@ def run_3d_fusion_for_mission(
                 sx = cam_w / max(1.0, video_w)
                 sy = cam_h / max(1.0, video_h)
 
-                bbox = obs.get("boundingBox") or obs.get("bbox") or [0, 0, 10, 10]
+                bbox = obs.get("boundingBox") or obs.get("bbox") or obs.get("bbox_2d") or obs.get("bounding_box") or [0, 0, 10, 10]
                 cx_cam = float((bbox[0] + bbox[2]) / 2.0) * sx
                 cy_cam = float((bbox[1] + bbox[3]) / 2.0) * sy
                 bbox_cam = [bbox[0] * sx, bbox[1] * sy, bbox[2] * sx, bbox[3] * sy]

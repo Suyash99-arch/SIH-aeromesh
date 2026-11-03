@@ -31,9 +31,12 @@ def load_csv_fused_objects(mission_id: str) -> List[Dict[str, Any]]:
                 with open(csv_path, "r", encoding="utf-8") as f:
                     reader = csv.DictReader(f)
                     for r in reader:
-                        cls_name = r.get("class", "vehicle")
+                        obj_id = (r.get("object_id") or "").strip()
+                        cls_name = (r.get("class") or "vehicle").strip()
+                        if not obj_id or obj_id.upper() == "NONE" or not cls_name or cls_name.lower() == "none":
+                            continue
                         objects.append({
-                            "object_id": r.get("object_id", ""),
+                            "object_id": obj_id,
                             "track_id": r.get("track_id", ""),
                             "class": cls_name,
                             "class_name": cls_name,

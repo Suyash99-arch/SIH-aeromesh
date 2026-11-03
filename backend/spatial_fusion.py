@@ -409,15 +409,20 @@ def classify_object_motion_state(
     variance across frames (ego-motion compensated), NOT from image-space motion.
     Parked vans must be STATIC.
     """
-    if not trajectory_pts or len(trajectory_pts) < 3:
+    if trajectory_pts is None:
         return "STATIC" if evidence_count >= 1 else "UNKNOWN"
 
     pts = []
-    for p in trajectory_pts:
-        if isinstance(p, dict):
-            pts.append([float(p.get("x", 0.0)), float(p.get("y", 0.0)), float(p.get("z", 0.0))])
-        elif isinstance(p, (list, tuple)) and len(p) >= 3:
-            pts.append([float(p[0]), float(p[1]), float(p[2])])
+    if isinstance(trajectory_pts, np.ndarray):
+        if trajectory_pts.size == 0 or len(trajectory_pts) < 3:
+            return "STATIC" if evidence_count >= 1 else "UNKNOWN"
+        pts = trajectory_pts.reshape(-1, 3).tolist()
+    else:
+        for p in trajectory_pts:
+            if isinstance(p, dict):
+                pts.append([float(p.get("x", 0.0)), float(p.get("y", 0.0)), float(p.get("z", 0.0))])
+            elif isinstance(p, (list, tuple, np.ndarray)) and len(p) >= 3:
+                pts.append([float(p[0]), float(p[1]), float(p[2])])
 
     if len(pts) < 3:
         return "STATIC" if evidence_count >= 1 else "UNKNOWN"

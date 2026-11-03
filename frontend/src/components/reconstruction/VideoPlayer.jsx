@@ -330,25 +330,55 @@ export default function VideoPlayer({
       propSemanticObjects,
       mission?.semantic_scene?.observations,
       mission?.semantic_scene?.objects,
-      mission?.detections,
+      mission?.detections?.observations,
+      Array.isArray(mission?.detections) ? mission?.detections : null,
       mission?.objects_3d,
+      mission?.tracks,
     ];
     for (const src of sources) {
       if (!Array.isArray(src)) continue;
       for (const det of src) {
-        const observations = det.observations || (det.bbox ? [det] : []);
+        if (!det) continue;
+        let observations = det.observations;
+        if (!observations && det.trajectory && Array.isArray(det.trajectory)) {
+          const firstF = det.firstSeen ?? det.first_seen ?? 0;
+          const lastF = det.lastSeen ?? det.last_seen ?? firstF;
+          const traj = det.trajectory;
+          observations = traj.map((pt, idx) => {
+            const fNum = traj.length > 1 ? Math.round(firstF + (idx * (lastF - firstF)) / (traj.length - 1)) : firstF;
+            return {
+              frame: fNum,
+              bbox: [pt[0] - 20, pt[1] - 20, pt[0] + 20, pt[1] + 20],
+              confidence: det.confidence ?? 0.6,
+              class: det.class ?? det.class_name ?? "vehicle",
+              track_id: det.trackId ?? det.track_id ?? "",
+            };
+          });
+        } else if (!observations) {
+          observations = (det.bbox || det.bbox_2d || det.boundingBox || det.bounding_box) ? [det] : [];
+        }
+
         for (const obs of observations) {
-          const fi = obs.frame_index ?? obs.frame_id ?? obs.frame ?? det.frame_index ?? det.frame_id;
-          if (fi == null) continue;
-          const bbox = obs.bbox || obs.bounding_box || det.bbox || det.bounding_box;
+          if (!obs) continue;
+          const rawFi = obs.frame_index ?? obs.frame_id ?? obs.frame ?? det.frame_index ?? det.frame_id ?? det.frame;
+          if (rawFi == null) continue;
+          let key;
+          if (typeof rawFi === "number") {
+            key = rawFi;
+          } else {
+            const digits = String(rawFi).match(/\d+/);
+            if (digits) key = parseInt(digits[0], 10);
+            else continue;
+          }
+
+          const bbox = obs.bbox || obs.bbox_2d || obs.boundingBox || obs.bounding_box || det.bbox || det.bbox_2d || det.boundingBox || det.bounding_box;
           if (!bbox || bbox.length < 4) continue;
           const entry = {
             bbox,
             cls: obs.class || obs.class_name || det.class || det.class_name || det.category || "object",
-            track_id: obs.track_id || det.track_id || det.object_id || "",
+            track_id: obs.track_id || obs.trackId || det.track_id || det.trackId || det.object_id || "",
             confidence: obs.confidence ?? det.confidence ?? det.mean_confidence ?? null,
           };
-          const key = Number(fi);
           if (!map[key]) map[key] = [];
           map[key].push(entry);
         }

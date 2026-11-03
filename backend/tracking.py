@@ -541,8 +541,8 @@ class UltralyticsTracker:
             for frame_number, timestamp, frame in frame_items:
                 sampled_frame_seq += 1
                 h, w = frame.shape[:2]
-                rel_min_w = min_box_size[0] if min_box_size else max(24.0, float(w) * 0.006)
-                rel_min_h = min_box_size[1] if min_box_size else max(24.0, float(h) * 0.006)
+                rel_min_w = min_box_size[0] if min_box_size else max(8.0, float(w) * 0.005)
+                rel_min_h = min_box_size[1] if min_box_size else max(8.0, float(h) * 0.005)
 
                 motion = None
                 if motion_estimator is not None:
@@ -642,8 +642,8 @@ class UltralyticsTracker:
                         raw_frame_callback(sampled_seq, fn, ts, boxes, names, None)
 
                     h, w = frm.shape[:2]
-                    rel_min_w = min_box_size[0] if min_box_size else max(24.0, float(w) * 0.006)
-                    rel_min_h = min_box_size[1] if min_box_size else max(24.0, float(h) * 0.006)
+                    rel_min_w = min_box_size[0] if min_box_size else max(8.0, float(w) * 0.005)
+                    rel_min_h = min_box_size[1] if min_box_size else max(8.0, float(h) * 0.005)
 
                     for box in boxes:
                         class_id = int(_scalar(box.cls[0]))
@@ -663,7 +663,7 @@ class UltralyticsTracker:
                                 dropped_aspect_ratio_count += 1
                                 continue
                         ids = getattr(box, "id", None)
-                        track_id = str(int(_scalar(ids[0]))) if ids is not None else None
+                        track_id = str(int(_scalar(ids[0]))) if ids is not None else f"U{fn:05d}_{len(records)+1:03d}"
                         records.append(
                             DetectionRecord(
                                 str(fn),
@@ -682,7 +682,7 @@ class UltralyticsTracker:
         dropped_short_tracks = len(track_hit_counts) - len(valid_track_ids)
 
         if valid_track_ids:
-            records = [r for r in records if r.track_id in valid_track_ids]
+            records = [r for r in records if (r.track_id in valid_track_ids or r.confidence >= max(confidence, 0.35))]
 
         raw_tracks = len(valid_track_ids)
         self.last_motion_failures = motion_failures

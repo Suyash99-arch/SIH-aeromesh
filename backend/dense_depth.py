@@ -422,12 +422,54 @@ def densify_depth_aligned_to_sfm(
 
         mesh, densities = o3d.geometry.TriangleMesh.create_from_point_cloud_poisson(pcd, depth=9, n_threads=4)
         densities_np = np.asarray(densities)
-        if len(densities_np) > 0:
-            trim_thresh = np.quantile(densities_np, 0.05)
-            mesh.remove_vertices_by_mask(densities_np < trim_thresh)
 
-        # Decimate dense mesh to <= 400k faces (quadric decimation, keep vertex colours)
-        max_mesh_faces = 400_000
+        # 1. Distance trimming via cKDTree to remove outer closed ballooning bubble
+        from scipy.spatial import cKDTree
+        pcd_pts_arr = np.asarray(pcd.points)
+        mesh_verts_arr = np.asarray(mesh.vertices)
+        if len(pcd_pts_arr) > 0 and len(mesh_verts_arr) > 0:
+            tree = cKDTree(pcd_pts_arr)
+            sample_size = min(1000, len(pcd_pts_arr))
+            sample_dists, _ = tree.query(pcd_pts_arr[:sample_size], k=2, workers=-1)
+            avg_spacing = float(np.mean(sample_dists[:, 1])) if (hasattr(sample_dists, 'ndim') and sample_dists.ndim == 2) else float(voxel_size)
+            max_dist_thresh = max(avg_spacing * 2.8, float(voxel_size) * 3.5, 0.45)
+            mesh_dists, _ = tree.query(mesh_verts_arr, k=1, workers=-1)
+            keep_dist_mask = mesh_dists <= max_dist_thresh
+        else:
+            keep_dist_mask = np.ones(len(mesh_verts_arr), dtype=bool)
+
+        # 2. Density thresholding (10th percentile to discard weak extrapolations)
+        if len(densities_np) > 0:
+            trim_thresh = np.percentile(densities_np, 10)
+            density_mask = densities_np >= trim_thresh
+        else:
+            density_mask = np.ones(len(mesh_verts_arr), dtype=bool)
+
+        combined_trim_mask = keep_dist_mask & density_mask
+        mesh.remove_vertices_by_mask(~combined_trim_mask)
+
+        # 3. Connected component filtering to remove floating disconnected shards
+        tri_clusters, num_tri_arr, _ = mesh.cluster_connected_triangles()
+        tri_clusters = np.asarray(tri_clusters)
+        num_tri_arr = np.asarray(num_tri_arr)
+        if len(num_tri_arr) > 0:
+            min_cluster_sz = max(50, int(len(mesh.triangles) * 0.01))
+            valid_clust = np.where(num_tri_arr >= min_cluster_sz)[0]
+            if len(valid_clust) == 0:
+                valid_clust = [np.argmax(num_tri_arr)]
+            mesh.remove_triangles_by_mask(~np.isin(tri_clusters, valid_clust))
+            mesh.remove_unreferenced_vertices()
+
+        # 4. Subtle Laplacian smoothing to regularize surface transitions
+        try:
+            if len(mesh.vertices) > 20:
+                mesh = mesh.filter_smooth_laplacian(number_of_iterations=3, lambda_filter=0.5)
+                mesh.compute_vertex_normals()
+        except Exception:
+            pass
+
+        # 5. Clean, browser-safe face budget (120k-150k faces) to prevent WebGL context loss
+        max_mesh_faces = max(1000, int(os.getenv("RECONSTRUCTION_MAX_MESH_FACES", "140000")))
         if len(mesh.triangles) > max_mesh_faces:
             logger.info("[densify_depth] Decimating dense mesh from %d to <= %d faces...", len(mesh.triangles), max_mesh_faces)
             mesh = mesh.simplify_quadric_decimation(target_number_of_triangles=max_mesh_faces)

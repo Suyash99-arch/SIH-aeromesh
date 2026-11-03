@@ -6393,6 +6393,7 @@ def _run_yolo_detection(
             "observations": observations,
             "scene_analysis": scene_analysis,
             "filter_stats": filter_stats,
+            "tracks": all_tracks,
         },
         "tracks": all_tracks,
         "tracking": {
